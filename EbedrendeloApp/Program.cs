@@ -1,4 +1,5 @@
 using EbedrendeloApp.Components;
+using MudBlazor.Services;
 
 namespace EbedrendeloApp
 {
@@ -11,6 +12,8 @@ namespace EbedrendeloApp
             // Add services to the container.
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
+
+            builder.Services.AddMudServices();
 
             var app = builder.Build();
 
