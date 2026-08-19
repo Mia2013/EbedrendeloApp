@@ -1,0 +1,170 @@
+@using System.Globalization
+@using EbedrendeloApp.Common.Results
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.UpsertOrderingPeriod
+@using MediatR
+@inject IMediator Mediator
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">@(Existing is null ? "Új rendelési időszak" : "Rendelési időszak szerkesztése")</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Add meg az időszak határait és a leadási határidőt</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        @if (Existing?.HasOrders == true)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Ehhez az időszakhoz már tartozik rendelés — csak a név és a nyitva tartás módosítható. Egy dátum
+                kizárásához a „Nem rendelhető napok" oldal „Nap kizárása" funkcióját használd.
+            </MudAlert>
+        }
+
+        <MudStack Spacing="4">
+            <MudStack Spacing="1">
+                <MudStack Row Spacing="4">
+                    <MudSelect T="int" Label="Év" @bind-Value="nameYear" Variant="Variant.Outlined" Style="flex:1;">
+                        @foreach (var year in YearOptions)
+                        {
+                            <MudSelectItem Value="@year">@year</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" Label="Hónap" @bind-Value="nameMonth" Variant="Variant.Outlined" Style="flex:1;">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var month = m;
+                            <MudSelectItem Value="@month">@MonthName(month)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Az időszak neve: „@ComputedName" — évből és hónapból képezve, nem szabadszöveg.</MudText>
+            </MudStack>
+
+            <MudStack Row Spacing="4">
+                <MudDatePicker Label="Kezdés dátuma" @bind-Date="startDate" Variant="Variant.Outlined" Disabled="fieldsLocked" />
+                <MudDatePicker Label="Zárás dátuma" @bind-Date="endDate" Variant="Variant.Outlined" Disabled="fieldsLocked" />
+            </MudStack>
+
+            <MudStack Row Spacing="4">
+                <MudDatePicker Label="Leadási határidő napja" @bind-Date="orderDeadlineDate" Variant="Variant.Outlined" Disabled="fieldsLocked" />
+                <MudTimePicker Label="Leadási határidő ideje" @bind-Time="orderDeadlineTime" Variant="Variant.Outlined" Disabled="fieldsLocked" />
+            </MudStack>
+
+            <MudSwitch T="bool" @bind-Value="isOpen" Color="Color.Primary" Label="Nyitva (rendelhető)" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Mégse</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="isSaving">Mentés</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public OrderingPeriodDto? Existing { get; set; }
+
+    [Parameter]
+    public DateOnly? SuggestedStartDate { get; set; }
+
+    private static readonly CultureInfo HungarianCulture = new("hu-HU");
+
+    private int nameYear = DateTime.Today.AddMonths(1).Year;
+    private int nameMonth = DateTime.Today.AddMonths(1).Month;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private DateTime? orderDeadlineDate;
+    private TimeSpan? orderDeadlineTime = new(10, 0, 0);
+    private bool isOpen = true;
+    private bool isSaving;
+    private string? errorMessage;
+
+    private bool fieldsLocked => Existing?.HasOrders == true;
+
+    private static string MonthName(int month) => HungarianCulture.DateTimeFormat.GetMonthName(month);
+
+    private string ComputedName => $"{nameYear}. {MonthName(nameMonth)}";
+
+    private static IReadOnlyList<int> YearOptions
+    {
+        get
+        {
+            var thisYear = DateTime.Today.Year;
+            return [thisYear - 1, thisYear, thisYear + 1, thisYear + 2];
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            nameYear = Existing.StartDate.Year;
+            nameMonth = Existing.StartDate.Month;
+            startDate = Existing.StartDate.ToDateTime(TimeOnly.MinValue);
+            endDate = Existing.EndDate.ToDateTime(TimeOnly.MinValue);
+            orderDeadlineDate = Existing.OrderDeadline.Date;
+            orderDeadlineTime = Existing.OrderDeadline.TimeOfDay;
+            isOpen = Existing.IsOpen;
+        }
+        else if (SuggestedStartDate is { } suggested)
+        {
+            nameYear = suggested.Year;
+            nameMonth = suggested.Month;
+            startDate = suggested.ToDateTime(TimeOnly.MinValue);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (startDate is null || endDate is null || orderDeadlineDate is null || orderDeadlineTime is null)
+        {
+            errorMessage = "Minden mező kitöltése kötelező.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+
+        var command = new UpsertOrderingPeriodCommand(
+            Existing?.Id,
+            ComputedName,
+            DateOnly.FromDateTime(startDate.Value),
+            DateOnly.FromDateTime(endDate.Value),
+            orderDeadlineDate.Value.Date + orderDeadlineTime.Value,
+            isOpen);
+
+        try
+        {
+            var result = await Mediator.Send(command);
+
+            if (result.IsSuccess)
+            {
+                MudDialog.Close(DialogResult.Ok(result.Value));
+                return;
+            }
+
+            errorMessage = result.ErrorMessage;
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

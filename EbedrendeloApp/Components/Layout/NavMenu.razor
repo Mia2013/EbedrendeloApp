@@ -1,7 +1,39 @@
+@using EbedrendeloApp.Common.Security
 @using Microsoft.AspNetCore.Components.Routing
+@inject ICurrentUser CurrentUser
+@implements IDisposable
 
 <MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
         Kezdőlap
     </MudNavLink>
+
+    @if (CurrentUser.IsLoaded && CurrentUser.IsAdmin)
+    {
+        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">NAPTÁR</MudText>
+        <MudNavLink Href="idoszakok" Icon="@Icons.Material.Filled.CalendarMonth">
+            Rendelési időszakok
+        </MudNavLink>
+        <MudNavLink Href="nem-rendelheto-napok" Icon="@Icons.Material.Filled.EventBusy">
+            Nem rendelhető napok
+        </MudNavLink>
+    }
+    else if (CurrentUser.IsLoaded)
+    {
+        <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
+            Naptár
+        </MudNavLink>
+    }
 </MudNavMenu>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUser.Changed += OnCurrentUserChanged;
+        await CurrentUser.EnsureLoadedAsync();
+    }
+
+    private void OnCurrentUserChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => CurrentUser.Changed -= OnCurrentUserChanged;
+}

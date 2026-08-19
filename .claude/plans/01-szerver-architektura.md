@@ -43,13 +43,12 @@ választják el, a `Features/` alatt vertikális szeletekkel.
 ```
 EbedrendeloApp/
 ├─ Domain/
-│  ├─ Entities/          User, DailyMenu, MenuVariant, MenuOrder, ALaCarteItem,
-│  │                     ALaCarteDailyOffer, ALaCarteOrder, ALaCarteOrderLine,
+│  ├─ Entities/          User, Role, AppSetting, DailyMenu, MenuVariant, MenuOrder,
+│  │                     ALaCarteItem, ALaCarteDailyOffer, ALaCarteOrder, ALaCarteOrderLine,
 │  │                     OrderingPeriod, ExcludedDay, CreditEntry, PeriodInvoice,
 │  │                     UserNotification, KitchenClosure, KitchenClosureLine
-│  ├─ Enums/             OrderStatus, ALaCarteCategory, CancellationReason,
-│  │                     CreditEntryKind, NotificationType
-│  └─ Constants/         AppConstants (menü ára, határidő-időpontok, szerepkörök)
+│  └─ Enums/             OrderStatus, ALaCarteCategory, CancellationReason,
+│                        CreditEntryKind, NotificationType
 ├─ Data/
 │  ├─ EbedrendeloDbContext.cs
 │  ├─ Configurations/    IEntityTypeConfiguration<T> entitásonként
@@ -90,7 +89,27 @@ Konvenciók: pénz `int` (Ft, nincs tört), naptári nap `DateOnly`, időpillana
 ### User (a property-lista kötött, a felhasználó adta meg)
 `int Id` (PK) · `int UserId` (céges azonosító, **unique index**) · `string UserName` (unique index, 64) ·
 `string? KeresztNev` (128) · `string? VezetekNev` (128) · `string? Rf` (32) · `string? SzervKod` (32) ·
-`string Role` (32, `"User"` / `"Admin"`)
+`int RoleId` (FK → Role)
+
+### Role
+`int Id` (PK) · `string Name` (32, unique — `"Admin"` / `"User"`)
+
+A szerepkör **adatbázis-tábla**, nem C# konstans: két sorral seedelve indításkor
+(`DatabaseSeeder.AdminRoleName` / `.UserRoleName` csak a seed-adat literálja, nem üzleti szabály). A
+`"Admin"` **authorization policy név** ettől független — az ASP.NET Core kódba ágyazott azonosító
+(5. fejezet), nem admin által szerkesztendő adat.
+
+### AppSetting
+Egyetlen sor (`Id = 1`), az admin által futásidőben módosítható üzleti paraméterek: `int MenuPortionHuf`,
+`int ChangeDeadlineWorkingDays`, `TimeOnly ChangeDeadlineLocalTime`, `TimeOnly ALaCarteOrderDeadlineLocalTime`,
+`DateTime UpdatedAtUtc`, `int? UpdatedByUserId`.
+
+**Miért tábla, nem C# konstans.** A menü ára, a 3 munkanapos lemondási szabály és a két napi határidő
+(11:00 / 10:30) mind olyan érték, amit egy admin ésszerűen újratelepítés nélkül akarna módosítani —
+ezeket tehát adatként kell modellezni, nem `Domain/Constants`-ba zárt `const`/`static readonly` mezőként.
+Csak a ténylegesen kódszintű azonosítók (pl. az `"Admin"` policy név, az `Europe/Budapest` IANA
+időzóna-id a leendő `IAppClock` implementációban) maradnak C# szinten, a felhasználásuk helyéhez közel —
+nem egy közös konstans-osztályban, ami üzleti adat bedobására csábítana.
 
 ### Naptár
 - **ExcludedDay** — `Date` (unique), `Reason` (200), `CreatedAtUtc`, `CreatedByUserId` (FK User)
@@ -125,8 +144,8 @@ A véletlen rést a `GetUncoveredWorkdaysQuery` teszi láthatóvá.
 - **MenuVariant** — `DailyMenuId` (FK, cascade), `Code` (`"A"`/`"B"`/`"C"`, unique `DailyMenuId`+`Code`),
   `Name`, `Description?`, `SortOrder` (az „első elérhető variáns" szabályhoz)
 
-A menü ára fix 1400 Ft (`AppConstants.MenuPortionHuf`), de a rendelésre **snapshotoljuk**, hogy egy
-későbbi áremelés ne írja át a múltat.
+A menü ára az `AppSetting.MenuPortionHuf` értékét követi (induláskor 1400 Ft-ra seedelve), de a
+rendelésre **snapshotoljuk**, hogy egy későbbi áremelés ne írja át a múltat.
 
 ### Rendelés
 - **MenuOrder** — `UserId` (FK), `Date`, **`OrderingPeriodId`** (FK, kötelező), `MenuVariantId` (FK),
@@ -196,17 +215,19 @@ mutató FK teszi egyértelművé, melyik kizárás melyik rendeléseket érintet
 ### 3.1 Rendelési és lemondási határidő — 3 munkanap, 11:00
 
 Ugyanaz a határidő-függvény kapuzza a **rendelést** és a **lemondást** — ezért `ChangeDeadline` a neve,
-nem `CancellationDeadline`.
+nem `CancellationDeadline`. A „3 munkanap" és a „11:00" **nem C# konstans**, hanem az `AppSetting`
+(2. fejezet) `ChangeDeadlineWorkingDays` / `ChangeDeadlineLocalTime` mezője — a `WorkingDayCalculator`
+ezeket olvassa be, admin futásidőben módosíthatja őket.
 
 ```
 IsWorkingDay(d)  = d.DayOfWeek ∉ {Sat, Sun} ÉS d ∉ excludedDays
 
 ChangeDeadline(serviceDate):
     d = serviceDate;  counted = 0
-    while counted < 3:
+    while counted < settings.ChangeDeadlineWorkingDays:
         d = d.AddDays(-1)
         if IsWorkingDay(d): counted++
-    return d.ToDateTime(11:00)          // helyi idő
+    return d.ToDateTime(settings.ChangeDeadlineLocalTime)          // helyi idő
 
 CanChange(serviceDate, now) =
         now <= ChangeDeadline(serviceDate)
@@ -732,14 +753,15 @@ Minden fázis végén `dotnet build` és `dotnet test` zölden kell fusson.
 
 **Fázis 0 — build alapok**
 `Directory.Build.props` (TargetFramework, Nullable, ImplicitUsings központilag) +
-`Directory.Packages.props` (Central Package Management, a meglévő verziók áthúzva) +
-`.config/dotnet-tools.json` a `dotnet-ef` lokális eszközzel (globálisan **nincs telepítve**).
+`.config/dotnet-tools.json` a `dotnet-ef` lokális eszközzel (globálisan **nincs telepítve**). A
+csomagverziók projektenként, a `.csproj`-okban maradnak (`Version` attribútummal) — **nincs Central
+Package Management / `Directory.Packages.props`**, ez szándékos döntés.
 EF Core csomagok az app projektbe: `Microsoft.EntityFrameworkCore.SqlServer` **10.0.11** és
 `Microsoft.EntityFrameworkCore.Design` **10.0.11** (ellenőrizve a nuget.org-on, ez a legfrissebb 10.x).
 *Ellenőrzés:* `dotnet build`, `dotnet test`, `dotnet ef --version`.
 
 **Fázis 1 — adatmodell és adatbázis**
-`Domain/Entities` + `Enums` (benne `CancellationReason`, bővített `CreditEntryKind`) + `Constants`;
+`Domain/Entities` (benne `Role`, `AppSetting`) + `Enums` (`CancellationReason`, bővített `CreditEntryKind`);
 `EbedrendeloDbContext` + `Configurations`; connection string; `AddEbedrendeloData`;
 `dotnet ef migrations add InitialCreate`; `DatabaseSeeder` + indítási hívás.
 *Ellenőrzés:* `dotnet ef database update` lefut, az app elindul, a LocalDB-ben ott a séma és a seed adat.

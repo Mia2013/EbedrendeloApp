@@ -1,0 +1,163 @@
+@page "/nem-rendelheto-napok"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Calendar.GetExcludedDays
+@using EbedrendeloApp.Features.Calendar.GetUncoveredWorkdays
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+
+<PageTitle>Nem rendelhető napok</PageTitle>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
+    <MudStack Spacing="0" Style="max-width: 680px;">
+        <MudText Typo="Typo.h4">Nem rendelhető napok</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
+            <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
+            Mindkettőt itt látod egy helyen.
+        </MudText>
+    </MudStack>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenExcludeDialogAsync">
+        Nap kizárása
+    </MudButton>
+</MudStack>
+
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudStack Row Spacing="4" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+        <MudDatePicker Label="Mettől" @bind-Date="fromDate" Variant="Variant.Outlined" Style="width:200px;" />
+        <MudDatePicker Label="Meddig" @bind-Date="toDate" Variant="Variant.Outlined" Style="width:200px;" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync">Szűrés</MudButton>
+        <MudSpacer />
+        @if (rows is not null)
+        {
+            <MudChipSet T="FilterOption" SelectionMode="SelectionMode.SingleSelection" @bind-SelectedValue="selectedFilter" CheckMark="true">
+                <MudChip Value="FilterOption.All">Mind · @rows.Count</MudChip>
+                <MudChip Value="FilterOption.Excluded">Kizárva · @rows.Count(r => r.Type == RowType.Excluded)</MudChip>
+                <MudChip Value="FilterOption.Uncovered">Nincs időszak · @rows.Count(r => r.Type == RowType.Uncovered)</MudChip>
+            </MudChipSet>
+        }
+    </MudStack>
+</MudPaper>
+
+@if (rows is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else
+{
+    <MudTable Items="FilteredRows" Hover="true" Elevation="1" Class="mt-4">
+        <HeaderContent>
+            <MudTh>Dátum</MudTh>
+            <MudTh>Nap</MudTh>
+            <MudTh>Típus</MudTh>
+            <MudTh>Indoklás</MudTh>
+            <MudTh>Rögzítette</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Dátum">@context.Date.ToString("yyyy.MM.dd.")</MudTd>
+            <MudTd DataLabel="Nap">@context.Date.ToString("dddd", HungarianCulture)</MudTd>
+            <MudTd DataLabel="Típus">
+                @if (context.Type == RowType.Excluded)
+                {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Icon="@Icons.Material.Filled.Block">Kizárva</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.WarningAmber">Nincs időszak</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Indoklás">@(context.Reason ?? "—")</MudTd>
+            <MudTd DataLabel="Rögzítette">@(context.CreatedBy ?? "—")</MudTd>
+            <MudTd>
+                @if (context.Type == RowType.Excluded)
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo" OnClick="() => OpenRevokeDialogAsync(context.Date)">
+                        Visszavonás
+                    </MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+        A hétvégék nem jelennek meg — ott amúgy sincs kiszolgálás.
+    </MudText>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+
+    private enum RowType { Excluded, Uncovered }
+    private enum FilterOption { All, Excluded, Uncovered }
+
+    private sealed record Row(DateOnly Date, RowType Type, string? Reason, string? CreatedBy);
+
+    private DateTime? fromDate = DateTime.Today;
+    private DateTime? toDate = DateTime.Today.AddMonths(3);
+    private List<Row>? rows;
+    private FilterOption selectedFilter = FilterOption.All;
+
+    private IEnumerable<Row> FilteredRows => rows is null
+        ? []
+        : selectedFilter switch
+        {
+            FilterOption.Excluded => rows.Where(r => r.Type == RowType.Excluded),
+            FilterOption.Uncovered => rows.Where(r => r.Type == RowType.Uncovered),
+            _ => rows,
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("naptar");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (fromDate is null || toDate is null)
+        {
+            return;
+        }
+
+        var from = DateOnly.FromDateTime(fromDate.Value);
+        var to = DateOnly.FromDateTime(toDate.Value);
+
+        var excluded = await Mediator.Send(new GetExcludedDaysQuery(from, to));
+        var uncovered = await Mediator.Send(new GetUncoveredWorkdaysQuery(from, to));
+
+        rows = excluded.Select(e => new Row(e.Date, RowType.Excluded, e.Reason, e.CreatedByDisplayName))
+            .Concat(uncovered.Select(d => new Row(d, RowType.Uncovered, null, null)))
+            .OrderBy(r => r.Date)
+            .ToList();
+    }
+
+    private async Task OpenExcludeDialogAsync()
+    {
+        var dialogRef = await DialogService.ShowAsync<ExcludeDayDialog>("Nap kizárása");
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenRevokeDialogAsync(DateOnly date)
+    {
+        var parameters = new DialogParameters<RevokeExclusionDialog> { { x => x.Date, date } };
+        var dialogRef = await DialogService.ShowAsync<RevokeExclusionDialog>("Kizárás visszavonása", parameters);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

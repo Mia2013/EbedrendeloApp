@@ -1,0 +1,110 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Calendar.ExcludeDay
+@using EbedrendeloApp.Features.Calendar.GetExcludedDays
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Error" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Nap kizárása</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">A kiválasztott napon nem lesz kiszolgálás</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        <MudStack Spacing="4">
+            <MudStack Spacing="1">
+                <MudDatePicker Label="Dátum" @bind-Date="date" Variant="Variant.Outlined" MinDate="@DateTime.Today.AddDays(1)" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Csak jövőbeli nap zárható ki.</MudText>
+            </MudStack>
+
+            <MudAutocomplete T="string" Label="Indoklás" @bind-Value="reason" SearchFunc="SearchReasonsAsync"
+                              Strict="false" CoerceText="true" CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined"
+                              MaxLength="200" Counter="200" />
+
+            <MudAlert Severity="Severity.Warning">
+                Az erre a napra leadott aktív menürendelések automatikusan lemondásra kerülnek, a dolgozók pedig
+                teljes összegű jóváírást és értesítést kapnak.
+            </MudAlert>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Mégse</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="isSaving">Nap kizárása</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private DateTime? date = DateTime.Today.AddDays(1);
+    private string reason = string.Empty;
+    private bool isSaving;
+    private string? errorMessage;
+    private List<string>? knownReasons;
+
+    private async Task<IEnumerable<string>> SearchReasonsAsync(string value, CancellationToken ct)
+    {
+        knownReasons ??= (await Mediator.Send(
+                new GetExcludedDaysQuery(DateOnly.FromDateTime(DateTime.Today.AddYears(-1)), DateOnly.FromDateTime(DateTime.Today.AddYears(1))), ct))
+            .Select(e => e.Reason)
+            .Distinct()
+            .OrderBy(r => r)
+            .ToList();
+
+        return string.IsNullOrWhiteSpace(value)
+            ? knownReasons
+            : knownReasons.Where(r => r.Contains(value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (date is null || string.IsNullOrWhiteSpace(reason))
+        {
+            errorMessage = "A dátum és az indoklás megadása kötelező.";
+            return;
+        }
+
+        if (reason.Trim().Length > 200)
+        {
+            errorMessage = "Az indoklás legfeljebb 200 karakter lehet.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await Mediator.Send(new ExcludeDayCommand(DateOnly.FromDateTime(date.Value), reason.Trim(), CurrentUser.UserId));
+
+            if (result.IsSuccess)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                return;
+            }
+
+            errorMessage = result.ErrorMessage;
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

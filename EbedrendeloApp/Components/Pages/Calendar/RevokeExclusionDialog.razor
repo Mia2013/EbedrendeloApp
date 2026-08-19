@@ -1,0 +1,106 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Calendar.RemoveExcludedDay
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Kizárás visszavonása — @Date.ToString("yyyy.MM.dd.")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        @if (outcome is null)
+        {
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.body1">Lemondott rendelések visszaállítása, ahol lehetséges</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Csak akkor áll vissza egy rendelés, ha a jóváírása érintetlen, és még nincs rá időszaki számla.
+                    </MudText>
+                </MudStack>
+                <MudSwitch T="bool" @bind-Value="restoreCancelledOrders" Color="Color.Primary" />
+            </MudStack>
+        }
+        else
+        {
+            <MudStack Row Spacing="3" Class="mb-4">
+                <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3" Style="background:var(--mud-palette-success-hover);">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h5" Color="Color.Success">@outcome.RestoredCount</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Success">Helyreállítva</MudText>
+                    </MudStack>
+                </MudPaper>
+                <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3">
+                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h5">@outcome.SkippedCount</MudText>
+                        <MudText Typo="Typo.caption">Kihagyva</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudStack>
+
+            @foreach (var skipped in outcome.SkippedDetails)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-2">
+                    <MudText Typo="Typo.subtitle2">Kihagyott rendelés — @skipped.UserDisplayName</MudText>
+                    <MudText Typo="Typo.body2">Ok: @skipped.Reason.</MudText>
+                </MudPaper>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (outcome is null)
+        {
+            <MudButton OnClick="Cancel">Mégse</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmAsync" Disabled="isSaving">
+                Visszavonás megerősítése
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Close">Bezárás</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    private bool restoreCancelledOrders = true;
+    private bool isSaving;
+    private string? errorMessage;
+    private RemoveExcludedDayResult? outcome;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+
+    private async Task ConfirmAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new RemoveExcludedDayCommand(Date, restoreCancelledOrders, CurrentUser.UserId));
+
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            outcome = result.Value;
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}
