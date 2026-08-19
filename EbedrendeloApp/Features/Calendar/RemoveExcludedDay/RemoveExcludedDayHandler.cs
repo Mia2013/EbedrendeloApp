@@ -57,6 +57,10 @@ public sealed class RemoveExcludedDayHandler(
             .Where(o => o.CancelledByExcludedDayId == excluded.Id)
             .ToListAsync(cancellationToken);
 
+        // TODO: at very large daily order volumes (a few thousand+ candidates for one excluded day)
+        // these .Contains() lists could approach SQL Server's ~2100-parameter-per-query ceiling. At
+        // today's expected scale (~1000 orders/day) this stays comfortably under it; if that grows
+        // materially, switch to a table-valued parameter / temp-table join instead of inline IN lists.
         var orderIds = candidates.Select(o => o.Id).ToList();
         var userIds = candidates.Select(o => o.UserId).Distinct().ToList();
         var periodIds = candidates.Select(o => o.OrderingPeriodId).Distinct().ToList();
@@ -68,12 +72,18 @@ public sealed class RemoveExcludedDayHandler(
 
         // Batch-load everything the per-order checks below need, instead of 3 queries per candidate
         // order (was an N+1 pattern — see 01-szerver-architektura.md discussion on this handler).
-        var creditEntryByOrderId = await db.CreditEntries
+        // The "pick the oldest entry per order" grouping is done client-side (not
+        // .GroupBy(...).Select(g => g.First()) on the IQueryable) on purpose: SQL's GROUP BY doesn't
+        // guarantee row order within a group, so a server-translated GroupBy+First has no reliable way
+        // to honor "oldest wins" — this materializes first, then groups with plain, guaranteed
+        // LINQ-to-Objects semantics. The row count here is bounded by one excluded day's candidate
+        // orders, so this stays cheap even at ~1000 rows.
+        var creditEntries = await db.CreditEntries
             .Where(c => c.SourceMenuOrderId != null && orderIds.Contains(c.SourceMenuOrderId.Value) && c.Kind == CreditEntryKind.CancellationCredit)
-            .OrderBy(c => c.Id)
+            .ToListAsync(cancellationToken);
+        var creditEntryByOrderId = creditEntries
             .GroupBy(c => c.SourceMenuOrderId!.Value)
-            .Select(g => g.First())
-            .ToDictionaryAsync(c => c.SourceMenuOrderId!.Value, cancellationToken);
+            .ToDictionary(g => g.Key, g => g.OrderBy(c => c.Id).First());
 
         var invoicedUserPeriods = (await db.PeriodInvoices
             .Where(i => userIds.Contains(i.UserId) && periodIds.Contains(i.OrderingPeriodId))
