@@ -1,11 +1,15 @@
 using EbedrendeloApp.Components;
+using EbedrendeloApp.Data;
+using EbedrendeloApp.Data.Seed;
+using EbedrendeloApp.Extensions;
+using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
 namespace EbedrendeloApp
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +19,15 @@ namespace EbedrendeloApp
 
             builder.Services.AddMudServices();
 
+            builder.Services.AddEbedrendeloData(builder.Configuration);
+
             var app = builder.Build();
+
+            await using (var db = await app.Services.GetRequiredService<IDbContextFactory<EbedrendeloDbContext>>().CreateDbContextAsync())
+            {
+                await db.Database.MigrateAsync();
+                await DatabaseSeeder.SeedAsync(db);
+            }
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())
