@@ -28,7 +28,7 @@
             </MudStack>
 
             <MudAutocomplete T="string" Label="Indoklás" @bind-Value="reason" SearchFunc="SearchReasonsAsync"
-                              Strict="false" CoerceText="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined" />
+                              Strict="false" CoerceText="true" CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined" />
 
             <MudAlert Severity="Severity.Warning">
                 Az erre a napra leadott aktív menürendelések automatikusan lemondásra kerülnek, a dolgozók pedig

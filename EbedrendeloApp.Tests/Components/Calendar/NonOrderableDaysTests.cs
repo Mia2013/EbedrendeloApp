@@ -35,7 +35,9 @@ public class NonOrderableDaysTests : EbedrendeloApp.Tests.TestSupport.MudBunitCo
         Assert.Contains("Kizárva", cut.Markup);
         Assert.Contains("Karbantartás", cut.Markup);
         Assert.Contains("Nincs időszak", cut.Markup);
-        Assert.Contains("Időszak létrehozása", cut.Markup);
+        Assert.Contains("Visszavonás", cut.Markup);
+        // The uncovered-day row is purely informative — no action button next to it.
+        Assert.DoesNotContain("Időszak létrehozása", cut.Markup);
     }
 
     [Fact]
@@ -50,11 +52,12 @@ public class NonOrderableDaysTests : EbedrendeloApp.Tests.TestSupport.MudBunitCo
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<NonOrderableDays>((Bunit.ComponentParameterCollectionBuilder<NonOrderableDays> _) => { });
-        Assert.Contains("Nincs időszak", cut.Markup);
+        Assert.Contains("2026.10.06.", cut.Markup);
 
         var excludedChip = cut.FindAll(".mud-chip").First(c => c.TextContent.Contains("Kizárva ·"));
         excludedChip.Click();
 
-        Assert.DoesNotContain("Időszak létrehozása", cut.Markup);
+        Assert.DoesNotContain("2026.10.06.", cut.Markup);
+        Assert.Contains("2026.08.19.", cut.Markup);
     }
 }

@@ -78,12 +78,6 @@ else
                         Visszavonás
                     </MudButton>
                 }
-                else
-                {
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenCreatePeriodDialogAsync(context.Date)">
-                        Időszak létrehozása
-                    </MudButton>
-                }
             </MudTd>
         </RowTemplate>
     </MudTable>
@@ -160,17 +154,6 @@ else
     {
         var parameters = new DialogParameters<RevokeExclusionDialog> { { x => x.Date, date } };
         var dialogRef = await DialogService.ShowAsync<RevokeExclusionDialog>("Kizárás visszavonása", parameters);
-        var result = await dialogRef.Result;
-        if (result is { Canceled: false })
-        {
-            await LoadAsync();
-        }
-    }
-
-    private async Task OpenCreatePeriodDialogAsync(DateOnly date)
-    {
-        var parameters = new DialogParameters<OrderingPeriodDialog> { { x => x.SuggestedStartDate, date } };
-        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak", parameters);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
