@@ -20,6 +20,7 @@ namespace EbedrendeloApp
             builder.Services.AddMudServices();
 
             builder.Services.AddEbedrendeloData(builder.Configuration);
+            builder.Services.AddEbedrendeloApplication();
 
             var app = builder.Build();
 

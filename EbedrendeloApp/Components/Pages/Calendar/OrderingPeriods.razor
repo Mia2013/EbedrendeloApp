@@ -1,0 +1,105 @@
+@page "/idoszakok"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+
+<PageTitle>Rendelési időszakok</PageTitle>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
+    <MudStack Spacing="0">
+        <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
+        </MudText>
+    </MudStack>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
+        Új időszak
+    </MudButton>
+</MudStack>
+
+<MudAlert Severity="Severity.Info" Class="my-4">
+    Ha egy időszakhoz már tartozik rendelés, a kezdő-, záró- és leadási határidő nem módosítható — csak a
+    név és a nyitva tartás. Egy dátum kizárásához a „Nem rendelhető napok" funkciót használd.
+</MudAlert>
+
+@if (periods is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="periods" Hover="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Név</MudTh>
+            <MudTh>Kezdés</MudTh>
+            <MudTh>Zárás</MudTh>
+            <MudTh>Leadási határidő</MudTh>
+            <MudTh>Állapot</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Név">@context.Name</MudTd>
+            <MudTd DataLabel="Kezdés">@context.StartDate.ToString("yyyy.MM.dd.")</MudTd>
+            <MudTd DataLabel="Zárás">@context.EndDate.ToString("yyyy.MM.dd.")</MudTd>
+            <MudTd DataLabel="Leadási határidő">@context.OrderDeadline.ToString("yyyy.MM.dd. HH:mm")</MudTd>
+            <MudTd DataLabel="Állapot">
+                <MudChip T="string" Color="@(context.IsOpen ? Color.Success : Color.Default)" Size="Size.Small">
+                    @(context.IsOpen ? "Nyitva" : "Zárva")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialogAsync(context)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<OrderingPeriodDto>? periods;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("naptar");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        periods = await Mediator.Send(new GetOrderingPeriodsQuery());
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak");
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialogAsync(OrderingPeriodDto period)
+    {
+        var parameters = new DialogParameters<OrderingPeriodDialog>
+        {
+            { x => x.Existing, period },
+        };
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Rendelési időszak szerkesztése", parameters);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

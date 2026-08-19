@@ -1,0 +1,160 @@
+@page "/naptar"
+@using EbedrendeloApp.Common.Results
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderableDays
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<PageTitle>Naptár</PageTitle>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+    <MudStack Spacing="0">
+        <MudText Typo="Typo.h4">Naptár</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Ez mutatja, melyik napra rendelhetsz és melyiket mondhatod le — ha nem, azt is, hogy miért nem.
+        </MudText>
+    </MudStack>
+
+    @if (periods is { Count: > 0 })
+    {
+        <MudSelect T="int" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
+            @foreach (var period in periods)
+            {
+                <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</MudStack>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-4 mb-2" Wrap="Wrap.Wrap">
+    <MudStack Row Spacing="4">
+        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Success" Size="Size.Small" />
+            <MudText Typo="Typo.caption">Rendelhető / lemondható</MudText>
+        </MudStack>
+        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Default" Size="Size.Small" />
+            <MudText Typo="Typo.caption">Nem elérhető</MudText>
+        </MudStack>
+    </MudStack>
+
+    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+               StartIcon="@(showHistory ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.History)"
+               OnClick="() => showHistory = !showHistory">
+        @(showHistory ? "Előzmények elrejtése" : "Előzmények mutatása")
+    </MudButton>
+</MudStack>
+
+@if (days is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudAlert Severity="Severity.Error">@errorMessage</MudAlert>
+}
+else
+{
+    <MudTable Items="VisibleDays" Hover="true" Elevation="1" FixedHeader="true" Height="60vh">
+        <HeaderContent>
+            <MudTh>Dátum</MudTh>
+            <MudTh>Választott menü</MudTh>
+            <MudTh>Rendelhető</MudTh>
+            <MudTh>Lemondható</MudTh>
+            <MudTh>Megjegyzés</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Dátum">@context.Date.ToString("yyyy.MM.dd. ddd", HungarianCulture)</MudTd>
+            <MudTd DataLabel="Választott menü">@(context.VariantName is null ? "—" : $"{context.VariantCode} menü — {context.VariantName}")</MudTd>
+            <MudTd DataLabel="Rendelhető">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Orderable ? Color.Success : Color.Default)">
+                    @(context.Orderable ? "Igen" : "Nem")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Lemondható">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Cancellable ? Color.Success : Color.Default)">
+                    @(context.Cancellable ? "Igen" : "Nem")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Megjegyzés">@Describe(context)</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+
+    private static readonly Dictionary<string, string> ReasonText = new()
+    {
+        [ErrorCodes.DayExcluded] = "Kizárt nap",
+        [ErrorCodes.DayClosed] = "A nap már le van zárva",
+        [ErrorCodes.MenuNotPublished] = "Erre a napra még nincs publikált menü",
+        [ErrorCodes.AlreadyOrdered] = "Már van aktív rendelésed erre a napra",
+        [ErrorCodes.NoActiveOrder] = "Nincs aktív rendelésed erre a napra",
+        [ErrorCodes.DeadlinePassed] = "A módosítási határidő lejárt",
+    };
+
+    private IReadOnlyList<OrderingPeriodDto>? periods;
+    private int selectedPeriodId;
+    private IReadOnlyList<OrderableDayDto>? days;
+    private string? errorMessage;
+    private bool showHistory;
+
+    private IEnumerable<OrderableDayDto> VisibleDays => days is null
+        ? []
+        : showHistory ? days : days.Where(d => d.Date >= DateOnly.FromDateTime(DateTime.Today));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+
+        periods = await Mediator.Send(new GetOrderingPeriodsQuery());
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();
+
+        if (current is not null)
+        {
+            selectedPeriodId = current.Id;
+            await LoadDaysAsync();
+        }
+    }
+
+    private async Task OnPeriodSelectedAsync(int periodId)
+    {
+        selectedPeriodId = periodId;
+        showHistory = false;
+        await LoadDaysAsync();
+    }
+
+    private async Task LoadDaysAsync()
+    {
+        days = null;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new GetOrderableDaysQuery(selectedPeriodId, CurrentUser.UserId));
+        if (result.IsSuccess)
+        {
+            days = result.Value;
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+
+    private static string Describe(OrderableDayDto day)
+    {
+        if (day.Reason is null)
+        {
+            return string.Empty;
+        }
+
+        var text = ReasonText.GetValueOrDefault(day.Reason, day.Reason);
+        return day.Reason == ErrorCodes.DayExcluded && !string.IsNullOrEmpty(day.ReasonDetail)
+            ? $"{text} — {day.ReasonDetail}"
+            : text;
+    }
+}

@@ -1,6 +1,10 @@
 @inherits LayoutComponentBase
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Theme
+@inject ICurrentUser CurrentUser
+@implements IDisposable
 
-<MudThemeProvider />
+<MudThemeProvider Theme="AppTheme.Default" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -13,6 +17,17 @@
                        OnClick="ToggleDrawer"
                        aria-label="Navigáció" />
         <MudText Typo="Typo.h6">Ebédrendelő</MudText>
+        <MudSpacer />
+        @if (CurrentUser.IsLoaded)
+        {
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="px-2">
+                <MudAvatar Color="Color.Surface" Size="Size.Small">@Initials</MudAvatar>
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.body2" Style="line-height:1.2;">@CurrentUser.DisplayName</MudText>
+                    <MudText Typo="Typo.caption" Style="opacity:.75; line-height:1.2;">@(CurrentUser.IsAdmin ? "Admin" : "Dolgozó")</MudText>
+                </MudStack>
+            </MudStack>
+        }
     </MudAppBar>
 
     <MudDrawer @bind-Open="drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always">
@@ -35,5 +50,21 @@
 @code {
     private bool drawerOpen = true;
 
+    private string Initials => string.Concat(
+        CurrentUser.DisplayName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]))
+            .Take(2));
+
     private void ToggleDrawer() => drawerOpen = !drawerOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUser.Changed += OnCurrentUserChanged;
+        await CurrentUser.EnsureLoadedAsync();
+    }
+
+    private void OnCurrentUserChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => CurrentUser.Changed -= OnCurrentUserChanged;
 }

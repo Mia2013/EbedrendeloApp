@@ -1,7 +1,65 @@
-﻿@page "/"
+@page "/"
+@using EbedrendeloApp.Common.Security
+@inject ICurrentUser CurrentUser
+@inject IDevUserSwitcher DevUserSwitcher
+@implements IDisposable
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Kezdőlap</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudText Typo="Typo.h4" GutterBottom="true">Ebédrendelő</MudText>
 
-Welcome to your new app.
+@if (CurrentUser.IsLoaded)
+{
+    <MudText Class="mb-4">
+        Bejelentkezve mint <strong>@CurrentUser.DisplayName</strong> (@(CurrentUser.IsAdmin ? "Admin" : "Dolgozó")).
+    </MudText>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@(CurrentUser.IsAdmin ? "idoszakok" : "naptar")">
+        @(CurrentUser.IsAdmin ? "Rendelési időszakok megnyitása" : "Naptár megnyitása")
+    </MudButton>
+}
+
+<MudPaper Class="pa-4 mt-8" Outlined="true">
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+        <MudIcon Icon="@Icons.Material.Filled.Construction" Color="Color.Warning" />
+        <MudText Typo="Typo.subtitle1">Fejlesztői felhasználóváltó</MudText>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mb-4">
+        Ideiglenes eszköz — nem valódi bejelentkezés, csak ennek a munkamenetnek a "aktuális felhasználóját"
+        cseréli, hogy az admin- és dolgozói nézet is kipróbálható legyen. Az Epic 9 valódi dev-loginja fogja
+        lecserélni.
+    </MudText>
+    @if (users is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+    }
+    else
+    {
+        <MudSelect T="int" Label="Aktuális felhasználó" Value="CurrentUser.UserId" ValueChanged="OnUserSelectedAsync" Variant="Variant.Outlined">
+            @foreach (var user in users)
+            {
+                <MudSelectItem Value="@user.UserId">@user.DisplayName (@user.RoleName)</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</MudPaper>
+
+@code {
+    private IReadOnlyList<DevUserOption>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUser.Changed += OnCurrentUserChanged;
+        await CurrentUser.EnsureLoadedAsync();
+        users = await DevUserSwitcher.GetUsersAsync();
+    }
+
+    private async Task OnUserSelectedAsync(int userId)
+    {
+        await DevUserSwitcher.SwitchToAsync(userId);
+    }
+
+    private void OnCurrentUserChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => CurrentUser.Changed -= OnCurrentUserChanged;
+}
