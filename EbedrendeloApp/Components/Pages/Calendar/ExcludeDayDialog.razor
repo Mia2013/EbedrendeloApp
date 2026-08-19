@@ -28,7 +28,8 @@
             </MudStack>
 
             <MudAutocomplete T="string" Label="Indoklás" @bind-Value="reason" SearchFunc="SearchReasonsAsync"
-                              Strict="false" CoerceText="true" CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined" />
+                              Strict="false" CoerceText="true" CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined"
+                              MaxLength="200" Counter="200" />
 
             <MudAlert Severity="Severity.Warning">
                 Az erre a napra leadott aktív menürendelések automatikusan lemondásra kerülnek, a dolgozók pedig
@@ -76,20 +77,34 @@
             return;
         }
 
+        if (reason.Trim().Length > 200)
+        {
+            errorMessage = "Az indoklás legfeljebb 200 karakter lehet.";
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 
-        var result = await Mediator.Send(new ExcludeDayCommand(DateOnly.FromDateTime(date.Value), reason.Trim(), CurrentUser.UserId));
-
-        isSaving = false;
-
-        if (result.IsSuccess)
+        try
         {
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        else
-        {
+            var result = await Mediator.Send(new ExcludeDayCommand(DateOnly.FromDateTime(date.Value), reason.Trim(), CurrentUser.UserId));
+
+            if (result.IsSuccess)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                return;
+            }
+
             errorMessage = result.ErrorMessage;
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
 }

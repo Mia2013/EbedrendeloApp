@@ -120,6 +120,11 @@ else
             selectedPeriodId = current.Id;
             await LoadDaysAsync();
         }
+        else
+        {
+            days = [];
+            errorMessage = "Nincs még rendelési időszak.";
+        }
     }
 
     private async Task OnPeriodSelectedAsync(int periodId)
@@ -141,6 +146,7 @@ else
         }
         else
         {
+            days = [];
             errorMessage = result.ErrorMessage;
         }
     }

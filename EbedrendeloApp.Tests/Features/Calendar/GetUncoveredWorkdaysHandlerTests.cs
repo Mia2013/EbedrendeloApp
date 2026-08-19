@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Features.Calendar.GetUncoveredWorkdays;
 using EbedrendeloApp.Tests.TestSupport;
@@ -9,7 +10,7 @@ public class GetUncoveredWorkdaysHandlerTests : IDisposable
     private readonly SqliteDbContextFactory dbFactory = new();
     private readonly GetUncoveredWorkdaysHandler sut;
 
-    public GetUncoveredWorkdaysHandlerTests() => sut = new GetUncoveredWorkdaysHandler(dbFactory);
+    public GetUncoveredWorkdaysHandlerTests() => sut = new GetUncoveredWorkdaysHandler(dbFactory, new WorkingDayCalculator());
 
     public void Dispose() => dbFactory.Dispose();
 
@@ -44,5 +45,34 @@ public class GetUncoveredWorkdaysHandlerTests : IDisposable
         var result = await sut.Handle(new GetUncoveredWorkdaysQuery(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31)), CancellationToken.None);
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Does_not_report_a_weekday_that_is_already_excluded()
+    {
+        // 2026-08-20 (Thu) falls in the gap between the two periods AND is explicitly excluded —
+        // it must show up via GetExcludedDaysQuery only, not also as "uncovered", or the
+        // "Nem rendelhető napok" page would list it twice.
+        using (var db = dbFactory.CreateDbContext())
+        {
+            db.OrderingPeriods.AddRange(
+                new OrderingPeriod { Name = "P1", StartDate = new DateOnly(2026, 8, 5), EndDate = new DateOnly(2026, 8, 19), OrderDeadline = new DateTime(2026, 7, 26, 10, 0, 0) },
+                new OrderingPeriod { Name = "P2", StartDate = new DateOnly(2026, 8, 24), EndDate = new DateOnly(2026, 9, 5), OrderDeadline = new DateTime(2026, 8, 14, 10, 0, 0) });
+
+            var role = new Role { Name = "Admin" };
+            db.Roles.Add(role);
+            await db.SaveChangesAsync();
+
+            var admin = new User { UserId = 1, UserName = "admin", RoleId = role.Id };
+            db.Users.Add(admin);
+            await db.SaveChangesAsync();
+
+            db.ExcludedDays.Add(new ExcludedDay { Date = new DateOnly(2026, 8, 20), Reason = "Karbantartás", CreatedByUserId = admin.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetUncoveredWorkdaysQuery(new DateOnly(2026, 8, 5), new DateOnly(2026, 8, 31)), CancellationToken.None);
+
+        Assert.Equal([new DateOnly(2026, 8, 21)], result);
     }
 }

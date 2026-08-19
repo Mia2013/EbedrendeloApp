@@ -104,6 +104,63 @@ public class RemoveExcludedDayHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Skips_restoring_the_order_when_its_credit_was_already_partially_consumed()
+    {
+        var (_, orderId, _) = await SeedExcludedOrderAsync();
+
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var credit = await db.CreditEntries.SingleAsync(c => c.SourceMenuOrderId == orderId);
+            credit.RemainingHuf = 700; // half spent elsewhere — no longer equals AmountHuf (1400)
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Value!.RestoredCount);
+        Assert.Equal(1, result.Value.SkippedCount);
+
+        await using var verifyDb = dbFactory.CreateDbContext();
+        var order = await verifyDb.MenuOrders.SingleAsync(o => o.Id == orderId);
+        Assert.Equal(OrderStatus.Cancelled, order.Status);
+    }
+
+    [Fact]
+    public async Task Skips_restoring_the_order_when_a_newer_active_order_exists_for_the_same_day()
+    {
+        var (periodId, orderId, userId) = await SeedExcludedOrderAsync();
+
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+            var variantId = order.MenuVariantId;
+
+            db.MenuOrders.Add(new MenuOrder
+            {
+                UserId = userId,
+                Date = ExcludedDate,
+                OrderingPeriodId = periodId,
+                MenuVariantId = variantId,
+                PriceHuf = 1400,
+                Status = OrderStatus.Active,
+                PlacedByUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Value!.RestoredCount);
+        Assert.Equal(1, result.Value.SkippedCount);
+
+        await using var verifyDb = dbFactory.CreateDbContext();
+        var originalOrder = await verifyDb.MenuOrders.SingleAsync(o => o.Id == orderId);
+        Assert.Equal(OrderStatus.Cancelled, originalOrder.Status);
+    }
+
+    [Fact]
     public async Task Does_not_touch_orders_when_restore_flag_is_false()
     {
         var (_, orderId, _) = await SeedExcludedOrderAsync();

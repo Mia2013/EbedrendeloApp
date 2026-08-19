@@ -1,10 +1,11 @@
+using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace EbedrendeloApp.Features.Calendar.GetUncoveredWorkdays;
 
-public sealed class GetUncoveredWorkdaysHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
+public sealed class GetUncoveredWorkdaysHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory, IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<GetUncoveredWorkdaysQuery, IReadOnlyList<DateOnly>>
 {
     public async Task<IReadOnlyList<DateOnly>> Handle(GetUncoveredWorkdaysQuery request, CancellationToken cancellationToken)
@@ -16,10 +17,17 @@ public sealed class GetUncoveredWorkdaysHandler(IDbContextFactory<EbedrendeloDbC
             .Select(p => new { p.StartDate, p.EndDate })
             .ToListAsync(cancellationToken);
 
+        // Days that are explicitly excluded are reported separately (GetExcludedDaysQuery) — skip
+        // them here so a day that is both excluded and outside any period doesn't show up twice.
+        var excludedDates = await db.ExcludedDays
+            .Where(e => e.Date >= request.From && e.Date <= request.To)
+            .Select(e => e.Date)
+            .ToHashSetAsync(cancellationToken);
+
         var result = new List<DateOnly>();
         for (var date = request.From; date <= request.To; date = date.AddDays(1))
         {
-            if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (!workingDayCalculator.IsWorkingDay(date, excludedDates))
             {
                 continue;
             }

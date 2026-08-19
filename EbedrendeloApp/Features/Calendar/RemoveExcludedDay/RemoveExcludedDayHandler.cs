@@ -57,25 +57,47 @@ public sealed class RemoveExcludedDayHandler(
             .Where(o => o.CancelledByExcludedDayId == excluded.Id)
             .ToListAsync(cancellationToken);
 
+        var orderIds = candidates.Select(o => o.Id).ToList();
         var userIds = candidates.Select(o => o.UserId).Distinct().ToList();
+        var periodIds = candidates.Select(o => o.OrderingPeriodId).Distinct().ToList();
+        var candidateDates = candidates.Select(o => o.Date).Distinct().ToList();
+
         var userNames = await db.Users
             .Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => $"{u.VezetekNev} {u.KeresztNev}".Trim(), cancellationToken);
+
+        // Batch-load everything the per-order checks below need, instead of 3 queries per candidate
+        // order (was an N+1 pattern — see 01-szerver-architektura.md discussion on this handler).
+        var creditEntryByOrderId = await db.CreditEntries
+            .Where(c => c.SourceMenuOrderId != null && orderIds.Contains(c.SourceMenuOrderId.Value) && c.Kind == CreditEntryKind.CancellationCredit)
+            .OrderBy(c => c.Id)
+            .GroupBy(c => c.SourceMenuOrderId!.Value)
+            .Select(g => g.First())
+            .ToDictionaryAsync(c => c.SourceMenuOrderId!.Value, cancellationToken);
+
+        var invoicedUserPeriods = (await db.PeriodInvoices
+            .Where(i => userIds.Contains(i.UserId) && periodIds.Contains(i.OrderingPeriodId))
+            .Select(i => new { i.UserId, i.OrderingPeriodId })
+            .ToListAsync(cancellationToken))
+            .Select(i => (i.UserId, i.OrderingPeriodId))
+            .ToHashSet();
+
+        var activeOrdersOnCandidateDates = await db.MenuOrders
+            .Where(o => o.Status == OrderStatus.Active && userIds.Contains(o.UserId) && candidateDates.Contains(o.Date))
+            .Select(o => new { o.Id, o.UserId, o.Date })
+            .ToListAsync(cancellationToken);
 
         var restoredCount = 0;
         var skipped = new List<SkippedOrderInfo>();
 
         foreach (var order in candidates)
         {
-            var creditEntry = await db.CreditEntries
-                .Where(c => c.SourceMenuOrderId == order.Id && c.Kind == CreditEntryKind.CancellationCredit)
-                .FirstOrDefaultAsync(cancellationToken);
+            var creditEntry = creditEntryByOrderId.GetValueOrDefault(order.Id);
 
-            var hasInvoice = await db.PeriodInvoices
-                .AnyAsync(i => i.UserId == order.UserId && i.OrderingPeriodId == order.OrderingPeriodId, cancellationToken);
+            var hasInvoice = invoicedUserPeriods.Contains((order.UserId, order.OrderingPeriodId));
 
-            var hasNewerActiveOrder = await db.MenuOrders
-                .AnyAsync(o => o.Id != order.Id && o.UserId == order.UserId && o.Date == order.Date && o.Status == OrderStatus.Active, cancellationToken);
+            var hasNewerActiveOrder = activeOrdersOnCandidateDates
+                .Any(a => a.Id != order.Id && a.UserId == order.UserId && a.Date == order.Date);
 
             var userName = userNames.GetValueOrDefault(order.UserId, "Ismeretlen felhasználó");
 

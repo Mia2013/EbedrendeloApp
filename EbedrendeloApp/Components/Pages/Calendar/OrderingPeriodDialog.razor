@@ -146,17 +146,25 @@
             orderDeadlineDate.Value.Date + orderDeadlineTime.Value,
             isOpen);
 
-        var result = await Mediator.Send(command);
-
-        isSaving = false;
-
-        if (result.IsSuccess)
+        try
         {
-            MudDialog.Close(DialogResult.Ok(result.Value));
-        }
-        else
-        {
+            var result = await Mediator.Send(command);
+
+            if (result.IsSuccess)
+            {
+                MudDialog.Close(DialogResult.Ok(result.Value));
+                return;
+            }
+
             errorMessage = result.ErrorMessage;
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
 }
