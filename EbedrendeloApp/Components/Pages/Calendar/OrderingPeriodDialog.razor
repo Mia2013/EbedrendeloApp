@@ -1,3 +1,4 @@
+@using System.Globalization
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Features.Calendar
 @using EbedrendeloApp.Features.Calendar.UpsertOrderingPeriod
@@ -29,7 +30,24 @@
         }
 
         <MudStack Spacing="4">
-            <MudTextField T="string" Label="Név" @bind-Value="name" Variant="Variant.Outlined" MaxLength="64" Required="true" />
+            <MudStack Spacing="1">
+                <MudStack Row Spacing="4">
+                    <MudSelect T="int" Label="Év" @bind-Value="nameYear" Variant="Variant.Outlined" Style="flex:1;">
+                        @foreach (var year in YearOptions)
+                        {
+                            <MudSelectItem Value="@year">@year</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" Label="Hónap" @bind-Value="nameMonth" Variant="Variant.Outlined" Style="flex:1;">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var month = m;
+                            <MudSelectItem Value="@month">@MonthName(month)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Az időszak neve: „@ComputedName" — évből és hónapból képezve, nem szabadszöveg.</MudText>
+            </MudStack>
 
             <MudStack Row Spacing="4">
                 <MudDatePicker Label="Kezdés dátuma" @bind-Date="startDate" Variant="Variant.Outlined" Disabled="fieldsLocked" />
@@ -60,7 +78,10 @@
     [Parameter]
     public DateOnly? SuggestedStartDate { get; set; }
 
-    private string name = string.Empty;
+    private static readonly CultureInfo HungarianCulture = new("hu-HU");
+
+    private int nameYear = DateTime.Today.AddMonths(1).Year;
+    private int nameMonth = DateTime.Today.AddMonths(1).Month;
     private DateTime? startDate;
     private DateTime? endDate;
     private DateTime? orderDeadlineDate;
@@ -71,11 +92,25 @@
 
     private bool fieldsLocked => Existing?.HasOrders == true;
 
+    private static string MonthName(int month) => HungarianCulture.DateTimeFormat.GetMonthName(month);
+
+    private string ComputedName => $"{nameYear}. {MonthName(nameMonth)}";
+
+    private static IReadOnlyList<int> YearOptions
+    {
+        get
+        {
+            var thisYear = DateTime.Today.Year;
+            return [thisYear - 1, thisYear, thisYear + 1, thisYear + 2];
+        }
+    }
+
     protected override void OnInitialized()
     {
         if (Existing is not null)
         {
-            name = Existing.Name;
+            nameYear = Existing.StartDate.Year;
+            nameMonth = Existing.StartDate.Month;
             startDate = Existing.StartDate.ToDateTime(TimeOnly.MinValue);
             endDate = Existing.EndDate.ToDateTime(TimeOnly.MinValue);
             orderDeadlineDate = Existing.OrderDeadline.Date;
@@ -84,6 +119,8 @@
         }
         else if (SuggestedStartDate is { } suggested)
         {
+            nameYear = suggested.Year;
+            nameMonth = suggested.Month;
             startDate = suggested.ToDateTime(TimeOnly.MinValue);
         }
     }
@@ -92,7 +129,7 @@
 
     private async Task SubmitAsync()
     {
-        if (startDate is null || endDate is null || orderDeadlineDate is null || orderDeadlineTime is null || string.IsNullOrWhiteSpace(name))
+        if (startDate is null || endDate is null || orderDeadlineDate is null || orderDeadlineTime is null)
         {
             errorMessage = "Minden mező kitöltése kötelező.";
             return;
@@ -103,7 +140,7 @@
 
         var command = new UpsertOrderingPeriodCommand(
             Existing?.Id,
-            name.Trim(),
+            ComputedName,
             DateOnly.FromDateTime(startDate.Value),
             DateOnly.FromDateTime(endDate.Value),
             orderDeadlineDate.Value.Date + orderDeadlineTime.Value,
