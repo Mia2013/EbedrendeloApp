@@ -16,6 +16,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IWorkingDayCalculator, WorkingDayCalculator>();
         services.AddScoped<ICreditService, CreditService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IMenuReassignmentService, MenuReassignmentService>();
 
         // Stub current-user (see StubCurrentUser) — replaced wholesale by Epic 9's cookie-based
         // ICurrentUser; both interfaces are implemented by the same instance for now.

@@ -41,8 +41,8 @@ public sealed class GetOrderableDaysHandler(
             .ToHashSetAsync(cancellationToken);
 
         var dailyMenus = await db.DailyMenus
-            .Include(m => m.Variants)
-            .Where(m => m.Date >= period.StartDate && m.Date <= period.EndDate)
+            .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
+            .Where(m => m.Date >= period.StartDate && m.Date <= period.EndDate && m.RemovedAtUtc == null)
             .ToDictionaryAsync(m => m.Date, cancellationToken);
 
         var userOrders = await db.MenuOrders

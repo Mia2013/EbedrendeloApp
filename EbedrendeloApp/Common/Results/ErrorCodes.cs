@@ -15,4 +15,5 @@ public static class ErrorCodes
     public const string NotFutureDate = nameof(NotFutureDate);
     public const string HasOrders = nameof(HasOrders);
     public const string NotFound = nameof(NotFound);
+    public const string NoVariants = nameof(NoVariants);
 }
