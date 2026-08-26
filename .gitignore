@@ -13,3 +13,6 @@ obj/
 ## OS
 .DS_Store
 Thumbs.db
+
+## Claude Code plugin skill cache (local copy of enabled plugins' skills — see .claude/settings.json)
+.claude/skills/

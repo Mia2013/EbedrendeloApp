@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Enums;
@@ -41,9 +42,11 @@ public sealed class GetTodayMenuForUserHandler(
             return NotOrderable(today, ErrorCodes.MenuNotPublished);
         }
 
+        var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
+
         var variants = menu.Variants
             .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
-            .Select(v => new MenuVariantDto(v.Code, v.Name, v.Description, v.SortOrder))
+            .Select(v => MenuVariantDtoFactory.Create(v, dishes))
             .ToList();
 
         var myOrder = await db.MenuOrders
@@ -63,7 +66,7 @@ public sealed class GetTodayMenuForUserHandler(
             .ToListAsync(cancellationToken);
 
         var offerDtos = offers
-            .Select(o => new ALaCarteOfferDto(o.ALaCarteItemId, o.ALaCarteItem!.Name, o.ALaCarteItem.Category, o.ALaCarteItem.PriceHuf, o.Capacity - o.OrderedCount))
+            .Select(o => new ALaCarteOfferDto(o.ALaCarteItemId, o.ALaCarteItem!.Name, o.ALaCarteItem.Category, o.ALaCarteItem.PriceHuf, o.Capacity - o.OrderedCount, o.ALaCarteItem.Allergens))
             .OrderBy(o => o.Category).ThenBy(o => o.Name, StringComparer.Ordinal)
             .ToList();
 

@@ -28,7 +28,7 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     [Fact]
-    public async Task Creates_new_unpublished_menu_with_variants()
+    public async Task Creates_new_menu_published_immediately()
     {
         await SeedUsersAsync();
 
@@ -40,7 +40,8 @@ public class UpsertDailyMenuHandlerTests : IDisposable
 
         await using var db = dbFactory.CreateDbContext();
         var menu = await db.DailyMenus.Include(m => m.Variants).SingleAsync(m => m.Id == result.Value);
-        Assert.False(menu.IsPublished);
+        // Nincs külön publikálás-lépés: a sikeres mentés azonnal rendelhetővé teszi a napot.
+        Assert.True(menu.IsPublished);
         Assert.Single(menu.Variants);
         Assert.Equal("A", menu.Variants[0].Code);
     }
@@ -197,9 +198,117 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         await using var db2 = dbFactory.CreateDbContext();
         var menu2 = await db2.DailyMenus.Include(m => m.Variants).SingleAsync(m => m.Id == menuId);
         Assert.Null(menu2.RemovedAtUtc);
-        Assert.False(menu2.IsPublished);
+        // A feléledt sor is azonnal publikáltnak számít — nincs külön piszkozat-állapot.
+        Assert.True(menu2.IsPublished);
         var variant = Assert.Single(menu2.Variants, v => v.RemovedAtUtc == null);
         Assert.Equal("Új A", variant.Name);
+    }
+
+    [Fact]
+    public async Task Saving_a_menu_with_an_unknown_dish_name_does_not_create_a_catalog_entry()
+    {
+        await SeedUsersAsync();
+
+        var result = await sut.Handle(
+            new UpsertDailyMenuCommand(
+                new DateOnly(2026, 8, 20), null,
+                [new MenuVariantInput("A", "Gulyásleves", "Rántott hús", 0, "zeller", "glutén, tojás")],
+                adminId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.False(await db.MenuDishes.AnyAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves"));
+        Assert.False(await db.MenuDishes.AnyAsync(d => d.Kind == MenuDishKind.Foetel && d.Name == "Rántott hús"));
+    }
+
+    [Fact]
+    public async Task Resaving_a_known_dish_with_a_blank_allergen_field_keeps_the_previously_recorded_allergens()
+    {
+        await SeedUsersAsync();
+        var date = new DateOnly(2026, 8, 20);
+        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller", null)], adminId),
+            CancellationToken.None);
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, null, null)], adminId),
+            CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var soup = await db.MenuDishes.SingleAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves");
+        Assert.Equal("zeller", soup.Allergens);
+    }
+
+    [Fact]
+    public async Task Resaving_a_known_dish_with_new_allergens_updates_the_catalog()
+    {
+        await SeedUsersAsync();
+        var date = new DateOnly(2026, 8, 20);
+        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller", null)], adminId),
+            CancellationToken.None);
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller, tejtermék", null)], adminId),
+            CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var soup = await db.MenuDishes.SingleAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves");
+        Assert.Equal("zeller, tejtermék", soup.Allergens);
+    }
+
+    [Fact]
+    public async Task Saving_a_known_dish_with_nutrition_values_updates_the_catalog()
+    {
+        await SeedUsersAsync();
+        var date = new DateOnly(2026, 8, 20);
+        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(
+                date, null,
+                [new MenuVariantInput("A", "Gulyásleves", null, 0, SoupEnergyKcal: 108, SoupFatGrams: 1.8m, SoupSaltGrams: 0.14m)],
+                adminId),
+            CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var soup = await db.MenuDishes.SingleAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves");
+        Assert.Equal(108, soup.EnergyKcal);
+        Assert.Equal(1.8m, soup.FatGrams);
+        Assert.Equal(0.14m, soup.SaltGrams);
+    }
+
+    [Fact]
+    public async Task Resaving_a_known_dish_with_blank_nutrition_fields_keeps_the_previously_recorded_values()
+    {
+        await SeedUsersAsync();
+        var date = new DateOnly(2026, 8, 20);
+        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, SoupEnergyKcal: 108)], adminId),
+            CancellationToken.None);
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0)], adminId),
+            CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var soup = await db.MenuDishes.SingleAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves");
+        Assert.Equal(108, soup.EnergyKcal);
+    }
+
+    private async Task SeedDishAsync(MenuDishKind kind, string name)
+    {
+        await using var db = dbFactory.CreateDbContext();
+        db.MenuDishes.Add(new MenuDish { Kind = kind, Name = name });
+        await db.SaveChangesAsync();
     }
 
     private async Task SeedUsersAsync()

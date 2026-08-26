@@ -13,6 +13,7 @@ public sealed class EbedrendeloDbContext(DbContextOptions<EbedrendeloDbContext> 
     public DbSet<OrderingPeriod> OrderingPeriods => Set<OrderingPeriod>();
     public DbSet<DailyMenu> DailyMenus => Set<DailyMenu>();
     public DbSet<MenuVariant> MenuVariants => Set<MenuVariant>();
+    public DbSet<MenuDish> MenuDishes => Set<MenuDish>();
     public DbSet<MenuOrder> MenuOrders => Set<MenuOrder>();
     public DbSet<ALaCarteItem> ALaCarteItems => Set<ALaCarteItem>();
     public DbSet<ALaCarteDailyOffer> ALaCarteDailyOffers => Set<ALaCarteDailyOffer>();

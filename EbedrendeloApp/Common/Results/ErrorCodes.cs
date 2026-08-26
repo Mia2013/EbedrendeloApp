@@ -16,4 +16,5 @@ public static class ErrorCodes
     public const string HasOrders = nameof(HasOrders);
     public const string NotFound = nameof(NotFound);
     public const string NoVariants = nameof(NoVariants);
+    public const string DuplicateName = nameof(DuplicateName);
 }

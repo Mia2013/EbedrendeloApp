@@ -6,7 +6,7 @@
 
 <MudThemeProvider Theme="AppTheme.Default" />
 <MudPopoverProvider />
-<MudDialogProvider />
+<MudDialogProvider CloseButton="true" />
 <MudSnackbarProvider />
 
 <MudLayout>
@@ -35,10 +35,14 @@
     </MudDrawer>
 
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-6">
             @Body
         </MudContainer>
     </MudMainContent>
+
+    <MudScrollToTop TopOffset="300" ScrollBehavior="ScrollBehavior.Smooth" Style="z-index:1400;">
+        <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.KeyboardArrowUp" aria-label="Vissza a lap tetejére" />
+    </MudScrollToTop>
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>

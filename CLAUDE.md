@@ -17,6 +17,7 @@ A `.claude/plans/` alatt él a két mérvadó terv — **egyetlen példányban**
 |---|---|
 | `01-szerver-architektura.md` | adatmodell, üzleti szabályok, MediatR use case-ek, végrehajtási sorrend |
 | `02-user-stories.md` | user story-k + elfogadási kritériumok + use case ↔ story lefedettségi mátrix |
+| `03-nyitott-teendok.md` | backlog: fejlesztés közben felmerülő, nem blokkoló észrevételek/ötletek |
 
 Domain-feladat előtt ezekből indulj ki, ne a sablonkódból. Ha a use case készlet változik, **mindkettőt**
 frissíteni kell; a kapocs a `02` végén lévő lefedettségi mátrix.
@@ -104,3 +105,10 @@ Minőség-kapuk:
 - `crap-analysis` — összetett kódhoz tartozó tesztek hozzáadása/módosítása után
 
 Jelenleg nem relevánsak ehhez a projekthez (Aspire, Akka.NET, DocFX) — csak akkor vonatkoztass rájuk, ha a stack ténylegesen bővül ilyen irányba.
+
+## Rules
+- Keep reports concise (bullet points over paragraphs)
+- Cite sources from research or skills
+- For code changes: Show diff/plan briefly, then execute  
+- For components: Use artifact iteration (generate → you edit → feedback)
+- Ask clarifying questions only if task is truly ambiguous

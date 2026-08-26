@@ -1,4 +1,5 @@
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,7 @@ public sealed class GetPeriodMenuHandler(IDbContextFactory<EbedrendeloDbContext>
         }
 
         var menus = await query.OrderBy(m => m.Date).ToListAsync(cancellationToken);
+        var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
 
         var dtos = menus
             .Select(m => new DailyMenuDto(
@@ -36,7 +38,7 @@ public sealed class GetPeriodMenuHandler(IDbContextFactory<EbedrendeloDbContext>
                 m.Note,
                 m.Variants
                     .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
-                    .Select(v => new MenuVariantDto(v.Code, v.Name, v.Description, v.SortOrder))
+                    .Select(v => MenuVariantDtoFactory.Create(v, dishes))
                     .ToList()))
             .ToList();
 

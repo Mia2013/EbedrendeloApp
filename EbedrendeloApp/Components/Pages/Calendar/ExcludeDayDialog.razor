@@ -38,8 +38,8 @@
         </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Mégse</MudButton>
-        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="isSaving">Nap kizárása</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.EventBusy" OnClick="SubmitAsync" Disabled="isSaving">Nap kizárása</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="Cancel">Mégse</MudButton>
     </DialogActions>
 </MudDialog>
 

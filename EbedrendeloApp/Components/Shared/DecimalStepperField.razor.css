@@ -1,0 +1,28 @@
+.decimal-stepper-field {
+    position: relative;
+    width: 100%;
+}
+
+.decimal-stepper-field ::deep .mud-input-slot {
+    padding-right: 28px;
+}
+
+.decimal-stepper-field__spin {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    bottom: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.decimal-stepper-field__spin ::deep .decimal-stepper-field__spin-btn {
+    padding: 0;
+    width: 22px;
+    height: 18px;
+}
+
+.decimal-stepper-field__spin ::deep .decimal-stepper-field__spin-btn .mud-icon-root {
+    font-size: 1rem;
+}

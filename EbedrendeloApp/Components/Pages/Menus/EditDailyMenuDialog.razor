@@ -1,0 +1,387 @@
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Menus
+@using EbedrendeloApp.Features.Menus.GetDailyMenu
+@using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions
+@using EbedrendeloApp.Features.Menus.UpsertDailyMenu
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">@Date.ToString("yyyy.MM.dd.") (@Date.ToString("dddd", HungarianCulture)) menüjének szerkesztése</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-2">@errorMessage</MudAlert>
+            }
+
+            <MudTextField T="string" Label="Megjegyzés" @bind-Value="note" Variant="Variant.Outlined" MaxLength="500" Class="mb-2" />
+
+            @if (variants.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">Még nincs egyetlen variáns sem hozzáadva.</MudText>
+            }
+
+            <MudGrid Spacing="1" Class="mb-1">
+                @foreach (var variant in variants)
+                {
+                    <MudItem xs="12" md="4">
+                        <MudPaper Outlined="true" Class="pa-2 d-flex flex-column" Style="height:100%;">
+                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
+                                <MudTextField T="string" Label="Kód" @bind-Value="variant.Code" Variant="Variant.Outlined" MaxLength="8" Style="width:90px;" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
+                                               title="Variáns törlése" OnClick="() => RemoveVariantAsync(variant)" Disabled="isSaving" />
+                            </MudStack>
+
+                            <MudStack Spacing="1" Class="flex-grow-1">
+                                @if (variant.OpenDishEditor == DishEditorTarget.Soup)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Leves szerkesztése</MudText>
+                                    <MenuDishEditor Existing="variant.SoupDish" OnSaved="d => OnSoupSaved(variant, d)" OnCancelled="() => variant.OpenDishEditor = DishEditorTarget.None" />
+                                }
+                                else
+                                {
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Start">
+                                        <MudAutocomplete T="MenuDishDto" Label="Leves" Value="variant.SoupDish" ValueChanged="d => OnSoupSelected(variant, d)"
+                                                         SearchFunc="SearchSoupsAsync" ToStringFunc="d => d?.Name" CoerceValue="false"
+                                                         Variant="Variant.Outlined" Class="flex-grow-1" />
+                                        @if (variant.SoupDish?.Id is not null)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small"
+                                                           title="Leves adatainak szerkesztése" OnClick="() => variant.OpenDishEditor = DishEditorTarget.Soup" />
+                                        }
+                                    </MudStack>
+                                    @if (FormatAllergensShort(variant.SoupDish) is { } soupAllergensShort)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="cursor:help;" title="@FormatAllergens(variant.SoupDish)">Allergén: @soupAllergensShort</MudText>
+                                    }
+                                    @if (FormatNutrition(variant.SoupDish) is { } soupNutritionText)
+                                    {
+                                        <MudText Class="mud-text-secondary" Style="font-size:0.68rem; line-height:1.3;">@soupNutritionText</MudText>
+                                    }
+                                }
+
+                                @if (variant.OpenDishEditor == DishEditorTarget.MainCourse)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Főétel szerkesztése</MudText>
+                                    <MenuDishEditor Existing="variant.MainCourseDish" OnSaved="d => OnMainCourseSaved(variant, d)" OnCancelled="() => variant.OpenDishEditor = DishEditorTarget.None" />
+                                }
+                                else if (variant.OpenDishEditor != DishEditorTarget.Soup)
+                                {
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Start">
+                                        <MudAutocomplete T="MenuDishDto" Label="Főétel" Value="variant.MainCourseDish" ValueChanged="d => OnMainCourseSelected(variant, d)"
+                                                         SearchFunc="SearchMainCoursesAsync" ToStringFunc="d => d?.Name" CoerceValue="false"
+                                                         Variant="Variant.Outlined" Class="flex-grow-1" />
+                                        @if (variant.MainCourseDish?.Id is not null)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small"
+                                                           title="Főétel adatainak szerkesztése" OnClick="() => variant.OpenDishEditor = DishEditorTarget.MainCourse" />
+                                        }
+                                    </MudStack>
+                                    @if (FormatAllergensShort(variant.MainCourseDish) is { } mainCourseAllergensShort)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="cursor:help;" title="@FormatAllergens(variant.MainCourseDish)">Allergén: @mainCourseAllergensShort</MudText>
+                                    }
+                                    @if (FormatNutrition(variant.MainCourseDish) is { } mainCourseNutritionText)
+                                    {
+                                        <MudText Class="mud-text-secondary" Style="font-size:0.68rem; line-height:1.3;">@mainCourseNutritionText</MudText>
+                                    }
+                                }
+
+                                @if (variant.OpenDishEditor == DishEditorTarget.NewDish)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Új étel hozzáadása</MudText>
+                                    <MenuDishEditor OnSaved="d => OnNewDishSaved(variant, d)" OnCancelled="() => variant.OpenDishEditor = DishEditorTarget.None" />
+                                }
+                            </MudStack>
+
+                            @if (variant.OpenDishEditor == DishEditorTarget.None)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                           OnClick="() => variant.OpenDishEditor = DishEditorTarget.NewDish" Class="mt-1" Style="align-self:flex-start;">
+                                    Hozzáad
+                                </MudButton>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddVariant" Disabled="isSaving">
+                Variáns hozzáadása
+            </MudButton>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="SaveAsync" Disabled="isLoading || isSaving || variants.Count == 0">
+            Mentés
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="() => MudDialog.Cancel()" Disabled="isSaving">
+            Mégse
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+    private static readonly string[] DefaultVariantCodes = ["A", "B", "C"];
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public required DateOnly Date { get; set; }
+
+    private enum DishEditorTarget { None, NewDish, Soup, MainCourse }
+
+    private sealed class VariantRow
+    {
+        public bool IsPersisted { get; init; }
+        public string Code { get; set; } = string.Empty;
+        public MenuDishDto? SoupDish { get; set; }
+        public MenuDishDto? MainCourseDish { get; set; }
+        public DishEditorTarget OpenDishEditor { get; set; }
+
+        public string Name => SoupDish?.Name ?? string.Empty;
+        public string Description => MainCourseDish?.Name ?? string.Empty;
+    }
+
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? errorMessage;
+    private string note = string.Empty;
+    private List<VariantRow> variants = [];
+    private MenuDishSuggestionsDto dishSuggestions = new([], []);
+
+    protected override async Task OnInitializedAsync()
+    {
+        dishSuggestions = await Mediator.Send(new GetMenuDishSuggestionsQuery());
+
+        var dto = await Mediator.Send(new GetDailyMenuQuery(Date, IncludeUnpublished: true));
+        note = dto?.Note ?? string.Empty;
+        variants = dto?.Variants.Select(ToVariantRow).ToList() ?? [];
+
+        // Ha még nincs menü erre a napra, alapból felkínáljuk a szokásos A/B/C variánst üresen — az
+        // admin a jellemző esetben úgyis ezt a hármat tölti ki, nem kell egyenként "hozzáadás"-t nyomnia.
+        if (variants.Count == 0)
+        {
+            foreach (var code in DefaultVariantCodes)
+            {
+                variants.Add(new VariantRow { IsPersisted = false, Code = code });
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private VariantRow ToVariantRow(MenuVariantDto v) => new()
+    {
+        IsPersisted = true,
+        Code = v.Code,
+        SoupDish = ResolveDish(
+            dishSuggestions.Soups, MenuDishKind.Leves, v.Name, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
+            v.SoupCarbohydrateGrams, v.SoupSugarGrams, v.SoupProteinGrams, v.SoupSaltGrams),
+        MainCourseDish = v.Description is null ? null : ResolveDish(
+            dishSuggestions.MainCourses, MenuDishKind.Foetel, v.Description, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams,
+            v.MainCourseSaturatedFatGrams, v.MainCourseCarbohydrateGrams, v.MainCourseSugarGrams, v.MainCourseProteinGrams, v.MainCourseSaltGrams),
+    };
+
+    /// <summary>Egy elmentett variáns nevéhez tartozó katalógustételt a már betöltött <see cref="dishSuggestions"/>-ből
+    /// próbáljuk feloldani (ez adja az Id-t a szerkesztés-ceruzához). Ha a katalógusban már nincs ilyen nevű tétel,
+    /// a lekérdezésből kapott adatokból építünk egy Id nélküli DTO-t.</summary>
+    private static MenuDishDto? ResolveDish(
+        IReadOnlyList<MenuDishDto> catalog, MenuDishKind kind, string name, string? allergens,
+        decimal? energyKcal, decimal? fatGrams, decimal? saturatedFatGrams, decimal? carbohydrateGrams,
+        decimal? sugarGrams, decimal? proteinGrams, decimal? saltGrams)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var match = catalog.FirstOrDefault(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase));
+        return match ?? new MenuDishDto(name, allergens, energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams, Kind: kind);
+    }
+
+    private static string? FormatAllergens(MenuDishDto? dish) => dish is null ? null : AllergenCatalog.Format(dish.Allergens);
+
+    private static string? FormatAllergensShort(MenuDishDto? dish) => dish is null ? null : AllergenCatalog.FormatNumbersOnly(dish.Allergens);
+
+    private static string? FormatNutrition(MenuDishDto? dish) => dish is null ? null : MenuVariantNutritionFormat.Format(
+        dish.EnergyKcal, dish.FatGrams, dish.SaturatedFatGrams, dish.CarbohydrateGrams, dish.SugarGrams, dish.ProteinGrams, dish.SaltGrams);
+
+    private Task<IEnumerable<MenuDishDto>> SearchSoupsAsync(string value, CancellationToken ct)
+        => Task.FromResult(FilterDishes(dishSuggestions.Soups, value));
+
+    private Task<IEnumerable<MenuDishDto>> SearchMainCoursesAsync(string value, CancellationToken ct)
+        => Task.FromResult(FilterDishes(dishSuggestions.MainCourses, value));
+
+    private static IEnumerable<MenuDishDto> FilterDishes(IReadOnlyList<MenuDishDto> dishes, string value)
+        => string.IsNullOrWhiteSpace(value) ? dishes : dishes.Where(d => d.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+
+    private void OnSoupSelected(VariantRow variant, MenuDishDto? dish)
+    {
+        if (dish is null)
+        {
+            // CoerceValue=false: typing something that doesn't match any suggestion and blurring fires
+            // ValueChanged(null) to revert the box — nothing on the row actually changed, so no-op.
+            return;
+        }
+
+        variant.SoupDish = dish;
+
+        // Az A és B menü levese jellemzően megegyezik: ha az A variáns levesét adjuk meg, ajánljuk fel
+        // azt a még leves nélküli többi variánsnak is — az admin felülírhatja, ha mégsem.
+        if (string.Equals(variant.Code, "A", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var other in variants.Where(v => v != variant && v.SoupDish is null))
+            {
+                other.SoupDish = dish;
+            }
+        }
+    }
+
+    private void OnMainCourseSelected(VariantRow variant, MenuDishDto? dish)
+    {
+        if (dish is not null)
+        {
+            variant.MainCourseDish = dish;
+        }
+    }
+
+    private async Task RefreshDishSuggestionsAsync() => dishSuggestions = await Mediator.Send(new GetMenuDishSuggestionsQuery());
+
+    private async Task OnSoupSaved(VariantRow variant, MenuDishDto dish)
+    {
+        variant.SoupDish = dish;
+        variant.OpenDishEditor = DishEditorTarget.None;
+        await RefreshDishSuggestionsAsync();
+    }
+
+    private async Task OnMainCourseSaved(VariantRow variant, MenuDishDto dish)
+    {
+        variant.MainCourseDish = dish;
+        variant.OpenDishEditor = DishEditorTarget.None;
+        await RefreshDishSuggestionsAsync();
+    }
+
+    /// <summary>A "Hozzáad" gomb egyetlen inline űrlapot nyit mindkét fajta ételhez — a beágyazott
+    /// <see cref="MenuDishEditor"/>-ban választott <see cref="MenuDishDto.Kind"/> dönti el, melyik mezőbe
+    /// kerül az új tétel.</summary>
+    private async Task OnNewDishSaved(VariantRow variant, MenuDishDto dish)
+    {
+        if (dish.Kind == MenuDishKind.Leves)
+        {
+            OnSoupSelected(variant, dish);
+        }
+        else
+        {
+            OnMainCourseSelected(variant, dish);
+        }
+
+        variant.OpenDishEditor = DishEditorTarget.None;
+        await RefreshDishSuggestionsAsync();
+    }
+
+    private void AddVariant() => variants.Add(new VariantRow { IsPersisted = false });
+
+    private async Task RemoveVariantAsync(VariantRow variant)
+    {
+        if (!variant.IsPersisted)
+        {
+            variants.Remove(variant);
+            return;
+        }
+
+        var parameters = new DialogParameters<DeleteMenuVariantDialog>
+        {
+            { x => x.Date, Date },
+            { x => x.VariantCode, variant.Code },
+        };
+        var dialogRef = await DialogService.ShowAsync<DeleteMenuVariantDialog>("Variáns törlése", parameters);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            variants.Remove(variant);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (variants.Count == 0)
+        {
+            return;
+        }
+
+        if (variants.Any(v => string.IsNullOrWhiteSpace(v.Code) || string.IsNullOrWhiteSpace(v.Name)))
+        {
+            errorMessage = "Minden variánsnak kell kód és leves.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+
+        // A kód (A/B/C…) magától meghatározza a sorrendet, nincs rá külön szerkeszthető mező.
+        var orderedVariants = variants
+            .OrderBy(v => v.Code, StringComparer.OrdinalIgnoreCase)
+            .Select((v, index) => new MenuVariantInput(
+                v.Code.Trim(),
+                v.Name.Trim(),
+                string.IsNullOrWhiteSpace(v.Description) ? null : v.Description.Trim(),
+                index,
+                v.SoupDish?.Allergens,
+                v.MainCourseDish?.Allergens,
+                v.SoupDish?.EnergyKcal,
+                v.SoupDish?.FatGrams,
+                v.SoupDish?.SaturatedFatGrams,
+                v.SoupDish?.CarbohydrateGrams,
+                v.SoupDish?.SugarGrams,
+                v.SoupDish?.ProteinGrams,
+                v.SoupDish?.SaltGrams,
+                v.MainCourseDish?.EnergyKcal,
+                v.MainCourseDish?.FatGrams,
+                v.MainCourseDish?.SaturatedFatGrams,
+                v.MainCourseDish?.CarbohydrateGrams,
+                v.MainCourseDish?.SugarGrams,
+                v.MainCourseDish?.ProteinGrams,
+                v.MainCourseDish?.SaltGrams))
+            .ToList();
+
+        try
+        {
+            var result = await Mediator.Send(new UpsertDailyMenuCommand(Date, string.IsNullOrWhiteSpace(note) ? null : note.Trim(), orderedVariants, CurrentUser.UserId));
+            if (result.IsSuccess)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage;
+            }
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

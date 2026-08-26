@@ -57,14 +57,14 @@
     <DialogActions>
         @if (outcome is null)
         {
-            <MudButton OnClick="Cancel">Mégse</MudButton>
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmAsync" Disabled="isSaving">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Undo" OnClick="ConfirmAsync" Disabled="isSaving">
                 Visszavonás megerősítése
             </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="Cancel">Mégse</MudButton>
         }
         else
         {
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Close">Bezárás</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Check" OnClick="Close">Bezárás</MudButton>
         }
     </DialogActions>
 </MudDialog>

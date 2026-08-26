@@ -1,0 +1,139 @@
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Menus.CreateMenuDish
+@using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions
+@using EbedrendeloApp.Features.Menus.UpdateMenuDish
+@using MediatR
+@inject IMediator Mediator
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+}
+
+<MudGrid Spacing="3">
+    <MudItem xs="12">
+        <MudTextField T="string" Label="Név" @bind-Value="name" Variant="Variant.Outlined" MaxLength="128" Immediate="true" FullWidth="true" />
+    </MudItem>
+
+    <MudItem xs="6">
+        <MudSelect T="MenuDishKind" Label="Típus" @bind-Value="selectedKind" Disabled="IsEditMode" Variant="Variant.Outlined">
+            <MudSelectItem T="MenuDishKind" Value="MenuDishKind.Leves">Leves</MudSelectItem>
+            <MudSelectItem T="MenuDishKind" Value="MenuDishKind.Foetel">Főétel</MudSelectItem>
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="6">
+        <MudSelect T="int" Label="Allergének" MultiSelection="true" SelectedValues="allergenIds" SelectedValuesChanged="v => allergenIds = v.ToHashSet()" Variant="Variant.Outlined">
+            @foreach (var allergen in AllergenCatalog.All)
+            {
+                <MudSelectItem T="int" Value="allergen.Number">@allergen.Number – @allergen.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+
+    <MudItem xs="12" Class="d-flex justify-center">
+        <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+    </MudItem>
+
+    <MudItem xs="12">
+        <DecimalStepperField Label="Energia (kcal)" @bind-Value="energyKcal" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Zsír" @bind-Value="fatGrams" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Telített zsír" @bind-Value="saturatedFatGrams" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Szénhidrát" @bind-Value="carbohydrateGrams" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Cukor" @bind-Value="sugarGrams" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Fehérje" @bind-Value="proteinGrams" />
+    </MudItem>
+    <MudItem xs="6">
+        <DecimalStepperField Label="Só" @bind-Value="saltGrams" />
+    </MudItem>
+</MudGrid>
+
+<MudStack Row Spacing="2" Class="mt-3">
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+               OnClick="SaveAsync" Disabled="isSaving || string.IsNullOrWhiteSpace(name)">
+        Mentés
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="() => OnCancelled.InvokeAsync()">Mégse</MudButton>
+</MudStack>
+
+@code {
+    /// <summary>Ha meg van adva, a szerkesztő módba vált: a mezők (a típust is beleértve) ebből
+    /// töltődnek fel, és mentéskor <see cref="UpdateMenuDishCommand"/> megy a már meglévő
+    /// (<see cref="MenuDishDto.Id"/>-vel azonosított) katalógustételre — új felvétel helyett. Létrehozás
+    /// módban a típust maga ez a komponens kéri be (a hívó nem tudhatja előre, levest vagy főételt vesz-e
+    /// fel az admin).</summary>
+    [Parameter]
+    public MenuDishDto? Existing { get; set; }
+
+    [Parameter]
+    public EventCallback<MenuDishDto> OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelled { get; set; }
+
+    private bool IsEditMode => Existing is not null;
+
+    private MenuDishKind selectedKind = MenuDishKind.Leves;
+    private string name = string.Empty;
+    private HashSet<int> allergenIds = [];
+    private decimal? energyKcal;
+    private decimal? fatGrams;
+    private decimal? saturatedFatGrams;
+    private decimal? carbohydrateGrams;
+    private decimal? sugarGrams;
+    private decimal? proteinGrams;
+    private decimal? saltGrams;
+    private bool isSaving;
+    private string? errorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } dish)
+        {
+            selectedKind = dish.Kind;
+            name = dish.Name;
+            allergenIds = AllergenCatalog.Parse(dish.Allergens);
+            energyKcal = dish.EnergyKcal;
+            fatGrams = dish.FatGrams;
+            saturatedFatGrams = dish.SaturatedFatGrams;
+            carbohydrateGrams = dish.CarbohydrateGrams;
+            sugarGrams = dish.SugarGrams;
+            proteinGrams = dish.ProteinGrams;
+            saltGrams = dish.SaltGrams;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = IsEditMode
+            ? await Mediator.Send(new UpdateMenuDishCommand(
+                Existing!.Id!.Value, name.Trim(), allergenIds, energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams))
+            : await Mediator.Send(new CreateMenuDishCommand(
+                selectedKind, name.Trim(), allergenIds, energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams));
+
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            await OnSaved.InvokeAsync(result.Value);
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

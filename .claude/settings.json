@@ -1,5 +1,7 @@
 {
   "enabledPlugins": {
-    "dotnet-skills@dotnet-skills": true
+    "dotnet-skills@dotnet-skills": true,
+    "mattpocock-skills@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
   }
 }

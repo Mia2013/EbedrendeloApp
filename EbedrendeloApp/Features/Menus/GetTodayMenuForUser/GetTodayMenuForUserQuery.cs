@@ -22,6 +22,6 @@ public sealed record TodayMenuDto(
 
 public sealed record MyMenuSelectionDto(string VariantCode, string VariantName, int PriceHuf);
 
-public sealed record ALaCarteOfferDto(int ALaCarteItemId, string Name, ALaCarteCategory Category, int PriceHuf, int FreeCount);
+public sealed record ALaCarteOfferDto(int ALaCarteItemId, string Name, ALaCarteCategory Category, int PriceHuf, int FreeCount, string? Allergens = null);
 
 public sealed record MyALaCarteLineDto(string ItemName, ALaCarteCategory Category, int UnitPriceHuf);

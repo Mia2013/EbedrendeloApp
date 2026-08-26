@@ -37,7 +37,9 @@ public sealed class UpsertDailyMenuHandler(
 
         if (menu is null)
         {
-            menu = new DailyMenu { Date = request.Date, IsPublished = false, Note = request.Note };
+            // Nincs külön publikálás-lépés: a mentés (sikeres validáció = van legalább egy variáns)
+            // azonnal rendelhetővé teszi a napot.
+            menu = new DailyMenu { Date = request.Date, IsPublished = true, Note = request.Note };
             db.DailyMenus.Add(menu);
         }
         else
@@ -46,8 +48,9 @@ public sealed class UpsertDailyMenuHandler(
             if (wasRevived)
             {
                 menu.RemovedAtUtc = null;
-                menu.IsPublished = false;
             }
+
+            menu.IsPublished = true;
         }
 
         var requestedCodes = request.Variants.Select(v => v.Code).ToHashSet(StringComparer.Ordinal);
@@ -57,6 +60,10 @@ public sealed class UpsertDailyMenuHandler(
         // revive that row (the unique index on (DailyMenuId, Code) would otherwise conflict with a
         // fresh insert).
         var existingByCode = menu.Variants.ToDictionary(v => v.Code, StringComparer.Ordinal);
+
+        // Single batch load instead of a query per variant per dish-kind: the same (Kind, Name) lookup
+        // MenuDishAllergenLookup uses for reads, but tracked here since UpdateDishAsync mutates in place.
+        var dishes = await LoadTrackedDishesAsync(db, request.Variants, cancellationToken);
 
         foreach (var input in request.Variants)
         {
@@ -77,6 +84,19 @@ public sealed class UpsertDailyMenuHandler(
                     Description = input.Description,
                     SortOrder = input.SortOrder,
                 });
+            }
+
+            UpdateDish(
+                dishes, MenuDishKind.Leves, input.Name, input.SoupAllergens,
+                input.SoupEnergyKcal, input.SoupFatGrams, input.SoupSaturatedFatGrams, input.SoupCarbohydrateGrams,
+                input.SoupSugarGrams, input.SoupProteinGrams, input.SoupSaltGrams);
+            if (!string.IsNullOrWhiteSpace(input.Description))
+            {
+                UpdateDish(
+                    dishes, MenuDishKind.Foetel, input.Description, input.MainCourseAllergens,
+                    input.MainCourseEnergyKcal, input.MainCourseFatGrams, input.MainCourseSaturatedFatGrams,
+                    input.MainCourseCarbohydrateGrams, input.MainCourseSugarGrams, input.MainCourseProteinGrams,
+                    input.MainCourseSaltGrams);
             }
         }
 
@@ -129,5 +149,58 @@ public sealed class UpsertDailyMenuHandler(
         await transaction.CommitAsync(cancellationToken);
 
         return Result.Success(menu.Id);
+    }
+
+    /// <summary>
+    /// Batch-loads every dish catalog row this request could touch (tracked, not <see cref="MenuDishAllergenLookup"/>'s
+    /// NoTracking read) in a single query, keyed the same way — avoids a per-variant per-dish-kind round trip in
+    /// <see cref="UpdateDish"/> below.
+    /// </summary>
+    private static async Task<Dictionary<(MenuDishKind Kind, string Name), MenuDish>> LoadTrackedDishesAsync(
+        EbedrendeloDbContext db, IReadOnlyList<MenuVariantInput> variants, CancellationToken cancellationToken)
+    {
+        var soupNames = variants.Select(v => v.Name).Distinct().ToList();
+        var mainCourseNames = variants.Where(v => !string.IsNullOrWhiteSpace(v.Description))
+            .Select(v => v.Description!).Distinct().ToList();
+
+        var dishes = await db.MenuDishes
+            .Where(d => (d.Kind == MenuDishKind.Leves && soupNames.Contains(d.Name))
+                     || (d.Kind == MenuDishKind.Foetel && mainCourseNames.Contains(d.Name)))
+            .ToListAsync(cancellationToken);
+
+        return dishes.ToDictionary(d => (d.Kind, d.Name));
+    }
+
+    /// <summary>
+    /// Updates an *existing* dish catalog row's allergens/nutrition in place when a daily menu referencing
+    /// it is saved — a same-day correction doesn't need a separate screen. Does **not** create a new row
+    /// for an unknown name: brand-new dishes are only ever added explicitly via
+    /// Features/Menus/CreateMenuDish (the "+ Új étel" dialog), so a name that somehow doesn't match any
+    /// catalog entry here is silently skipped rather than failing the whole save. A blank field (allergens
+    /// or any nutrition value) is treated as "no change", so re-saving a day without touching that field
+    /// can't accidentally wipe out data recorded earlier.
+    /// </summary>
+    private static void UpdateDish(
+        IReadOnlyDictionary<(MenuDishKind Kind, string Name), MenuDish> dishes, MenuDishKind kind, string name, string? allergens,
+        decimal? energyKcal, decimal? fatGrams, decimal? saturatedFatGrams, decimal? carbohydrateGrams,
+        decimal? sugarGrams, decimal? proteinGrams, decimal? saltGrams)
+    {
+        if (!dishes.TryGetValue((kind, name), out var dish))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(allergens))
+        {
+            dish.Allergens = allergens.Trim();
+        }
+
+        dish.EnergyKcal = energyKcal ?? dish.EnergyKcal;
+        dish.FatGrams = fatGrams ?? dish.FatGrams;
+        dish.SaturatedFatGrams = saturatedFatGrams ?? dish.SaturatedFatGrams;
+        dish.CarbohydrateGrams = carbohydrateGrams ?? dish.CarbohydrateGrams;
+        dish.SugarGrams = sugarGrams ?? dish.SugarGrams;
+        dish.ProteinGrams = proteinGrams ?? dish.ProteinGrams;
+        dish.SaltGrams = saltGrams ?? dish.SaltGrams;
     }
 }

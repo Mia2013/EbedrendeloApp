@@ -1,4 +1,5 @@
 using EbedrendeloApp.Domain.Entities;
+using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Menus.GetDailyMenu;
 using EbedrendeloApp.Tests.TestSupport;
 
@@ -65,6 +66,47 @@ public class GetDailyMenuHandlerTests : IDisposable
 
         Assert.NotNull(result);
         Assert.Equal(["A", "B"], result!.Variants.Select(v => v.Code));
+    }
+
+    [Fact]
+    public async Task Joins_allergens_from_the_dish_catalog_by_name()
+    {
+        var date = new DateOnly(2026, 8, 20);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var menu = new DailyMenu { Date = date, IsPublished = true };
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", Description = "Rántott hús", SortOrder = 0 });
+            db.DailyMenus.Add(menu);
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", Allergens = "zeller" });
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Foetel, Name = "Rántott hús", Allergens = "glutén, tojás" });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetDailyMenuQuery(date, IncludeUnpublished: true), CancellationToken.None);
+
+        var variant = Assert.Single(result!.Variants);
+        Assert.Equal("zeller", variant.SoupAllergens);
+        Assert.Equal("glutén, tojás", variant.MainCourseAllergens);
+    }
+
+    [Fact]
+    public async Task Joins_nutrition_from_the_dish_catalog_by_name()
+    {
+        var date = new DateOnly(2026, 8, 20);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var menu = new DailyMenu { Date = date, IsPublished = true };
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", SortOrder = 0 });
+            db.DailyMenus.Add(menu);
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", EnergyKcal = 108, SaltGrams = 0.14m });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetDailyMenuQuery(date, IncludeUnpublished: true), CancellationToken.None);
+
+        var variant = Assert.Single(result!.Variants);
+        Assert.Equal(108, variant.SoupEnergyKcal);
+        Assert.Equal(0.14m, variant.SoupSaltGrams);
     }
 
     private async Task SeedMenuAsync(DateOnly date, bool isPublished)

@@ -95,7 +95,7 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
         await SeedPublishedMenuAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
-            var item = new ALaCarteItem { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true };
+            var item = new ALaCarteItem { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true, Allergens = "1,9" };
             db.ALaCarteItems.Add(item);
             await db.SaveChangesAsync();
 
@@ -108,6 +108,42 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
         var offer = Assert.Single(result.ALaCarteOffers);
         Assert.Equal("Húsleves", offer.Name);
         Assert.Equal(7, offer.FreeCount);
+        Assert.Equal("1,9", offer.Allergens);
+    }
+
+    [Fact]
+    public async Task Includes_soup_allergens_from_the_dish_catalog()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü", Allergens = "glutén" });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var variant = result.Variants.Single(v => v.Code == "A");
+        Assert.Equal("glutén", variant.SoupAllergens);
+    }
+
+    [Fact]
+    public async Task Includes_soup_nutrition_from_the_dish_catalog()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü", EnergyKcal = 108, FatGrams = 1.8m });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var variant = result.Variants.Single(v => v.Code == "A");
+        Assert.Equal(108, variant.SoupEnergyKcal);
+        Assert.Equal(1.8m, variant.SoupFatGrams);
     }
 
     private async Task SeedUserAsync()

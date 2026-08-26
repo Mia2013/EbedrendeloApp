@@ -9,4 +9,5 @@ public sealed class ALaCarteItem
     public required ALaCarteCategory Category { get; set; }
     public required int PriceHuf { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? Allergens { get; set; }
 }

@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -20,13 +21,15 @@ public sealed class GetDailyMenuHandler(IDbContextFactory<EbedrendeloDbContext> 
             return null;
         }
 
+        var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
+
         return new DailyMenuDto(
             menu.Date,
             menu.IsPublished,
             menu.Note,
             menu.Variants
                 .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
-                .Select(v => new MenuVariantDto(v.Code, v.Name, v.Description, v.SortOrder))
+                .Select(v => MenuVariantDtoFactory.Create(v, dishes))
                 .ToList());
     }
 }

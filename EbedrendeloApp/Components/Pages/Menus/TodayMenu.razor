@@ -1,0 +1,152 @@
+@page "/mai-menu"
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Common.Results
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Menus
+@using EbedrendeloApp.Features.Menus.GetTodayMenuForUser
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<PageTitle>Mai menü</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Mai menü</MudText>
+
+@if (today is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!today.IsOrderableToday)
+{
+    <MudAlert Severity="Severity.Info">@Describe(today.NotOrderableReason)</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-3 mb-3" Outlined="true">
+        <MudText Typo="Typo.h6" GutterBottom="true">Mai menüválaszték</MudText>
+        <MudGrid Spacing="2">
+            @foreach (var variant in today.Variants)
+            {
+                <MudItem xs="12" md="4">
+                    <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
+                            <MudText Typo="Typo.subtitle1">@variant.Code menü</MudText>
+                            @if (today.MySelection?.VariantCode == variant.Code)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Ezt választottad</MudChip>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.body2">
+                            Leves: @variant.Name
+                            @if (AllergenCatalog.Format(variant.SoupAllergens) is { } soupAllergens)
+                            {
+                                <span class="mud-text-secondary"> (allergén: @soupAllergens)</span>
+                            }
+                        </MudText>
+                        @if (variant.FormatSoup() is { } soupNutrition)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutrition</MudText>
+                        }
+                        @if (!string.IsNullOrEmpty(variant.Description))
+                        {
+                            <MudText Typo="Typo.body2">
+                                Főétel: @variant.Description
+                                @if (AllergenCatalog.Format(variant.MainCourseAllergens) is { } mainCourseAllergens)
+                                {
+                                    <span class="mud-text-secondary"> (allergén: @mainCourseAllergens)</span>
+                                }
+                            </MudText>
+                            @if (variant.FormatMainCourse() is { } mainCourseNutrition)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@mainCourseNutrition</MudText>
+                            }
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    <MudAlert Severity="@(today.MySelection is null ? Severity.Warning : Severity.Success)" Class="mb-3" Dense="true">
+        @(today.MySelection is { } selection
+            ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {selection.PriceHuf} Ft értékben."
+            : "Ma még nem rendeltél menüt.")
+    </MudAlert>
+
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudText Typo="Typo.h6" GutterBottom="true">Mai à la carte kínálat</MudText>
+
+        @if (today.ALaCarteOffers.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Ma nincs à la carte kínálat.</MudText>
+        }
+        else
+        {
+            <MudTable Items="today.ALaCarteOffers" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Kategória</MudTh>
+                    <MudTh>Tétel</MudTh>
+                    <MudTh>Allergén</MudTh>
+                    <MudTh>Ár</MudTh>
+                    <MudTh>Szabad</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Kategória">@CategoryName(context.Category)</MudTd>
+                    <MudTd DataLabel="Tétel">@context.Name</MudTd>
+                    <MudTd DataLabel="Allergén">
+                        @if (AllergenCatalog.Format(context.Allergens) is { } allergens)
+                        {
+                            <span class="mud-text-secondary">@allergens</span>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
+                    <MudTd DataLabel="Szabad">@context.FreeCount</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-2">Saját à la carte rendelésed</MudText>
+        @if (today.MyALaCarteOrderLines.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Ma nem rendeltél à la carte tételt.</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="1" Class="mt-1">
+                @foreach (var line in today.MyALaCarteOrderLines)
+                {
+                    <MudText Typo="Typo.body2">@line.ItemName (@CategoryName(line.Category)) — @line.UnitPriceHuf Ft</MudText>
+                }
+            </MudStack>
+        }
+    </MudPaper>
+}
+
+@code {
+    private static readonly Dictionary<string, string> ReasonText = new()
+    {
+        [ErrorCodes.NotWorkingDay] = "Ma hétvége van, nincs kiszolgálás.",
+        [ErrorCodes.DayExcluded] = "A mai nap ki van zárva, nincs kiszolgálás.",
+        [ErrorCodes.MenuNotPublished] = "Mára még nincs publikált menü.",
+    };
+
+    private TodayMenuDto? today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
+    }
+
+    private static string Describe(string? reason) => reason is null ? string.Empty : ReasonText.GetValueOrDefault(reason, reason);
+
+    private static string CategoryName(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => "Leves",
+        ALaCarteCategory.Foetel => "Főétel",
+        ALaCarteCategory.Koret => "Köret",
+        ALaCarteCategory.Desszert => "Desszert",
+        _ => category.ToString(),
+    };
+}

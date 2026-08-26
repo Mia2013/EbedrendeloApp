@@ -1,0 +1,73 @@
+@using System.Globalization
+
+<div class="decimal-stepper-field">
+    <MudTextField T="decimal?" Label="@Label" Value="Value" ValueChanged="OnTextChangedAsync" Converter="converter"
+                  Variant="Variant.Outlined" FullWidth="true" />
+    <div class="decimal-stepper-field__spin">
+        <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Class="decimal-stepper-field__spin-btn"
+                       title="Növelés" OnClick="IncrementAsync" />
+        <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="decimal-stepper-field__spin-btn"
+                       title="Csökkentés" OnClick="DecrementAsync" />
+    </div>
+</div>
+
+@code {
+    // A MudNumericField natív <input type="number">-je csak pontot fogad tizedesjelként, magyar
+    // billentyűzettel gépelt vessző egyszerűen nem jut el a komponensig — ezért itt MudTextField +
+    // saját Converter kombó, ami mindkettőt elfogadja, a fel/le lépést pedig egy, az inputra applikált
+    // spin-gomb pár pótolja.
+    private static readonly CultureInfo HungarianCulture = CultureInfo.GetCultureInfo("hu-HU");
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public decimal? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<decimal?> ValueChanged { get; set; }
+
+    [Parameter]
+    public decimal Step { get; set; } = 0.1m;
+
+    [Parameter]
+    public decimal Min { get; set; }
+
+    private readonly DeferredConverter<decimal?, string> converter = BuildConverter();
+
+    private static DeferredConverter<decimal?, string> BuildConverter()
+    {
+        var converter = new DeferredConverter<decimal?, string>();
+        converter.Set(FormatValue, ParseValue);
+        return converter;
+    }
+
+    private static string FormatValue(decimal? value) => value?.ToString("0.##", HungarianCulture) ?? string.Empty;
+
+    private static decimal? ParseValue(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (decimal.TryParse(text, NumberStyles.Number, HungarianCulture, out var huValue))
+        {
+            return huValue;
+        }
+
+        return decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var invariantValue) ? invariantValue : null;
+    }
+
+    private Task OnTextChangedAsync(decimal? value) => SetValueAsync(value is null ? null : Math.Max(Min, value.Value));
+
+    private Task IncrementAsync() => SetValueAsync(Math.Max(Min, (Value ?? 0m) + Step));
+
+    private Task DecrementAsync() => SetValueAsync(Math.Max(Min, (Value ?? 0m) - Step));
+
+    private Task SetValueAsync(decimal? value)
+    {
+        Value = value;
+        return ValueChanged.InvokeAsync(value);
+    }
+}
