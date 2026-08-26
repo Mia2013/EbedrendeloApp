@@ -1,7 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "dotnet-skills": {
+      "source": {
+        "source": "github",
+        "repo": "Mia2013/dotnet-skills"
+      }
+    }
+  },
   "enabledPlugins": {
-    "dotnet-skills@dotnet-skills": true,
     "mattpocock-skills@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "dotnet-skills@dotnet-skills": true
   }
 }
