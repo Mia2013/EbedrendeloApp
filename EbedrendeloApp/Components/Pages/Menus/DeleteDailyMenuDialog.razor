@@ -1,0 +1,64 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Menus.DeleteDailyMenu
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Nap menüjének törlése</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@Date.ToString("yyyy.MM.dd.")</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        <MudAlert Severity="Severity.Warning">
+            A nap összes aktív rendelése lemondásra kerül, teljes jóváírással.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="ConfirmAsync" Disabled="isSaving">
+            Törlés
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel">Mégse</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    private bool isSaving;
+    private string? errorMessage;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new DeleteDailyMenuCommand(Date, CurrentUser.UserId));
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

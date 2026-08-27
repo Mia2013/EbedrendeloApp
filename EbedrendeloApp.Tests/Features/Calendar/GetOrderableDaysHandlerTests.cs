@@ -62,6 +62,51 @@ public class GetOrderableDaysHandlerTests : IDisposable
         Assert.Equal(ErrorCodes.NoActiveOrder, orderable.Reason);
     }
 
+    [Fact]
+    public async Task A_closed_period_is_never_orderable_or_cancellable_even_within_the_deadline_window()
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var closedPeriod = new OrderingPeriod
+        {
+            Name = "Zárt időszak",
+            StartDate = new DateOnly(2026, 8, 17), // Monday
+            EndDate = new DateOnly(2026, 8, 17),
+            OrderDeadline = new DateTime(2026, 8, 20, 10, 0, 0), // still in the future relative to the fixed clock
+            IsOpen = false,
+        };
+        db.OrderingPeriods.Add(closedPeriod);
+
+        db.AppSettings.Add(new AppSetting
+        {
+            MenuPortionHuf = 1400,
+            ChangeDeadlineWorkingDays = 3,
+            ChangeDeadlineLocalTime = new TimeOnly(11, 0),
+            ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
+        });
+
+        var role = new Role { Name = "User" };
+        db.Roles.Add(role);
+        await db.SaveChangesAsync();
+
+        var user = new User { UserId = 2, UserName = "u2", RoleId = role.Id };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var menu = new DailyMenu { Date = closedPeriod.StartDate, IsPublished = true };
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", SortOrder = 0 });
+        db.DailyMenus.Add(menu);
+        await db.SaveChangesAsync();
+
+        var result = await sut.Handle(new GetOrderableDaysQuery(closedPeriod.Id, user.Id), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var day = Assert.Single(result.Value!);
+        Assert.False(day.Orderable);
+        Assert.False(day.Cancellable);
+        Assert.Equal(ErrorCodes.PeriodClosed, day.Reason);
+    }
+
     private async Task SeedAsync()
     {
         await using var db = dbFactory.CreateDbContext();

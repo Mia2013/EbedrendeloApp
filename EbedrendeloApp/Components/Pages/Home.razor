@@ -6,7 +6,10 @@
 
 <PageTitle>Kezdőlap</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Ebédrendelő</MudText>
+<MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+    <MudIcon Icon="@Icons.Material.Filled.LunchDining" Color="Color.Primary" Size="Size.Large" />
+    <MudText Typo="Typo.h4" GutterBottom="true">Ebédrendelő</MudText>
+</MudStack>
 
 @if (CurrentUser.IsLoaded)
 {

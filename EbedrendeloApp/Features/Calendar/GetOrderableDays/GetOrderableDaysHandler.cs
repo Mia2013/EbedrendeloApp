@@ -41,8 +41,8 @@ public sealed class GetOrderableDaysHandler(
             .ToHashSetAsync(cancellationToken);
 
         var dailyMenus = await db.DailyMenus
-            .Include(m => m.Variants)
-            .Where(m => m.Date >= period.StartDate && m.Date <= period.EndDate)
+            .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
+            .Where(m => m.Date >= period.StartDate && m.Date <= period.EndDate && m.RemovedAtUtc == null)
             .ToDictionaryAsync(m => m.Date, cancellationToken);
 
         var userOrders = await db.MenuOrders
@@ -56,7 +56,10 @@ public sealed class GetOrderableDaysHandler(
             .ToDictionaryAsync(v => v.Id, cancellationToken);
 
         var nowLocal = clock.LocalNow;
-        var inOrderWindow = nowLocal <= period.OrderDeadline;
+        // Both ordering phases require IsOpen (01-szerver-architektura.md §"A rendelés két fázisa": "A —
+        // IsOpen ÉS now <= OrderDeadline", "B — IsOpen ÉS now > OrderDeadline ÉS ..."). A period an admin
+        // has explicitly closed must not be orderable/cancellable regardless of the deadline math below.
+        var inOrderWindow = period.IsOpen && nowLocal <= period.OrderDeadline;
 
         var result = new List<OrderableDayDto>();
 
@@ -91,15 +94,15 @@ public sealed class GetOrderableDaysHandler(
 
             if (userOrders.TryGetValue(date, out var order))
             {
-                var cancellable = workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false);
+                var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false);
                 var variant = variants.GetValueOrDefault(order.MenuVariantId);
-                var cancelReason = cancellable ? null : ErrorCodes.DeadlinePassed;
+                var cancelReason = cancellable ? null : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
                 result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.Name, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null));
                 continue;
             }
 
-            var orderable = inOrderWindow || workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false);
-            var reason = orderable ? ErrorCodes.NoActiveOrder : ErrorCodes.DeadlinePassed;
+            var orderable = inOrderWindow || (period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false));
+            var reason = orderable ? ErrorCodes.NoActiveOrder : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
             result.Add(new OrderableDayDto(date, orderable, false, null, null, reason, null));
         }
 

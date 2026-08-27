@@ -12,7 +12,10 @@
 
 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
     <MudStack Spacing="0">
-        <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
+        </MudStack>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
         </MudText>
@@ -53,7 +56,7 @@ else
                 </MudChip>
             </MudTd>
             <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => OpenEditDialogAsync(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="() => OpenEditDialogAsync(context)" />
             </MudTd>
         </RowTemplate>
     </MudTable>

@@ -1,0 +1,30 @@
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">@(IsEditMode ? $"{KindLabel} szerkesztése" : "Új étel hozzáadása")</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MenuDishEditor Existing="Existing" OnSaved="Save" OnCancelled="MudDialog.Cancel" />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Lásd <see cref="MenuDishEditor.Existing"/> — ez a dialógus csak a <see cref="MudDialog"/>
+    /// keretet (cím, X gomb) adja a beágyazható mezőkészlethez.</summary>
+    [Parameter]
+    public MenuDishDto? Existing { get; set; }
+
+    private bool IsEditMode => Existing is not null;
+
+    private string KindLabel => Existing?.Kind == MenuDishKind.Leves ? "leves" : "főétel";
+
+    private void Save(MenuDishDto dish) => MudDialog.Close(DialogResult.Ok(dish));
+}

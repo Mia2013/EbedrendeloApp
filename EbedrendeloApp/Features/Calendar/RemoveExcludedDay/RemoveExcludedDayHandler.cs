@@ -83,7 +83,18 @@ public sealed class RemoveExcludedDayHandler(
             .ToListAsync(cancellationToken);
         var creditEntryByOrderId = creditEntries
             .GroupBy(c => c.SourceMenuOrderId!.Value)
-            .ToDictionary(g => g.Key, g => g.OrderBy(c => c.Id).First());
+            .ToDictionary(g => g.Key, g =>
+            {
+                // An order can go through more than one exclude/restore cycle: ExcludeDayHandler always
+                // inserts a brand-new CreditEntry rather than reusing one, and CreditService.RevokeCredit
+                // only zeroes RemainingHuf on restore — it never removes the row. So the oldest entry for
+                // an order can be a stale, already-revoked one from an earlier cycle. Prefer the still-live
+                // entry (RemainingHuf == AmountHuf) for THIS cycle; if none is live (most recent takes
+                // priority in case of a data anomaly), fall back to the most recent one so the existing
+                // "already consumed" skip path below still behaves correctly.
+                return g.Where(c => c.RemainingHuf == c.AmountHuf).OrderByDescending(c => c.Id).FirstOrDefault()
+                    ?? g.OrderByDescending(c => c.Id).First();
+            });
 
         var invoicedUserPeriods = (await db.PeriodInvoices
             .Where(i => userIds.Contains(i.UserId) && periodIds.Contains(i.OrderingPeriodId))

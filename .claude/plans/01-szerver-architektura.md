@@ -140,12 +140,58 @@ menürendelés, sem a la carte nem adható le (utóbbi azért, mert nem lenne me
 A véletlen rést a `GetUncoveredWorkdaysQuery` teszi láthatóvá.
 
 ### Menü
-- **DailyMenu** — `Date` (unique), `IsPublished`, `Note?`; navigáció: `Variants`
+- **DailyMenu** — `Date` (unique), `IsPublished`, `Note?`, **`RemovedAtUtc?`**; navigáció: `Variants`
 - **MenuVariant** — `DailyMenuId` (FK, cascade), `Code` (`"A"`/`"B"`/`"C"`, unique `DailyMenuId`+`Code`),
-  `Name`, `Description?`, `SortOrder` (az „első elérhető variáns" szabályhoz)
+  `Name`, `Description?`, `SortOrder` (az „első elérhető variáns" szabályhoz), **`RemovedAtUtc?`**
 
 A menü ára az `AppSetting.MenuPortionHuf` értékét követi (induláskor 1400 Ft-ra seedelve), de a
 rendelésre **snapshotoljuk**, hogy egy későbbi áremelés ne írja át a múltat.
+
+**`RemovedAtUtc` — miért nincs fizikai törlés.** A `MenuOrder.MenuVariantId` FK-ja (lásd lejjebb)
+`DeleteBehavior.Restrict`, mert egy rendelés — akár lemondva is — soha nem veszítheti el, melyik
+variánsra szólt (audit). Emiatt egy `DailyMenu`/`MenuVariant` sor SQL-szintű törlése elszállna, mihelyt
+bármelyik hozzá tartozó rendelés (akár egy régen lemondott is) még hivatkozik rá — ez pont a
+`DeleteMenuVariantCommand`/`DeleteDailyMenuCommand` fő esetében állna elő, hiszen ott jellemzően *van*
+rendelés a variánson. A `DeleteMenuVariantCommand` és a `DeleteDailyMenuCommand` ezért **soft delete**:
+`RemovedAtUtc` beállítása, a sor megmarad. Minden olvasó lekérdezés (`GetDailyMenuQuery`,
+`GetPeriodMenuQuery`, `GetTodayMenuForUserQuery`, `GetOrderableDaysQuery`) `RemovedAtUtc == null`-ra
+szűr, így a felhasználó szempontjából ez ténylegesen törlésként viselkedik. A `Date` és a
+`(DailyMenuId, Code)` unique index a soft-deletelt sorokra is érvényes marad — ha egy admin később
+ugyanarra a napra vagy ugyanazzal a kóddal ad meg menüt/variánst, az `UpsertDailyMenuCommand` a régi sort
+**élesztí fel** (`RemovedAtUtc = null`, mezők felülírva), nem új sort szúr be. Ugyanez a minta, mint a
+`RemoveExcludedDayHandler`-ben a `CancelledByExcludedDayId` nullázása egy másik Restrict FK miatt — az
+audit-megőrzés elve itt a menütörlésre is kiterjed.
+
+**`SortOrder` a felületen implicit.** A mező a domainben megmaradt (erre épül a 3.2 „első maradék
+variáns" szabálya), de az admin felület nem kéri be — a `MenuVariant.Code` (`"A"`/`"B"`/`"C"`) magától
+adja a sorrendet, egy külön szám csak zavaró duplikáció lenne. Az `UpsertDailyMenuCommand`-ot hívó
+felület a `Code` szerinti ábécésorrendből számítja ki a `SortOrder` értéket, mielőtt elküldi a parancsot.
+
+- **MenuDish** — `Kind` (`Leves` / `Foetel`), `Name` (unique `Kind`+`Name`), `Allergens?`, valamint 7
+  tápérték-mező: `EnergyKcal?`, `FatGrams?`, `SaturatedFatGrams?`, `CarbohydrateGrams?`, `SugarGrams?`,
+  `ProteinGrams?`, `SaltGrams?`. Egy emlékeztető katalógus: a korábban valaha felvitt levesek/főételek
+  neve, allergénlistája és tápértéke, kód-hivatkozás nélkül. A `MenuVariant.Name`/`Description` **nem**
+  erre FK-ol, de a napi menü szerkesztő dialógus (`EditDailyMenuDialog`) mégsem enged szabad szöveget: a
+  leves/főétel mező `MudAutocomplete`-tel **kizárólag** a katalógusból választ, egy nem egyező név
+  begépelése után a mező visszaáll. Egy teljesen új leves/főétel csak külön képernyőn
+  (`AddMenuDishDialog` → `CreateMenuDishCommand`) vihető fel a katalógusba — ennek admin felületi
+  bekötése nyitott teendő (`03-nyitott-teendok.md`). A meglévő katalógustétel adatai az
+  `UpsertDailyMenuCommand` mentésekor is frissülnek: minden mentett leves/főétel névhez, ha a
+  katalógusban már létezik ilyen nevű sor, felülírja az allergén és tápérték mezőket (`UpdateMenuDishCommand`
+  ugyanezt teszi explicit, a katalógus-szerkesztő felől). Az allergén és tápérték mezők felülírása csak
+  akkor történik, ha a mentéskor nem üresek — egy üresen hagyott mező tehát *nem* törli a korábban
+  rögzített adatot, csak a kitöltött érték ír felül. Ez adja az admin felület autocomplete-jét
+  (`GetMenuDishSuggestionsQuery`) és az allergének/tápértékek megjelenítését is: a
+  `GetDailyMenuQuery`/`GetPeriodMenuQuery`/`GetTodayMenuForUserQuery` mind visszaadja variánsonként a
+  hozzátartozó leves/főétel allergénjeit és tápértékét, névre illesztve a katalógusból.
+
+  **`Allergens` formátuma.** Nem szabad szöveg: a felület egy rögzített, 14 elemű, számozott listából
+  (`Common/Allergens/AllergenCatalog.cs` — az EU 1169/2011 rendelet Annex II szerinti 14 hivatalos
+  allergén, ~10 helyett a teljes jogilag elismert lista) enged multiszelektet, és a kiválasztott számokat
+  vesszővel elválasztva tárolja (pl. `"1,7,9"`). A szám maga a megjelenítendő adat része — a magyar
+  éttermi/konyhai gyakorlat a „7 – Tej (laktóz)" alakot használja, nem a puszta nevet —, ezért a szám a
+  perzisztált értékben is megmarad, nem csak UI-generált sorindex. A szerver oldal (`UpsertDailyMenuHandler`,
+  a DTO-k) ezt a stringet opakán kezeli — a katalógus és a „szám–név" formázás kizárólag UI-rétegbeli.
 
 ### Rendelés
 - **MenuOrder** — `UserId` (FK), `Date`, **`OrderingPeriodId`** (FK, kötelező), `MenuVariantId` (FK),
@@ -288,11 +334,21 @@ DeleteVariant(date, code):
             ReassignedFromVariantCode = régi kód;  MenuVariantId = cél.Id;  ReassignedAtUtc = most
             értesítés (OrderReassigned) a rendelés tulajdonosának
             + ha PlacedByUserId ≠ UserId, a leadónak is
-    variáns törlése
+    variáns soft delete (RemovedAtUtc = most)                    // 2. fejezet, „miért nincs fizikai törlés"
 ```
 
+Ugyanez az algoritmus fut le `UpsertDailyMenuCommand`-nál is minden olyan kódra, ami a korábbi
+variánslistában megvolt, de az új kérésből hiányzik — egy kódváltoztatás (`"A"` → `"D"`) tehát a régi kód
+eltűnéseként és egy új megjelenéseként viselkedik, **nem** átnevezésként. A handler ezért két menetben
+menti a változást: előbb `SaveChangesAsync` az új/módosított variánsokra (hogy a friss sorok valódi
+`Id`-t kapjanak), utána fut az átvezetés — enélkül egy frissen felvitt variáns nem lehetne érvényes
+átvezetési cél.
+
 Puszta **módosításnál** (név/leírás változik) nincs átvezetés, csak `MenuChanged` értesítés az adott nap
-aktív rendelőinek.
+aktív rendelőinek. Ha egy `UpsertDailyMenuCommand` hívás egyszerre módosít is és variánst is töröl, egy
+rendelés csak **egy** értesítést kap: aki már `OrderReassigned`/`MenuCancelled` üzenetet kapott a fenti
+ágban, az nem kap még `MenuChanged`-et is ugyanarra a hívásra — a kettő ugyanazt az eseményt jelentené
+kétszer.
 
 ### 3.3 Jóváírás: egyenleg és beszámítás
 
@@ -570,15 +626,31 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 
 ### Menus
 - `UpsertDailyMenuCommand` **[A]** — nap menüjének létrehozása/módosítása variánsokkal; a kikerült
-  variánsok átvezetése + értesítés (3.2)
-- `DeleteMenuVariantCommand` **[A]** — egy variáns törlése, átvezetés az első maradék variánsra
-- `DeleteDailyMenuCommand` **[A]** — teljes nap menüjének törlése, minden rendelés lemondása
-  (`MenuDeleted`) + jóváírás
-- `PublishDailyMenuCommand` **[A]** — menü publikálása (ettől rendelhető)
-- `GetDailyMenuQuery` **[A/U]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata
+  variánsok átvezetése + értesítés (3.2). Ha a `Date`-re korábban `DeleteDailyMenuCommand` fut le
+  (soft-deletelt sor), a hívás **felélezti** a régi `DailyMenu`/`MenuVariant` sorokat ahelyett, hogy
+  újat szúrna be — az unique indexek (`Date`, `(DailyMenuId, Code)`) ezt megkövetelik (2. fejezet).
+  Nincs külön publikálás-lépés: minden sikeres mentés (a validáció már megköveteli legalább egy
+  variáns meglétét) azonnal `IsPublished = true`-ra állítja a napot — korábban ezt egy külön
+  `PublishDailyMenuCommand` végezte, ez a use case megszűnt
+- `DeleteMenuVariantCommand` **[A]** — egy variáns **soft delete**-je (`RemovedAtUtc`), átvezetés az
+  első maradék variánsra vagy lemondás, ha nem marad
+- `DeleteDailyMenuCommand` **[A]** — teljes nap menüjének **soft delete**-je, minden aktív rendelés
+  lemondása (`MenuDeleted`) + jóváírás; a menü és minden variánsa `RemovedAtUtc`-t kap,
+  `IsPublished = false`
+- `GetDailyMenuQuery` **[A/U]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata;
+  mindkettő a `RemovedAtUtc == null` variánsokat/napokat adja vissza, és az `IncludeUnpublished` flaget
+  a hívó szerepköre szerint kell állítani ([A] = true, [U] = false — AC 2.5.2)
 - `GetTodayMenuForUserQuery` **[U]** — **a „napi kiírás"**: mai menü variánsai + a felhasználó aznapi
   választása, vagy explicit „ma nem rendeltél" jelzés + mai a la carte kínálat és a felhasználó a la
   carte rendelése
+- `GetMenuDishSuggestionsQuery` **[A]** — a `MenuDish` katalógus (2. fejezet) leves/főétel neve +
+  allergénje + tápértéke, kind szerint kettébontva; az admin felület autocomplete-forrása
+- `CreateMenuDishCommand` **[A]** — új leves/főétel felvétele a `MenuDish` katalógusba, allergénekkel
+  és a 7 tápérték-mezővel; az "+ Új étel" dialógus (`AddMenuDishDialog`) forrása. A napi menü szerkesztő
+  dialógus (`EditDailyMenuDialog`) ezt **nem** hívja — az csak a katalógusból választ (2. fejezet,
+  `MenuDish`); az admin felületi bekötés (honnan nyitható meg ez a dialógus) nyitott teendő
+- `UpdateMenuDishCommand` **[A]** — meglévő katalógustétel nevének, allergénjeinek és tápértékének
+  módosítása
 
 ### Orders
 - `PlacePeriodOrderCommand` **[U]** — `TargetUserId` + `OrderingPeriodId` + `(Date, VariantCode)` lista;
@@ -721,7 +793,24 @@ kapcsolat, `DataSource=:memory:`): valódi relációs viselkedés, gyors, támog
   - `GetOrderableDaysQuery` naponkénti `orderable` / `cancellable` + ok egyezik a parancs kimenetével
   - időszakon kívüli nap → `OutsidePeriod`, akkor is, ha egyébként a 3 munkanapon túl van
 - más nevében rendelés → `PlacedByUserId` helyesen naplózva
-- variáns törlése → átvezetés az „A"-ra + értesítés keletkezik
+- **étlap- és variánskezelés** (3.2, Menus feature):
+  - `UpsertDailyMenuCommand` — új nap létrehozása azonnal publikáltan; lezárt napra elutasítva (`DayClosed`)
+  - névre/leírásra korlátozott módosítás nem mozgat és nem mond le rendelést (AC 2.3.1), de az adott nap
+    aktív rendelői `MenuChanged` értesítést kapnak
+  - új menü létrehozása **nem** küld `MenuChanged`-et (nincs kire, amíg nincs korábbi rendelés)
+  - variáns kikerülése (akár `DeleteMenuVariantCommand`-dal, akár `UpsertDailyMenuCommand`-ból való
+    kihagyással) → átvezetés a legkisebb `SortOrder`/`Code` szerinti maradék variánsra, `OrderReassigned`
+    a tulajdonosnak és — ha eltér — a leadónak is
+  - variánskód átnevezése (`"A"` → `"D"`) egyetlen aktív variánson → a rendelés átvezetődik az új kódra,
+    nem mondódik le (bizonyítja, hogy a frissen felvitt variáns még ugyanabban a hívásban érvényes
+    átvezetési cél)
+  - az utolsó variáns törlése/kihagyása → lemondás `VariantRemoved` okkal + jóváírás + `MenuCancelled`
+  - `DeleteDailyMenuCommand` → a nap minden aktív rendelése lemondva `MenuDeleted` okkal + jóváírás;
+    lezárt napra elutasítva
+  - törlés után `UpsertDailyMenuCommand` ugyanarra a `Date`-re **feléleszti** a soft-deletelt sort, nem
+    ütközik az unique indexbe, és a felélesztéssel egyben újra publikálttá is teszi
+  - `GetDailyMenuQuery`/`GetPeriodMenuQuery` a publikálatlan napot és a soft-deletelt variánst elrejti
+    `IncludeUnpublished = false` mellett, de megmutatja `true` mellett
 - teljes menü törlése / nap kizárása → lemondás helyes `CancellationReason`-nel + jóváírás + értesítés
 - **aznapi vagy múltbeli nap kizárása elutasítva**
 - **kizárás visszavonása** (3.7):

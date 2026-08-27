@@ -63,8 +63,8 @@
         </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Mégse</MudButton>
-        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="isSaving">Mentés</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" OnClick="SubmitAsync" Disabled="isSaving">Mentés</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel">Mégse</MudButton>
     </DialogActions>
 </MudDialog>
 

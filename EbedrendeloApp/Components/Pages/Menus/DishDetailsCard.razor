@@ -1,0 +1,70 @@
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions
+
+<MudPaper Outlined="true" Class="pa-2 mt-1">
+    @if (allergens.Count > 0)
+    {
+        <MudStack Row Wrap="Wrap.Wrap" Spacing="1" Class="mb-1">
+            @foreach (var allergen in allergens)
+            {
+                <MudChip T="string" Size="Size.Small"  Color="Color.Default" Variant="Variant.Outlined">  
+                   <AvatarContent>
+        <MudAvatar  Color="Color.Primary"  >@allergen.Number
+         </MudAvatar>
+    </AvatarContent>
+    <ChildContent> @allergen.Name</ChildContent>
+                </MudChip>
+            }
+        </MudStack>
+    }
+    else
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Nincs jelölt allergén</MudText>
+    }
+
+    @if (nutritionRows.Count > 0)
+    {
+        <MudSimpleTable Dense="true" Elevation="0" Class="mt-1">
+            <tbody>
+                @foreach (var row in nutritionRows)
+                {
+                    <tr>
+                        <td class="pa-0 pr-2"><MudText Typo="Typo.caption" Class="mud-text-secondary">@row.Label</MudText></td>
+                        <td class="pa-0"><MudText Typo="Typo.caption"><b>@row.Value</b></MudText></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public required MenuDishDto Dish { get; set; }
+
+    private List<AllergenOption> allergens = [];
+    private List<(string Label, string Value)> nutritionRows = [];
+
+    protected override void OnParametersSet()
+    {
+        var selectedNumbers = AllergenCatalog.Parse(Dish.Allergens);
+        allergens = AllergenCatalog.All.Where(a => selectedNumbers.Contains(a.Number)).ToList();
+
+        nutritionRows = [];
+        AddNutritionRow("Energia (kcal)", Dish.EnergyKcal);
+        AddNutritionRow("Zsír (g)", Dish.FatGrams);
+        AddNutritionRow("Telített zsír (g)", Dish.SaturatedFatGrams);
+        AddNutritionRow("Szénhidrát (g)", Dish.CarbohydrateGrams);
+        AddNutritionRow("Cukor (g)", Dish.SugarGrams);
+        AddNutritionRow("Fehérje (g)", Dish.ProteinGrams);
+        AddNutritionRow("Só (g)", Dish.SaltGrams);
+    }
+
+    private void AddNutritionRow(string label, decimal? value)
+    {
+        if (value is { } v)
+        {
+            nutritionRows.Add((label, v.ToString("0.##")));
+        }
+    }
+}

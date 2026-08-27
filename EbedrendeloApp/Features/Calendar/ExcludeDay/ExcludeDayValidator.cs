@@ -6,6 +6,6 @@ public sealed class ExcludeDayValidator : AbstractValidator<ExcludeDayCommand>
 {
     public ExcludeDayValidator()
     {
-        RuleFor(x => x.Reason).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(ExcludeDayCommand.ReasonMaxLength);
     }
 }

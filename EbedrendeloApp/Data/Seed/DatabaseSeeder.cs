@@ -207,17 +207,17 @@ public static class DatabaseSeeder
 
         var items = new List<ALaCarteItem>
         {
-            new() { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true },
-            new() { Name = "Zöldségkrémleves", Category = ALaCarteCategory.Leves, PriceHuf = 600, IsActive = true },
-            new() { Name = "Cordon bleu", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true },
-            new() { Name = "Rántott hal", Category = ALaCarteCategory.Foetel, PriceHuf = 1750, IsActive = true },
-            new() { Name = "Bakonyi szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1850, IsActive = true },
-            new() { Name = "Zöldségfasírt", Category = ALaCarteCategory.Foetel, PriceHuf = 1500, IsActive = true },
+            new() { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true, Allergens = "1,9" },
+            new() { Name = "Zöldségkrémleves", Category = ALaCarteCategory.Leves, PriceHuf = 600, IsActive = true, Allergens = "7,9" },
+            new() { Name = "Cordon bleu", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true, Allergens = "1,3,7" },
+            new() { Name = "Rántott hal", Category = ALaCarteCategory.Foetel, PriceHuf = 1750, IsActive = true, Allergens = "1,3,4" },
+            new() { Name = "Bakonyi szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1850, IsActive = true, Allergens = "1,3,7" },
+            new() { Name = "Zöldségfasírt", Category = ALaCarteCategory.Foetel, PriceHuf = 1500, IsActive = true, Allergens = "1,3" },
             new() { Name = "Hasábburgonya", Category = ALaCarteCategory.Koret, PriceHuf = 550, IsActive = true },
             new() { Name = "Jázmin rizs", Category = ALaCarteCategory.Koret, PriceHuf = 500, IsActive = true },
             new() { Name = "Vegyes saláta", Category = ALaCarteCategory.Koret, PriceHuf = 500, IsActive = true },
-            new() { Name = "Somlói galuska", Category = ALaCarteCategory.Desszert, PriceHuf = 750, IsActive = true },
-            new() { Name = "Gesztenyepüré", Category = ALaCarteCategory.Desszert, PriceHuf = 700, IsActive = true },
+            new() { Name = "Somlói galuska", Category = ALaCarteCategory.Desszert, PriceHuf = 750, IsActive = true, Allergens = "1,3,7,8" },
+            new() { Name = "Gesztenyepüré", Category = ALaCarteCategory.Desszert, PriceHuf = 700, IsActive = true, Allergens = "7" },
         };
 
         db.ALaCarteItems.AddRange(items);

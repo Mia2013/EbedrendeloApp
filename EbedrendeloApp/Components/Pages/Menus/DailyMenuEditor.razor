@@ -1,0 +1,373 @@
+@page "/etlap"
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
+@using EbedrendeloApp.Features.Menus
+@using EbedrendeloApp.Features.Menus.GetDailyMenu
+@using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions
+@using EbedrendeloApp.Features.Menus.GetPeriodMenu
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+
+<PageTitle>Napi menü szerkesztése</PageTitle>
+
+<MudPaper Elevation="0" Class="pa-4 page-header-card">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.h4">Napi menü szerkesztése</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Válassz egy rendelési időszakot — csak az ahhoz tartozó munkanapok listázódnak. Elmúlt napok menüje
+                csak megtekinthető.
+            </MudText>
+            @if (!isLoadingPeriods && periods.Count > 0)
+            {
+                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
+                           Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                           Class="mt-4" Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
+                    @foreach (var period in periods)
+                    {
+                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+@if (!isLoadingPeriods && periods.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Még nincs rendelési időszak.</MudAlert>
+}
+
+@if (isLoadingPeriods || isLoadingDays)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else
+{
+    <div class="menu-calendar__weekday-row">
+        @foreach (var weekdayLabel in WeekdayLabels)
+        {
+             <MudText Typo="Typo.caption" class="text-uppercase menu-calendar__weekday">
+                @weekdayLabel
+            </MudText> 
+        }
+    </div>
+
+    <div class="menu-calendar mt-3">
+        @foreach (var week in BuildWeeks())
+        {
+            @foreach (var cell in week)
+            {
+                @if (cell is null)
+                {
+                    <div class="menu-calendar__cell menu-calendar__cell--empty"></div>
+                }
+                else
+                {
+                    <div class="menu-calendar__cell" style="@(cell.Date == today ? "background:var(--mud-palette-primary-hover);" : null)">
+                        @DayCell(cell)
+                    </div>
+                }
+            }
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Egyetlen közös sablon a naptár-rács minden napcellájához (Razor templated delegate,
+    /// <see cref="RenderFragment{TValue}"/>) — a fejléc (avatar+dátum / hét napja / akció ikonok) felül,
+    /// a variáns-lista (vagy "nincs menü" felirat) alatta.</summary>
+    private RenderFragment<DayRow> DayCell => day =>
+    @<MudStack Spacing="1" Style="height:100%;">
+        <div class="menu-calendar__header">
+            <div class="menu-calendar__header-left">
+                <MudText Typo="Typo.subtitle2" Class="@GetTextClass(day)" Color="@(day.IsPastDay ? Color.Default : Color.Primary)" Style="font-weight:700;">@day.Date.ToString("MM.dd.")</MudText>
+                @if (day.Date == today)
+                {
+                    <MudBadge Content="@("Ma")" Color="Color.Primary" />
+                }
+            </div>
+
+            <div class="menu-calendar__header-actions menu-calendar__actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Variant="Variant.Text" Size="Size.Small"
+                               title="@(day.IsPastDay ? "Elmúlt, csak megtekinthető" : "Szerkesztés")"
+                               OnClick="() => EditDayAsync(day)" Disabled="!day.CanEdit" />
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Variant="Variant.Text" Size="Size.Small"
+                               title="Nap menüjének törlése" OnClick="() => DeleteDayRowAsync(day)"
+                               Disabled="!day.CanDelete" />
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(day.ErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@day.ErrorMessage</MudAlert>
+        }
+
+        @if (day.HasMenu)
+        {
+            <MudGrid Spacing="2">
+                @for (var variantIndex = 0; variantIndex < day.Variants.Count; variantIndex++)
+                {
+                    var variant = day.Variants[variantIndex];
+                    <MudItem xs="12" md="4" lg="12">
+                        <MudStack Row Spacing="2" AlignItems="AlignItems.Start">
+                            <MudAvatar Color="@(day.IsPastDay ? Color.Default : Color.Warning)" Size="Size.Small" Rounded="true">@variant.Code</MudAvatar>
+                            <MudStack Spacing="0" Class="flex-grow-1" Style="min-width:0;">
+                                <MudText Typo="Typo.body2" Class="@GetTextClass(day)">
+                                    @variant.Name
+                                    @if (FormatAllergensShort(variant.SoupDish) is { } soupAllergensShort)
+                                    {
+                                        <text> (@soupAllergensShort)</text>
+                                        <MudTooltip Text="@FormatAllergens(variant.SoupDish)" Inline="true">
+                                            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                        </MudTooltip>
+                                    }
+                                </MudText>
+                                @if (FormatNutrition(variant.SoupDish) is { } soupNutritionText)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutritionText</MudText>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(variant.Description))
+                                {
+                                    <MudText Typo="Typo.body2" Class="@GetTextClass(day, "mt-1")">
+                                        @variant.Description
+                                        @if (FormatAllergensShort(variant.MainCourseDish) is { } mainCourseAllergensShort)
+                                        {
+                                            <text> (@mainCourseAllergensShort)</text>
+                                            <MudTooltip Text="@FormatAllergens(variant.MainCourseDish)" Inline="true">
+                                                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                            </MudTooltip>
+                                        }
+                                    </MudText>
+                                    @if (FormatNutrition(variant.MainCourseDish) is { } mainCourseNutritionText)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@mainCourseNutritionText</MudText>
+                                    }
+                                }
+                            </MudStack>
+                        </MudStack>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Nincs még menü erre a napra.</MudText>
+        }
+    </MudStack>;
+}
+
+@code {
+    private static readonly string[] WeekdayLabels = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek"];
+
+    private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+
+    private sealed class VariantRow
+    {
+        public string Code { get; set; } = string.Empty;
+        public MenuDishDto? SoupDish { get; set; }
+        public MenuDishDto? MainCourseDish { get; set; }
+
+        public string Name => SoupDish?.Name ?? string.Empty;
+        public string Description => MainCourseDish?.Name ?? string.Empty;
+    }
+
+    private sealed class DayRow
+    {
+        public required DateOnly Date { get; init; }
+        public required bool IsPastDay { get; init; }
+        public bool HasMenu { get; set; }
+        public List<VariantRow> Variants { get; set; } = [];
+        public bool IsSaving { get; set; }
+        public string? ErrorMessage { get; set; }
+
+        public bool CanEdit => !IsPastDay && !IsSaving;
+        public bool CanDelete => !IsPastDay && !IsSaving && HasMenu;
+    }
+
+    private List<OrderingPeriodDto> periods = [];
+    private int selectedPeriodId;
+    private List<DayRow> days = [];
+    private bool isLoadingPeriods = true;
+    private bool isLoadingDays;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
+        isLoadingPeriods = false;
+
+        var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();
+        if (current is not null)
+        {
+            selectedPeriodId = current.Id;
+            await LoadDaysAsync();
+        }
+    }
+
+    private async Task OnPeriodSelectedAsync(int periodId)
+    {
+        selectedPeriodId = periodId;
+        await LoadDaysAsync();
+    }
+
+    private async Task LoadDaysAsync()
+    {
+        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
+        if (period is null)
+        {
+            days = [];
+            return;
+        }
+
+        isLoadingDays = true;
+
+        var menuResult = await Mediator.Send(new GetPeriodMenuQuery(selectedPeriodId, IncludeUnpublished: true));
+        var menusByDate = menuResult.IsSuccess
+            ? menuResult.Value!.ToDictionary(m => m.Date)
+            : [];
+
+        var newDays = new List<DayRow>();
+        for (var date = period.StartDate; date <= period.EndDate; date = date.AddDays(1))
+        {
+            if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
+                continue;
+            }
+
+            menusByDate.TryGetValue(date, out var dto);
+            newDays.Add(new DayRow
+            {
+                Date = date,
+                IsPastDay = date < today,
+                HasMenu = dto is not null,
+                Variants = dto?.Variants.Select(ToVariantRow).ToList() ?? [],
+            });
+        }
+
+        days = newDays;
+        isLoadingDays = false;
+    }
+
+    /// <summary>Hétfő-Péntek oszlopos naptár-rács hetes sorokba rendezve. Ha az időszak nem hétfővel kezdődik
+    /// (vagy nem péntekkel végződik), az adott hét lefedetlen napjaira null kerül — ezekből üres cella lesz,
+    /// hogy a rács oszlopai (hétfő..péntek) mindig helyükön maradjanak.</summary>
+    private List<DayRow?[]> BuildWeeks()
+    {
+        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
+        if (period is null)
+        {
+            return [];
+        }
+
+        var weeks = new List<DayRow?[]>();
+        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
+        {
+            var week = new DayRow?[5];
+            for (var i = 0; i < 5; i++)
+            {
+                var date = weekStart.AddDays(i);
+                week[i] = days.FirstOrDefault(d => d.Date == date);
+            }
+
+            weeks.Add(week);
+        }
+
+        // Ha az időszak hétvégén kezdődik, a MondayOf visszaugrik egy olyan hétre, amelyben egyetlen
+        // nap sincs még az időszakban (az első valódi nap csak a rákövetkező héten van) — ez a vezető
+        // hét ilyenkor csupa null cellából állna, ezért innen levágjuk. Csak elölről: a záró hét soha
+        // nem lehet teljesen üres (lásd a doksit fent).
+        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
+        {
+            weeks.RemoveAt(0);
+        }
+
+        return weeks;
+    }
+
+    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
+
+    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+
+    /// <summary>Muted grey for an elmúlt (past) day's text — a subtle "not editable anymore" cue.</summary>
+    private static string? GetTextClass(DayRow day, string? extra = null)
+    {
+        if (!day.IsPastDay)
+        {
+            return extra;
+        }
+
+        return extra is null ? "mud-text-secondary" : $"mud-text-secondary {extra}";
+    }
+
+    /// <summary>View-mód: csak a megjelenítéshez szükséges mezők, katalógus-egyeztetés nélkül (arra csak a
+    /// szerkesztő-dialógusban van szükség, ahol a szerkesztés-ceruzának Id kell).</summary>
+    private static VariantRow ToVariantRow(MenuVariantDto v) => new()
+    {
+        Code = v.Code,
+        SoupDish = new MenuDishDto(
+            v.Name, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
+            v.SoupCarbohydrateGrams, v.SoupSugarGrams, v.SoupProteinGrams, v.SoupSaltGrams, Kind: MenuDishKind.Leves),
+        MainCourseDish = v.Description is null ? null : new MenuDishDto(
+            v.Description, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams, v.MainCourseSaturatedFatGrams,
+            v.MainCourseCarbohydrateGrams, v.MainCourseSugarGrams, v.MainCourseProteinGrams, v.MainCourseSaltGrams, Kind: MenuDishKind.Foetel),
+    };
+
+    private static string? FormatAllergens(MenuDishDto? dish) => dish is null ? null : AllergenCatalog.Format(dish.Allergens);
+
+    private static string? FormatAllergensShort(MenuDishDto? dish) => dish is null ? null : AllergenCatalog.FormatNumbersOnly(dish.Allergens);
+
+    private static string? FormatNutrition(MenuDishDto? dish) => dish is null ? null : MenuVariantNutritionFormat.Format(
+        dish.EnergyKcal, dish.FatGrams, dish.SaturatedFatGrams, dish.CarbohydrateGrams, dish.SugarGrams, dish.ProteinGrams, dish.SaltGrams);
+
+    /// <summary>Re-reads one day from the server without touching any other row.</summary>
+    private async Task RefreshRowDataAsync(DayRow row)
+    {
+        var dto = await Mediator.Send(new GetDailyMenuQuery(row.Date, IncludeUnpublished: true));
+        row.HasMenu = dto is not null;
+        row.Variants = dto?.Variants.Select(ToVariantRow).ToList() ?? [];
+    }
+
+    private static readonly DialogOptions EditDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Large,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task EditDayAsync(DayRow day)
+    {
+        var parameters = new DialogParameters<EditDailyMenuDialog> { { x => x.Date, day.Date } };
+        var dialogRef = await DialogService.ShowAsync<EditDailyMenuDialog>("Nap menüjének szerkesztése", parameters, EditDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await RefreshRowDataAsync(day);
+        }
+    }
+
+    private async Task DeleteDayRowAsync(DayRow day)
+    {
+        var parameters = new DialogParameters<DeleteDailyMenuDialog> { { x => x.Date, day.Date } };
+        var dialogRef = await DialogService.ShowAsync<DeleteDailyMenuDialog>("Nap menüjének törlése", parameters);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            await RefreshRowDataAsync(day);
+        }
+    }
+}

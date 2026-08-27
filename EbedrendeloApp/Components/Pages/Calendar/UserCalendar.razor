@@ -12,7 +12,10 @@
 
 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
     <MudStack Spacing="0">
-        <MudText Typo="Typo.h4">Naptár</MudText>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h4">Naptár</MudText>
+        </MudStack>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             Ez mutatja, melyik napra rendelhetsz és melyiket mondhatod le — ha nem, azt is, hogy miért nem.
         </MudText>
