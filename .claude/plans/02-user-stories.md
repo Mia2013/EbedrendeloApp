@@ -159,11 +159,11 @@ Azért, hogy a dolgozók láthassák a kínálatot és megrendelhessék az ebéd
 * **AC 2.1.1:** Egy naphoz több variáns (pl. "A", "B", "C") rögzíthető `Code`, `Name` (leves), `Description` (főétel) mezőkkel; a `SortOrder`-t a felület a `Code` ábécésorrendjéből számítja, nem kér be külön mezőt.
 * **AC 2.1.2:** Nincs külön publikálás-lépés: az `UpsertDailyMenuCommand` sikeres lefutása (ehhez legalább egy variáns szükséges) azonnal rendelhetővé teszi a napot a dolgozók számára (`IsPublished = true`).
 * **AC 2.1.3:** A menü ára snapshotolódik a rendeléskor (fix alapérték: 1400 Ft).
-* **AC 2.1.4 (Leves/főétel autocomplete):** A leves és a főétel mező korábban már felvitt nevekre autocomplete-et ajánl fel (`GetMenuDishSuggestionsQuery`), de egyedi, korábban nem szereplő név is beírható — nincs külön törzsadat-felviteli lépés.
-* **AC 2.1.5 (Allergének az ételhez tárolva):** Leveshez és főételhez külön allergén-lista adható meg; ez az adott **ételnévhez** (nem a naphoz vagy a variánshoz) tárolódik, így egy korábban már megadott étel újbóli kiválasztásakor az allergénje magától megjelenik, és a dolgozói „napi kiírás" (US-2.6) mellette mutatja.
+* **AC 2.1.4 (Leves/főétel kizárólag katalógusból):** A leves és a főétel mező a `MenuDish` katalógusból választható autocomplete-tel (`GetMenuDishSuggestionsQuery`) — egyedi, a katalógusban még nem szereplő név **nem** írható be közvetlenül ide, a mező a be nem azonosítható értéket elveti. Egy teljesen új étel felvitele egy külön "+ Új étel" képernyőn (`AddMenuDishDialog` → `CreateMenuDishCommand`) történik, amit a napi menü szerkesztő dialógus nem tartalmaz — ennek admin felületi bekötése még nyitott teendő (lásd `03-nyitott-teendok.md`).
+* **AC 2.1.5 (Allergének és tápértékek az ételhez tárolva):** Leveshez és főételhez külön allergén-lista, valamint 7 tápérték-mező (energia kcal, zsír, telített zsír, szénhidrát, cukor, fehérje, só — az energia kivételével mind gramm) adható meg; ez az adott **ételnévhez** (nem a naphoz vagy a variánshoz) tárolódik, így egy korábban már megadott étel újbóli kiválasztásakor az allergénje és a tápértéke magától megjelenik, és a dolgozói „napi kiírás" (US-2.6) mellette mutatja.
 * **AC 2.1.6 (Leves-ismétlés A-ról):** Mivel az A és a B menü levese jellemzően megegyezik, ha az admin megadja az A variáns levesét, a felület felajánlja azt minden még üres leves-mezővel rendelkező variánsnak is — felülírható.
 
-**Technikai hivatkozás:** `UpsertDailyMenuCommand`, `GetMenuDishSuggestionsQuery`, `DailyMenu`, `MenuVariant`, `MenuDish`
+**Technikai hivatkozás:** `UpsertDailyMenuCommand`, `GetMenuDishSuggestionsQuery`, `CreateMenuDishCommand`, `UpdateMenuDishCommand`, `DailyMenu`, `MenuVariant`, `MenuDish`
 
 ---
 
@@ -737,6 +737,8 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `DeleteMenuVariantCommand` | A | US-2.2 |
 | `DeleteDailyMenuCommand` | A | US-2.4 |
 | `GetMenuDishSuggestionsQuery` | A | US-2.1 |
+| `CreateMenuDishCommand` | A | US-2.1 |
+| `UpdateMenuDishCommand` | A | US-2.1 |
 | `GetDailyMenuQuery` | A/U | US-2.5 |
 | `GetPeriodMenuQuery` | A/U | US-2.5 |
 | `GetTodayMenuForUserQuery` | U | US-2.6 |

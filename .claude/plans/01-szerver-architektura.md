@@ -167,16 +167,23 @@ variáns" szabálya), de az admin felület nem kéri be — a `MenuVariant.Code`
 adja a sorrendet, egy külön szám csak zavaró duplikáció lenne. Az `UpsertDailyMenuCommand`-ot hívó
 felület a `Code` szerinti ábécésorrendből számítja ki a `SortOrder` értéket, mielőtt elküldi a parancsot.
 
-- **MenuDish** — `Kind` (`Leves` / `Foetel`), `Name` (unique `Kind`+`Name`), `Allergens?`. Egy emlékeztető
-  katalógus: a korábban valaha felvitt levesek/főételek neve és allergénlistája, kód-hivatkozás nélkül. A
-  `MenuVariant.Name`/`Description` **nem** erre FK-ol — szabad szöveg marad, hogy egy vadonatúj étel
-  admin oldali törzsadat-lépés nélkül, egyből beírható legyen. A katalógus az `UpsertDailyMenuCommand`
-  mentésekor **implicit épül**: minden mentett leves/főétel névhez felvesz vagy frissít egy `MenuDish`
-  sort. Az allergén mező felülírása csak akkor történik, ha a mentéskor nem üres — egy üresen hagyott
-  allergén mező tehát *nem* törli a korábban rögzített allergéninfót, csak a kitöltött érték ír felül.
-  Ez adja az admin felület autocomplete-jét (`GetMenuDishSuggestionsQuery`) és az allergének
-  megjelenítését is: a `GetDailyMenuQuery`/`GetPeriodMenuQuery`/`GetTodayMenuForUserQuery` mind
-  visszaadja variánsonként a hozzátartozó leves/főétel allergénjeit, névre illesztve a katalógusból.
+- **MenuDish** — `Kind` (`Leves` / `Foetel`), `Name` (unique `Kind`+`Name`), `Allergens?`, valamint 7
+  tápérték-mező: `EnergyKcal?`, `FatGrams?`, `SaturatedFatGrams?`, `CarbohydrateGrams?`, `SugarGrams?`,
+  `ProteinGrams?`, `SaltGrams?`. Egy emlékeztető katalógus: a korábban valaha felvitt levesek/főételek
+  neve, allergénlistája és tápértéke, kód-hivatkozás nélkül. A `MenuVariant.Name`/`Description` **nem**
+  erre FK-ol, de a napi menü szerkesztő dialógus (`EditDailyMenuDialog`) mégsem enged szabad szöveget: a
+  leves/főétel mező `MudAutocomplete`-tel **kizárólag** a katalógusból választ, egy nem egyező név
+  begépelése után a mező visszaáll. Egy teljesen új leves/főétel csak külön képernyőn
+  (`AddMenuDishDialog` → `CreateMenuDishCommand`) vihető fel a katalógusba — ennek admin felületi
+  bekötése nyitott teendő (`03-nyitott-teendok.md`). A meglévő katalógustétel adatai az
+  `UpsertDailyMenuCommand` mentésekor is frissülnek: minden mentett leves/főétel névhez, ha a
+  katalógusban már létezik ilyen nevű sor, felülírja az allergén és tápérték mezőket (`UpdateMenuDishCommand`
+  ugyanezt teszi explicit, a katalógus-szerkesztő felől). Az allergén és tápérték mezők felülírása csak
+  akkor történik, ha a mentéskor nem üresek — egy üresen hagyott mező tehát *nem* törli a korábban
+  rögzített adatot, csak a kitöltött érték ír felül. Ez adja az admin felület autocomplete-jét
+  (`GetMenuDishSuggestionsQuery`) és az allergének/tápértékek megjelenítését is: a
+  `GetDailyMenuQuery`/`GetPeriodMenuQuery`/`GetTodayMenuForUserQuery` mind visszaadja variánsonként a
+  hozzátartozó leves/főétel allergénjeit és tápértékét, névre illesztve a katalógusból.
 
   **`Allergens` formátuma.** Nem szabad szöveg: a felület egy rögzített, 14 elemű, számozott listából
   (`Common/Allergens/AllergenCatalog.cs` — az EU 1169/2011 rendelet Annex II szerinti 14 hivatalos
@@ -637,7 +644,13 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   választása, vagy explicit „ma nem rendeltél" jelzés + mai a la carte kínálat és a felhasználó a la
   carte rendelése
 - `GetMenuDishSuggestionsQuery` **[A]** — a `MenuDish` katalógus (2. fejezet) leves/főétel neve +
-  allergénje, kind szerint kettébontva; az admin felület autocomplete-forrása
+  allergénje + tápértéke, kind szerint kettébontva; az admin felület autocomplete-forrása
+- `CreateMenuDishCommand` **[A]** — új leves/főétel felvétele a `MenuDish` katalógusba, allergénekkel
+  és a 7 tápérték-mezővel; az "+ Új étel" dialógus (`AddMenuDishDialog`) forrása. A napi menü szerkesztő
+  dialógus (`EditDailyMenuDialog`) ezt **nem** hívja — az csak a katalógusból választ (2. fejezet,
+  `MenuDish`); az admin felületi bekötés (honnan nyitható meg ez a dialógus) nyitott teendő
+- `UpdateMenuDishCommand` **[A]** — meglévő katalógustétel nevének, allergénjeinek és tápértékének
+  módosítása
 
 ### Orders
 - `PlacePeriodOrderCommand` **[U]** — `TargetUserId` + `OrderingPeriodId` + `(Date, VariantCode)` lista;
