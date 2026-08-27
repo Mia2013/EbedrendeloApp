@@ -19,6 +19,13 @@
 - [ ] Rendelési időszak jelenleg nem törölhető. Ha az admin rosszul vette fel, és még nincs
       hozzá rendelés, engedjük a törlést (ha már van rendelés hozzá, maradjon tiltva).
 
+## Rendelés (Epic 3)
+
+- [ ] US-2.1 AC 2.1.3 (menü ár snapshotolása rendeléskor) jelenleg nem valósítható meg és
+      nem tesztelhető, mert Epic 3 (Menü Előrendelés és Lemondás) még nincs megírva —
+      nincs `PlacePeriodOrderCommand`/`Features/Orders`. Az `AppSetting.MenuPortionHuf` és a
+      `MenuOrder.PriceHuf` mező már megvan az adatmodellben, csak az író use case hiányzik.
+
 ## UI / komponensek
 
 - [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
