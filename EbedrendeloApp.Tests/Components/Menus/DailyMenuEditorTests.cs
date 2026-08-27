@@ -297,14 +297,18 @@ public class DailyMenuEditorTests : MudBunitContext
 
         var cut = Render<DailyMenuEditor>((ComponentParameterCollectionBuilder<DailyMenuEditor> _) => { });
 
-        // A név mellett zárójelben a tömör szám-forma látszik; a teljes "szám – név" pár natív title
-        // attribútumban utazik, ami statikusan is jelen van a markupban, hoverelés nélkül is ellenőrizhető.
+        // A név mellett zárójelben a tömör szám-forma látszik statikusan; a teljes "szám – név" pár egy
+        // info-ikonra tett MudTooltip-ben utazik. A MudTooltip csak hoverelésre rendereli a szövegét a
+        // DOM-ba (MudPopover-portál), ezért ezt nem a markupból, hanem a komponensnek átadott Text
+        // paraméterből ellenőrizzük.
         Assert.Contains("Gulyásleves", cut.Markup);
         Assert.Contains("(1, 9)", cut.Markup);
-        Assert.Contains("title=\"1 – Glutén, 9 – Zeller\"", cut.Markup);
         Assert.Contains("Rántott hús", cut.Markup);
         Assert.Contains("(3)", cut.Markup);
-        Assert.Contains("title=\"3 – Tojás\"", cut.Markup);
+
+        var tooltipTexts = cut.FindComponents<MudTooltip>().Select(t => t.Instance.Text).ToList();
+        Assert.Contains("1 – Glutén, 9 – Zeller", tooltipTexts);
+        Assert.Contains("3 – Tojás", tooltipTexts);
     }
 
     [Fact]

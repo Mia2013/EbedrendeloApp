@@ -11,7 +11,10 @@
 
 <PageTitle>Mai menü</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Mai menü</MudText>
+<MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+    <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" Color="Color.Primary" Size="Size.Large" />
+    <MudText Typo="Typo.h4" GutterBottom="true">Mai menü</MudText>
+</MudStack>
 
 @if (today is null)
 {
@@ -24,7 +27,10 @@ else if (!today.IsOrderableToday)
 else
 {
     <MudPaper Class="pa-3 mb-3" Outlined="true">
-        <MudText Typo="Typo.h6" GutterBottom="true">Mai menüválaszték</MudText>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.Restaurant" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Mai menüválaszték</MudText>
+        </MudStack>
         <MudGrid Spacing="2">
             @foreach (var variant in today.Variants)
             {
@@ -75,7 +81,10 @@ else
     </MudAlert>
 
     <MudPaper Class="pa-3" Outlined="true">
-        <MudText Typo="Typo.h6" GutterBottom="true">Mai à la carte kínálat</MudText>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.Fastfood" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Mai à la carte kínálat</MudText>
+        </MudStack>
 
         @if (today.ALaCarteOffers.Count == 0)
         {

@@ -157,26 +157,10 @@ public class EditDailyMenuDialogTests : MudBunitContext
     }
 
     [Fact]
-    public async Task Clicking_hozzaad_opens_an_inline_new_dish_form_without_opening_a_second_dialog()
+    public async Task No_dish_creation_or_editing_controls_are_offered_in_this_dialog()
     {
-        var provider = await OpenAsync(BaseMediator());
-
-        Assert.Single(provider.FindAll("div.mud-dialog"));
-
-        var addButton = provider.FindAll("button").First(b => b.TextContent.Contains("Hozzáad") && !b.TextContent.Contains("Variáns"));
-        await provider.InvokeAsync(() => addButton.Click());
-
-        // Az inline űrlap ugyanabban a dialógusban jelenik meg — nem nyílik második `MudDialog` felület.
-        Assert.Single(provider.FindAll("div.mud-dialog"));
-        var nameInputs = provider.FindAll("div.mud-input-control").Where(d => d.QuerySelector("label")?.TextContent.Contains("Név") == true);
-        Assert.NotEmpty(nameInputs);
-    }
-
-    [Fact]
-    public async Task Clicking_the_edit_pencil_on_an_existing_soup_opens_an_inline_form_without_opening_a_second_dialog()
-    {
-        // A szerkesztés-ceruza csak akkor jelenik meg, ha a leves egyeztethető a katalógussal (van Id-je) —
-        // ezért itt a katalógusban is szerepeltetni kell ugyanazt a nevű ételt.
+        // A leves/főétel katalógus létrehozása/szerkesztése egy jövőbeli admin felületre kerül —
+        // ebben a dialógusban csak kiválasztás lehetséges.
         var mediator = new FakeMediator();
         mediator.Register<GetMenuDishSuggestionsQuery, MenuDishSuggestionsDto>(
             _ => new MenuDishSuggestionsDto([new MenuDishDto("Gulyásleves", "9", Id: 42, Kind: MenuDishKind.Leves)], []));
@@ -184,13 +168,24 @@ public class EditDailyMenuDialogTests : MudBunitContext
             _ => new DailyMenuDto(Date, true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupAllergens: "9")]));
         var provider = await OpenAsync(mediator);
 
-        var editSoupButton = provider.FindAll("button[title='Leves adatainak szerkesztése']").First();
-        await provider.InvokeAsync(() => editSoupButton.Click());
+        Assert.DoesNotContain(provider.FindAll("button"), b => b.TextContent.Contains("Hozzáad") && !b.TextContent.Contains("Variáns"));
+        Assert.Empty(provider.FindAll("button[title='Leves adatainak szerkesztése']"));
+        Assert.Empty(provider.FindAll("button[title='Főétel adatainak szerkesztése']"));
+    }
 
-        Assert.Single(provider.FindAll("div.mud-dialog"));
-        var nameInput = provider.FindAll("div.mud-input-control")
-            .First(d => d.QuerySelector("label")?.TextContent.Contains("Név") == true)
-            .QuerySelector("input");
-        Assert.Equal("Gulyásleves", nameInput!.GetAttribute("value"));
+    [Fact]
+    public async Task A_selected_dish_shows_its_allergens_and_nutrition_in_a_details_card()
+    {
+        var mediator = new FakeMediator();
+        mediator.Register<GetMenuDishSuggestionsQuery, MenuDishSuggestionsDto>(
+            _ => new MenuDishSuggestionsDto([], []));
+        mediator.Register<GetDailyMenuQuery, DailyMenuDto?>(
+            _ => new DailyMenuDto(Date, true, null,
+                [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupAllergens: "9", SoupEnergyKcal: 108m)]));
+        var provider = await OpenAsync(mediator);
+
+        Assert.Contains("Zeller", provider.Markup);
+        Assert.Contains("Energia (kcal)", provider.Markup);
+        Assert.Contains("108", provider.Markup);
     }
 }

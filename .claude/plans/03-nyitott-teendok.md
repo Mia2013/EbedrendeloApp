@@ -31,21 +31,25 @@
 - [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
       pl. select) legyen kiemelve önálló, újrafelhasználható komponensbe, és vezessük át az összes
       oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek).
-- [ ] A `MudAutocomplete` (leves/főétel név) egysoros, nincs autogrow/multiline támogatása —
-      a napi menü szerkesztő 3-oszlopos elrendezésében a hosszabb ételnevek levágódnak.
-      Megoldás még nyitott (tooltip a teljes névvel, és/vagy szélesebb elrendezés) — lásd az
-      alábbi pontot, mert összefügg vele.
-- [ ] Az ételekhez (leves/főétel) az eddigi Név + Allergének mellé jön egy tápérték-adatblokk is:
-      energia (kcal), zsír, telített zsír, szénhidrát, cukor, fehérje, só (pl. minta: „Mentás
-      zöldborsóleves — Allergének: 1,8,11, En: 108, Zs: 1.8, T.Zs: 0.4, Szh: 16.0, Cuk: 2.1,
-      Feh: 6.0, Só: 0.14"). Ezt meg kell jeleníteni **mindenhol**, ahol jelenleg az étel neve +
-      allergénjei látszik: napi menü szerkesztő (admin), mai menü / heti menü nézet (dolgozói
-      oldal), és feltehetően a `MenuDishSuggestionsDto` / autocomplete javaslatokban is. Nyitott
-      kérdések, amiket implementáció előtt tisztázni kell:
-      - hol tárolódik ez az adat (bővül-e a leves/főétel katalógus entitása, vagy külön tábla),
-      - admin szerkeszthető-e mezőnként, vagy fix forrásból (pl. import) jön,
-      - megjelenítési forma (kompakt chip-sor, kibontható részlet, tooltip) — ez már a fenti
-        `MudAutocomplete`-szélesség kérdéssel is összefügg, együtt érdemes megtervezni.
+- [x] A `MudAutocomplete` (leves/főétel név) a napi menü szerkesztő 3-oszlopos elrendezésében a
+      hosszabb ételnevek miatt levágódott — megoldva a dialógus szélesítésével
+      (`DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true }`,
+      `DailyMenuEditor.razor` `EditDayAsync`) és a `MudGrid` térköz növelésével.
+- [x] Az ételekhez (leves/főétel) a Név + Allergének mellé tápérték-adatblokk jelenik meg a napi
+      menü szerkesztő dialógusban — kiválasztás után egy kis kártyában (`DishDetailsCard.razor`),
+      allergén chip-sorral és a 7 tápérték-mezővel. **Még nincs** átvezetve a mai menü / heti menü
+      nézetre (dolgozói oldal) — ott továbbra is a régi kompakt egysoros formátum
+      (`MenuVariantNutritionFormat.Format`) fut; ha ott is kártyás megjelenítés kell, a
+      `DishDetailsCard` innen újrafelhasználható.
+- [ ] Admin felület a leves/főétel katalógus (`MenuDish`) önálló kezelésére: létrehozás,
+      szerkesztés, törlés/deaktiválás. A napi menü szerkesztő dialógusból (`EditDailyMenuDialog`)
+      szándékosan eltávolításra került az inline "Hozzáad" és a szerkesztés-ceruza — az a dialógus
+      mostantól csak a már meglévő katalógusból választ. A hozzá tartozó UI építőelemek már készen
+      állnak és újrafelhasználhatók: `MenuDishEditor.razor` (a mezőkészlet) és `AddMenuDishDialog.razor`
+      (dialógus-keret köré rá) — ez utóbbi jelenleg sehonnan nincs megnyitva, csak tesztelve van
+      (`AddMenuDishDialogTests.cs`). Az admin felületnek valószínűleg egy listázó nézetre is
+      szüksége lesz (jelenleg nincs "összes leves/főétel" lekérdezés, csak a `GetMenuDishSuggestionsQuery`,
+      ami a napi menü szerkesztőhöz készült).
 
 ---
 

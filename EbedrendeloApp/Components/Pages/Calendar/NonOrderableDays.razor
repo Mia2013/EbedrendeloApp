@@ -12,7 +12,10 @@
 
 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
     <MudStack Spacing="0" Style="max-width: 680px;">
-        <MudText Typo="Typo.h4">Nem rendelhető napok</MudText>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h4">Nem rendelhető napok</MudText>
+        </MudStack>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
             <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
@@ -28,7 +31,7 @@
     <MudStack Row Spacing="4" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
         <MudDatePicker Label="Mettől" @bind-Date="fromDate" Variant="Variant.Outlined" Style="width:200px;" />
         <MudDatePicker Label="Meddig" @bind-Date="toDate" Variant="Variant.Outlined" Style="width:200px;" />
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync">Szűrés</MudButton>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync">Szűrés</MudButton>
         <MudSpacer />
         @if (rows is not null)
         {
@@ -74,7 +77,7 @@ else
             <MudTd>
                 @if (context.Type == RowType.Excluded)
                 {
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo" OnClick="() => OpenRevokeDialogAsync(context.Date)">
+                    <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo" OnClick="() => OpenRevokeDialogAsync(context.Date)">
                         Visszavonás
                     </MudButton>
                 }

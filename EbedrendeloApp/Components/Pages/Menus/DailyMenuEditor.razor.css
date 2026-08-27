@@ -18,17 +18,15 @@
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     column-gap: 12px;
-    background: var(--mud-palette-background);
-    padding-bottom: 6px;
+    background: var(--mud-palette-warning);
+    border-radius: 6px;
+    padding: 8px;
+
 }
 
 .menu-calendar__weekday {
-    color: var(--mud-palette-text-secondary);
-    font-size: 0.72rem;
-    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .08em;
-    padding: 0 6px 6px;
 }
 
 .menu-calendar__cell {
@@ -54,24 +52,6 @@
     box-shadow: none;
 }
 
-.menu-calendar__cell--today {
-    background: var(--mud-palette-primary-hover);
-    box-shadow: 0 0 0 2px var(--mud-palette-primary), 0 4px 18px rgba(0, 0, 0, .08);
-}
-
-.menu-calendar__today-badge {
-    display: inline-block;
-    background: var(--mud-palette-primary);
-    color: #fff;
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    padding: 1px 7px;
-    border-radius: 999px;
-    line-height: 1.5;
-}
-
 .menu-calendar__header {
     display: flex;
     align-items: center;
@@ -95,45 +75,7 @@
     padding: 4px;
 }
 
-.menu-calendar__variant-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 26px;
-    height: 26px;
-    padding: 0 6px;
-    border-radius: 8px;
-    background: var(--variant-accent-soft, var(--mud-palette-background-gray));
-    color: var(--variant-accent, var(--mud-palette-text-primary));
-    font-weight: 700;
-    font-size: 0.85rem;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-.menu-calendar__variant-badge--muted {
-    background: var(--mud-palette-background-gray);
-    color: var(--mud-palette-text-secondary);
-}
-
-.menu-calendar__allergen-tag {
-    display: inline-block;
-    background: var(--mud-palette-background-gray);
-    color: var(--mud-palette-text-secondary);
-    border-radius: 6px;
-    padding: 0 5px;
-    font-size: 0.68rem;
-    margin-left: 4px;
-    cursor: help;
-    vertical-align: middle;
-}
-
-.variant-edit-card {
-    border-radius: 10px;
-    border-left: 3px solid var(--variant-accent, var(--mud-palette-primary));
-}
-
-@media (max-width: 900px) {
+@media (max-width: 1279px) {
     .menu-calendar {
         grid-template-columns: 1fr;
     }

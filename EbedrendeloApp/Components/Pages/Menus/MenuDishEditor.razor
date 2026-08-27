@@ -60,11 +60,11 @@
 </MudGrid>
 
 <MudStack Row Spacing="2" Class="mt-3">
-    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
-               OnClick="SaveAsync" Disabled="isSaving || string.IsNullOrWhiteSpace(name)">
+    <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+               OnClick="SaveAsync" Disabled="!CanSave">
         Mentés
     </MudButton>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="() => OnCancelled.InvokeAsync()">Mégse</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => OnCancelled.InvokeAsync()">Mégse</MudButton>
 </MudStack>
 
 @code {
@@ -83,6 +83,8 @@
     public EventCallback OnCancelled { get; set; }
 
     private bool IsEditMode => Existing is not null;
+
+    private bool CanSave => !isSaving && !string.IsNullOrWhiteSpace(name);
 
     private MenuDishKind selectedKind = MenuDishKind.Leves;
     private string name = string.Empty;

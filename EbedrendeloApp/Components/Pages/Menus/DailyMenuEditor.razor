@@ -20,7 +20,7 @@
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0">
-            <MudText Typo="Typo.h4" Style="font-weight:600;">Napi menü szerkesztése</MudText>
+            <MudText Typo="Typo.h4">Napi menü szerkesztése</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
                 Válassz egy rendelési időszakot — csak az ahhoz tartozó munkanapok listázódnak. Elmúlt napok menüje
                 csak megtekinthető.
@@ -54,7 +54,9 @@ else
     <div class="menu-calendar__weekday-row">
         @foreach (var weekdayLabel in WeekdayLabels)
         {
-            <div class="menu-calendar__weekday">@weekdayLabel</div>
+             <MudText Typo="Typo.caption" class="text-uppercase menu-calendar__weekday">
+                @weekdayLabel
+            </MudText> 
         }
     </div>
 
@@ -69,7 +71,7 @@ else
                 }
                 else
                 {
-                    <div class="menu-calendar__cell @(cell.Date == today ? "menu-calendar__cell--today" : null)">
+                    <div class="menu-calendar__cell" style="@(cell.Date == today ? "background:var(--mud-palette-primary-hover);" : null)">
                         @DayCell(cell)
                     </div>
                 }
@@ -86,20 +88,20 @@ else
     @<MudStack Spacing="1" Style="height:100%;">
         <div class="menu-calendar__header">
             <div class="menu-calendar__header-left">
-                <MudText Typo="Typo.subtitle2" Class="@GetTextClass(day)" Style="@DateStyle(day)">@day.Date.ToString("MM.dd.")</MudText>
+                <MudText Typo="Typo.subtitle2" Class="@GetTextClass(day)" Color="@(day.IsPastDay ? Color.Default : Color.Primary)" Style="font-weight:700;">@day.Date.ToString("MM.dd.")</MudText>
                 @if (day.Date == today)
                 {
-                    <span class="menu-calendar__today-badge">Ma</span>
+                    <MudBadge Content="@("Ma")" Color="Color.Primary" />
                 }
             </div>
 
             <div class="menu-calendar__header-actions menu-calendar__actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Variant="Variant.Text" Size="Size.Small"
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Variant="Variant.Text" Size="Size.Small"
                                title="@(day.IsPastDay ? "Elmúlt, csak megtekinthető" : "Szerkesztés")"
-                               OnClick="() => EditDayAsync(day)" Disabled="day.IsPastDay || day.IsSaving" />
+                               OnClick="() => EditDayAsync(day)" Disabled="!day.CanEdit" />
                 <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Variant="Variant.Text" Size="Size.Small"
                                title="Nap menüjének törlése" OnClick="() => DeleteDayRowAsync(day)"
-                               Disabled="day.IsPastDay || day.IsSaving || !day.HasMenu" />
+                               Disabled="!day.CanDelete" />
             </div>
         </div>
 
@@ -110,43 +112,51 @@ else
 
         @if (day.HasMenu)
         {
-            <MudStack Spacing="2">
+            <MudGrid Spacing="2">
                 @for (var variantIndex = 0; variantIndex < day.Variants.Count; variantIndex++)
                 {
                     var variant = day.Variants[variantIndex];
-                    <MudStack Row Spacing="2" AlignItems="AlignItems.Start" Class="menu-calendar__variant" Style="@VariantAccentStyle(variantIndex)">
-                        <span class="menu-calendar__variant-badge @(day.IsPastDay ? "menu-calendar__variant-badge--muted" : null)">@variant.Code</span>
-                        <MudStack Spacing="0" Class="flex-grow-1" Style="min-width:0;">
-                            <MudText Typo="Typo.body2" Class="@GetTextClass(day)">
-                                @variant.Name
-                                @if (FormatAllergensShort(variant.SoupDish) is { } soupAllergensShort)
-                                {
-                                    <span class="menu-calendar__allergen-tag" title="@FormatAllergens(variant.SoupDish)">(@soupAllergensShort)</span>
-                                }
-                            </MudText>
-                            @if (FormatNutrition(variant.SoupDish) is { } soupNutritionText)
-                            {
-                                <MudText Class="mud-text-secondary" Style="font-size:0.68rem; line-height:1.3;">@soupNutritionText</MudText>
-                            }
-
-                            @if (!string.IsNullOrWhiteSpace(variant.Description))
-                            {
-                                <MudText Typo="Typo.body2" Class="@GetTextClass(day, "mt-1")">
-                                    @variant.Description
-                                    @if (FormatAllergensShort(variant.MainCourseDish) is { } mainCourseAllergensShort)
+                    <MudItem xs="12" md="4" lg="12">
+                        <MudStack Row Spacing="2" AlignItems="AlignItems.Start">
+                            <MudAvatar Color="@(day.IsPastDay ? Color.Default : Color.Warning)" Size="Size.Small" Rounded="true">@variant.Code</MudAvatar>
+                            <MudStack Spacing="0" Class="flex-grow-1" Style="min-width:0;">
+                                <MudText Typo="Typo.body2" Class="@GetTextClass(day)">
+                                    @variant.Name
+                                    @if (FormatAllergensShort(variant.SoupDish) is { } soupAllergensShort)
                                     {
-                                        <span class="menu-calendar__allergen-tag" title="@FormatAllergens(variant.MainCourseDish)">(@mainCourseAllergensShort)</span>
+                                        <text> (@soupAllergensShort)</text>
+                                        <MudTooltip Text="@FormatAllergens(variant.SoupDish)" Inline="true">
+                                            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                        </MudTooltip>
                                     }
                                 </MudText>
-                                @if (FormatNutrition(variant.MainCourseDish) is { } mainCourseNutritionText)
+                                @if (FormatNutrition(variant.SoupDish) is { } soupNutritionText)
                                 {
-                                    <MudText Class="mud-text-secondary" Style="font-size:0.68rem; line-height:1.3;">@mainCourseNutritionText</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutritionText</MudText>
                                 }
-                            }
+
+                                @if (!string.IsNullOrWhiteSpace(variant.Description))
+                                {
+                                    <MudText Typo="Typo.body2" Class="@GetTextClass(day, "mt-1")">
+                                        @variant.Description
+                                        @if (FormatAllergensShort(variant.MainCourseDish) is { } mainCourseAllergensShort)
+                                        {
+                                            <text> (@mainCourseAllergensShort)</text>
+                                            <MudTooltip Text="@FormatAllergens(variant.MainCourseDish)" Inline="true">
+                                                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                            </MudTooltip>
+                                        }
+                                    </MudText>
+                                    @if (FormatNutrition(variant.MainCourseDish) is { } mainCourseNutritionText)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@mainCourseNutritionText</MudText>
+                                    }
+                                }
+                            </MudStack>
                         </MudStack>
-                    </MudStack>
+                    </MudItem>
                 }
-            </MudStack>
+            </MudGrid>
         }
         else
         {
@@ -178,6 +188,9 @@ else
         public List<VariantRow> Variants { get; set; } = [];
         public bool IsSaving { get; set; }
         public string? ErrorMessage { get; set; }
+
+        public bool CanEdit => !IsPastDay && !IsSaving;
+        public bool CanDelete => !IsPastDay && !IsSaving && HasMenu;
     }
 
     private List<OrderingPeriodDto> periods = [];
@@ -290,22 +303,6 @@ else
 
     private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
 
-    /// <summary>A/B/C… variánsonként más-más tónusú kiemelőszín (a napi menü meglévő MudBlazor palettájából,
-    /// nem új szín kitalálva) — ez segít ránézésre megkülönböztetni a variánsokat egy sűrű hónap-nézetben.</summary>
-    private static readonly (string Base, string Soft)[] VariantAccents =
-    [
-        ("--mud-palette-primary", "--mud-palette-primary-hover"),
-        ("--mud-palette-success", "--mud-palette-success-hover"),
-        ("--mud-palette-warning", "--mud-palette-warning-hover"),
-        ("--mud-palette-info", "--mud-palette-info-hover"),
-    ];
-
-    private static string VariantAccentStyle(int variantIndex)
-    {
-        var (baseVar, softVar) = VariantAccents[variantIndex % VariantAccents.Length];
-        return $"--variant-accent:var({baseVar}); --variant-accent-soft:var({softVar});";
-    }
-
     /// <summary>Muted grey for an elmúlt (past) day's text — a subtle "not editable anymore" cue.</summary>
     private static string? GetTextClass(DayRow day, string? extra = null)
     {
@@ -316,12 +313,6 @@ else
 
         return extra is null ? "mud-text-secondary" : $"mud-text-secondary {extra}";
     }
-
-    /// <summary>Nem elmúlt napoknál félkövér, primary-színű dátum (az avatar/pill helyett ez adja a
-    /// vizuális hangsúlyt) — elmúlt napnál a szín elmarad, a <see cref="GetTextClass"/> adta szürkítés
-    /// marad érvényben.</summary>
-    private static string DateStyle(DayRow day) =>
-        day.IsPastDay ? "font-weight:700;" : "font-weight:700; color:var(--mud-palette-primary);";
 
     /// <summary>View-mód: csak a megjelenítéshez szükséges mezők, katalógus-egyeztetés nélkül (arra csak a
     /// szerkesztő-dialógusban van szükség, ahol a szerkesztés-ceruzának Id kell).</summary>
@@ -351,10 +342,17 @@ else
         row.Variants = dto?.Variants.Select(ToVariantRow).ToList() ?? [];
     }
 
+    private static readonly DialogOptions EditDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Large,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
     private async Task EditDayAsync(DayRow day)
     {
         var parameters = new DialogParameters<EditDailyMenuDialog> { { x => x.Date, day.Date } };
-        var dialogRef = await DialogService.ShowAsync<EditDailyMenuDialog>("Nap menüjének szerkesztése", parameters);
+        var dialogRef = await DialogService.ShowAsync<EditDailyMenuDialog>("Nap menüjének szerkesztése", parameters, EditDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
