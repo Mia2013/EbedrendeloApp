@@ -3,6 +3,7 @@ namespace EbedrendeloApp.Common.Results;
 public static class ErrorCodes
 {
     public const string DeadlinePassed = nameof(DeadlinePassed);
+    public const string PeriodClosed = nameof(PeriodClosed);
     public const string DayClosed = nameof(DayClosed);
     public const string DayExcluded = nameof(DayExcluded);
     public const string NotWorkingDay = nameof(NotWorkingDay);

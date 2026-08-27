@@ -102,6 +102,42 @@ public class DeleteMenuVariantHandlerTests : IDisposable
 
         var notification = await db.UserNotifications.SingleAsync(n => n.RelatedMenuOrderId == orderId);
         Assert.Equal(NotificationType.MenuCancelled, notification.Type);
+
+        var menu = await db.DailyMenus.SingleAsync(m => m.Date == date);
+        Assert.False(menu.IsPublished);
+    }
+
+    [Fact]
+    public async Task Unpublishes_the_day_when_the_last_variant_is_deleted_even_without_active_orders()
+    {
+        // Regression test: without this, deleting the only variant left a "published" DailyMenu with an
+        // empty Variants list — GetOrderableDaysHandler/GetTodayMenuForUserHandler/GetPeriodMenuHandler
+        // would then report the day as orderable/having a menu with nothing to actually order.
+        var date = new DateOnly(2026, 8, 20);
+        await SeedMenuAsync(date, "A");
+
+        var result = await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await using var db = dbFactory.CreateDbContext();
+        var menu = await db.DailyMenus.SingleAsync(m => m.Date == date);
+        Assert.False(menu.IsPublished);
+    }
+
+    [Fact]
+    public async Task Keeps_the_day_published_when_another_variant_still_remains()
+    {
+        var date = new DateOnly(2026, 8, 20);
+        await SeedMenuAsync(date, "A", "B");
+
+        var result = await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await using var db = dbFactory.CreateDbContext();
+        var menu = await db.DailyMenus.SingleAsync(m => m.Date == date);
+        Assert.True(menu.IsPublished);
     }
 
     private async Task<(int variantAId, int variantBId)> SeedMenuAsync(DateOnly date, string codeA, string? codeB = null)

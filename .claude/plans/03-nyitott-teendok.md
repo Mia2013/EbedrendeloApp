@@ -51,6 +51,26 @@
       szüksége lesz (jelenleg nincs "összes leves/főétel" lekérdezés, csak a `GetMenuDishSuggestionsQuery`,
       ami a napi menü szerkesztőhöz készült).
 
+## Napi menü / étel-katalógus (Epic 2) — code review során talált, még nyitott kockázatok
+
+- [ ] `UpsertDailyMenuValidator` a variánskódok egyediségét `StringComparer.Ordinal`-lal (kis-nagybetű
+      érzékenyen) ellenőrzi, miközben a `MenuVariant` DB-oldali unique indexe (`DailyMenuId`, `Code`)
+      SQL Serveren alapértelmezetten kis-nagybetű független collationt használ. Emiatt pl. "A" és "a"
+      kódok átcsúszhatnak a validáción, majd `SaveChangesAsync`-nél nyers `DbUpdateException`
+      (unique constraint violation) száll fel egy barátságos `Result.Failure` helyett. Javítás: a
+      validátor is legyen kis-nagybetű független (`StringComparer.OrdinalIgnoreCase`), hogy a hiba még
+      a mentés előtt, szép hibaüzenettel bukjon el.
+- [ ] `GetTodayMenuForUserHandler.cs` egyik (fallback) lekérdezése — a felhasználó már leadott
+      rendeléséhez tartozó `MenuVariant` keresése — nem szűr `RemovedAtUtc == null`-ra, és `FirstAsync`-et
+      használ `FirstOrDefaultAsync` helyett (eltérően a fájl és a feature többi lekérdezésétől). Ma nem
+      hívható elő éles hibaként, mert minden variáns-törlési útvonal (`DeleteMenuVariantHandler`,
+      `UpsertDailyMenuHandler`, `DeleteDailyMenuHandler`) előbb átvezeti/lemondja az érintett aktív
+      rendeléseket a `MenuReassignmentService`-en keresztül, szóval aktív rendelés ma nem mutathat
+      törölt variánsra — de ha ez az invariáns egy jövőbeli módosítással megszűnik, ez a sor
+      kezeletlen `InvalidOperationException`-t dobna a "mai menü" oldalon. Érdemes a többi
+      lekérdezéshez hasonlóan `RemovedAtUtc == null` + `FirstOrDefaultAsync`-re javítani, kis
+      védelemként.
+
 ---
 
 *Új tétel felvételekor elég egy rövid, egy-két mondatos leírás — a részletes elfogadási kritériumok

@@ -103,6 +103,24 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Resaving_an_existing_menu_with_no_actual_changes_sends_no_MenuChanged_notification()
+    {
+        // Regression test: re-opening and re-saving an already-published day without changing anything
+        // (same Note, same variant Code/Name/Description/SortOrder) must not spam every active orderer.
+        var date = new DateOnly(2026, 8, 20);
+        var (_, orderId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+
+        var result = await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Régi név", null, 0)], adminId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.False(await db.UserNotifications.AnyAsync(n => n.RelatedMenuOrderId == orderId));
+    }
+
+    [Fact]
     public async Task Creating_a_menu_sends_no_MenuChanged_notification()
     {
         await SeedUsersAsync();

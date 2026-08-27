@@ -90,6 +90,29 @@ public class GetDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Joins_allergens_case_insensitively_after_a_dish_only_casing_rename()
+    {
+        // Regression test: MenuVariant.Name/Description are denormalized free text, not FK-linked to
+        // MenuDish (see MenuDish.cs). A case-only rename via UpdateMenuDishHandler ("gulyásleves" ->
+        // "Gulyásleves") only guards against a case-SENSITIVE self-conflict, so it succeeds and leaves
+        // already-saved MenuVariant rows with the old casing. The join must still find the dish.
+        var date = new DateOnly(2026, 8, 20);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var menu = new DailyMenu { Date = date, IsPublished = true };
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "gulyásleves", SortOrder = 0 });
+            db.DailyMenus.Add(menu);
+            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", Allergens = "zeller" });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetDailyMenuQuery(date, IncludeUnpublished: true), CancellationToken.None);
+
+        var variant = Assert.Single(result!.Variants);
+        Assert.Equal("zeller", variant.SoupAllergens);
+    }
+
+    [Fact]
     public async Task Joins_nutrition_from_the_dish_catalog_by_name()
     {
         var date = new DateOnly(2026, 8, 20);

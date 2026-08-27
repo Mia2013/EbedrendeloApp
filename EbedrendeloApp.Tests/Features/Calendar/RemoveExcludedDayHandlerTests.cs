@@ -161,6 +161,45 @@ public class RemoveExcludedDayHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Restores_correctly_after_a_second_exclude_restore_cycle_on_the_same_order()
+    {
+        // Regression test: ExcludeDayHandler always inserts a brand-new CreditEntry per cycle (never
+        // reuses one), so after exclude -> restore -> exclude -> restore, TWO CancellationCredit rows
+        // exist for the same order (the first one already zeroed by the first restore). Picking "the
+        // oldest" instead of "the still-live one" would find the stale, already-zeroed entry and wrongly
+        // skip the second restore as "credit already consumed elsewhere".
+        var (_, orderId, _) = await SeedExcludedOrderAsync();
+
+        var firstRestore = await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+        Assert.True(firstRestore.IsSuccess);
+        Assert.Equal(1, firstRestore.Value!.RestoredCount);
+        Assert.Equal(0, firstRestore.Value.SkippedCount);
+
+        var reExclude = await excludeHandler.Handle(new ExcludeDayCommand(ExcludedDate, "Ismételt karbantartás", adminId), CancellationToken.None);
+        Assert.True(reExclude.IsSuccess);
+
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var cancellationCredits = await db.CreditEntries
+                .Where(c => c.SourceMenuOrderId == orderId && c.Kind == CreditEntryKind.CancellationCredit)
+                .ToListAsync();
+            Assert.Equal(2, cancellationCredits.Count);
+            Assert.Single(cancellationCredits, c => c.RemainingHuf == c.AmountHuf); // the live, current-cycle entry
+        }
+
+        var secondRestore = await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+
+        Assert.True(secondRestore.IsSuccess);
+        Assert.Equal(1, secondRestore.Value!.RestoredCount);
+        Assert.Equal(0, secondRestore.Value.SkippedCount);
+
+        await using var verifyDb = dbFactory.CreateDbContext();
+        var order = await verifyDb.MenuOrders.SingleAsync(o => o.Id == orderId);
+        Assert.Equal(OrderStatus.Active, order.Status);
+        Assert.Null(order.CancellationReason);
+    }
+
+    [Fact]
     public async Task Does_not_touch_orders_when_restore_flag_is_false()
     {
         var (_, orderId, _) = await SeedExcludedOrderAsync();

@@ -35,6 +35,13 @@ public sealed class UpsertDailyMenuHandler(
         var wasRevived = menu is { RemovedAtUtc: not null };
         var isFreshMenu = menu is null || wasRevived;
 
+        // Snapshot the pre-change content so a no-op resave (admin reopens the day and saves without
+        // touching anything) doesn't spam every active orderer with a MenuChanged notification — the
+        // notification is meant for an actual name/description/variant-set change (01-szerver-architektura.md
+        // §"Puszta módosításnál (név/leírás változik) ... MenuChanged értesítés"), not for "not a fresh menu".
+        var previousNote = menu?.Note;
+        var previousVariantSignature = isFreshMenu ? null : BuildVariantSignature(menu!.Variants.Where(v => v.RemovedAtUtc is null));
+
         if (menu is null)
         {
             // Nincs külön publikálás-lépés: a mentés (sikeres validáció = van legalább egy variáns)
@@ -118,7 +125,10 @@ public sealed class UpsertDailyMenuHandler(
             removed.RemovedAtUtc = nowUtc;
         }
 
-        if (!isFreshMenu)
+        var contentChanged = previousNote != request.Note
+            || previousVariantSignature != BuildVariantSignature(remainingVariants);
+
+        if (!isFreshMenu && contentChanged)
         {
             // AC 2.3.2: every active orderer of the day hears about the change, except the ones who
             // already got a more specific OrderReassigned/MenuCancelled notification above.
@@ -152,6 +162,18 @@ public sealed class UpsertDailyMenuHandler(
     }
 
     /// <summary>
+    /// Builds a comparable signature of a day's variant set (Code, Name, Description, SortOrder) so a
+    /// before/after comparison can tell a real edit apart from a no-op resave. Deliberately excludes
+    /// allergen/nutrition fields — those live on the shared MenuDish catalog, not on MenuVariant, and are
+    /// out of scope for the "did this day's menu change" question the MenuChanged notification answers.
+    /// </summary>
+    private static string BuildVariantSignature(IEnumerable<MenuVariant> variants) => string.Join(
+        '|',
+        variants
+            .OrderBy(v => v.Code, StringComparer.Ordinal)
+            .Select(v => $"{v.Code}:{v.Name}:{v.Description}:{v.SortOrder}"));
+
+    /// <summary>
     /// Batch-loads every dish catalog row this request could touch (tracked, not <see cref="MenuDishAllergenLookup"/>'s
     /// NoTracking read) in a single query, keyed the same way — avoids a per-variant per-dish-kind round trip in
     /// <see cref="UpdateDish"/> below.
@@ -168,7 +190,7 @@ public sealed class UpsertDailyMenuHandler(
                      || (d.Kind == MenuDishKind.Foetel && mainCourseNames.Contains(d.Name)))
             .ToListAsync(cancellationToken);
 
-        return dishes.ToDictionary(d => (d.Kind, d.Name));
+        return dishes.ToDictionary(d => (d.Kind, d.Name), MenuDishAllergenLookup.KeyComparer);
     }
 
     /// <summary>

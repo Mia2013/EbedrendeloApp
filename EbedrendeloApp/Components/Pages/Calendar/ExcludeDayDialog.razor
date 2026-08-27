@@ -29,7 +29,7 @@
 
             <MudAutocomplete T="string" Label="Indoklás" @bind-Value="reason" SearchFunc="SearchReasonsAsync"
                               Strict="false" CoerceText="true" CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined"
-                              MaxLength="200" Counter="200" />
+                              MaxLength="@ExcludeDayCommand.ReasonMaxLength" Counter="@ExcludeDayCommand.ReasonMaxLength" />
 
             <MudAlert Severity="Severity.Warning">
                 Az erre a napra leadott aktív menürendelések automatikusan lemondásra kerülnek, a dolgozók pedig
@@ -77,9 +77,9 @@
             return;
         }
 
-        if (reason.Trim().Length > 200)
+        if (reason.Trim().Length > ExcludeDayCommand.ReasonMaxLength)
         {
-            errorMessage = "Az indoklás legfeljebb 200 karakter lehet.";
+            errorMessage = $"Az indoklás legfeljebb {ExcludeDayCommand.ReasonMaxLength} karakter lehet.";
             return;
         }
 

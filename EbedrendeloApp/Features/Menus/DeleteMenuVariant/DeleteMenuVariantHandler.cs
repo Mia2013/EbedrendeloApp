@@ -44,6 +44,17 @@ public sealed class DeleteMenuVariantHandler(
 
         variant.RemovedAtUtc = nowUtc;
 
+        if (remaining.Count == 0)
+        {
+            // No variants left on this day — treat it the same as an unpublished/removed menu (mirrors
+            // DeleteDailyMenuHandler's IsPublished = false) so GetOrderableDaysHandler, GetTodayMenuForUserHandler
+            // and GetPeriodMenuHandler stop reporting the day as orderable with nothing to actually order.
+            // Without this, deleting the last variant silently strands a "published" day with an empty
+            // Variants list (the UpsertDailyMenuValidator's "at least one variant" rule only guards the
+            // save/upsert path, not this direct delete).
+            menu.IsPublished = false;
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
