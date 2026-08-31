@@ -1,0 +1,295 @@
+@page "/rendelesek"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
+@using EbedrendeloApp.Features.Orders.GetUserOrders
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject IDevUserSwitcher DevUserSwitcher
+@inject NavigationManager NavigationManager
+
+<PageTitle>Rendelések</PageTitle>
+
+<MudPaper Elevation="0" Class="pa-4 admin-orders__header-card">
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.ListAlt" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h4">Rendelések</MudText>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Naponkénti, variánsonkénti összesítő — ez alapján tudja a konyha, hány adagot kell főznie. Reklamáció esetén
+        a lenti részletes listában kereshetsz konkrét rendelésre.
+    </MudText>
+
+    @if (periods is { Count: > 0 })
+    {
+        <MudSelect T="int" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
+            @foreach (var period in periods)
+            {
+                <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</MudPaper>
+
+@if (orders is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h6" Class="mt-6 mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.GridView" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
+        Napi összesítő
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Csak az aktív (le nem mondott) rendelések számítanak bele.</MudText>
+
+    <WeekdayHeaderRow />
+
+    <div class="admin-orders-calendar mt-3">
+        @foreach (var week in BuildWeeks())
+        {
+            @foreach (var date in week)
+            {
+                @if (date is null)
+                {
+                    <div class="admin-orders-calendar__cell admin-orders-calendar__cell--empty"></div>
+                }
+                else
+                {
+                    <div class="admin-orders-calendar__cell">
+                        @SummaryCell(date.Value)
+                    </div>
+                }
+            }
+        }
+    </div>
+
+    <MudText Typo="Typo.h6" Class="mt-8 mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
+        Részletes lista
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Egyedi rendelések szűrhetően — ki adta le, mikor, ki és miért mondta le.</MudText>
+
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudSelect T="int?" Label="Dolgozó" Value="selectedUserId" ValueChanged="OnUserSelectedAsync" Variant="Variant.Outlined" Clearable="true" Style="min-width:240px;">
+            @foreach (var user in users)
+            {
+                <MudSelectItem Value="@((int?)user.UserId)">@user.DisplayName</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudStack Row Spacing="2">
+            @foreach (var option in StatusFilterOptions)
+            {
+                <MudChip T="string" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
+                         Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => SetStatusFilter(option)">
+                    @option
+                </MudChip>
+            }
+        </MudStack>
+    </MudStack>
+
+    <MudTable Items="filteredOrders" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Dátum</MudTh>
+            <MudTh>Dolgozó</MudTh>
+            <MudTh>Menü</MudTh>
+            <MudTh>Állapot</MudTh>
+            <MudTh>Leadta</MudTh>
+            <MudTh>Leadás ideje</MudTh>
+            <MudTh>Lemondta / ok</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Dátum">@context.Date.ToString("yyyy.MM.dd.")</MudTd>
+            <MudTd DataLabel="Dolgozó">@context.UserDisplayName</MudTd>
+            <MudTd DataLabel="Menü">@context.VariantCode menü</MudTd>
+            <MudTd DataLabel="Állapot">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Status == OrderStatus.Active ? Color.Success : Color.Default)">
+                    @(context.Status == OrderStatus.Active ? "Aktív" : "Lemondva")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Leadta">
+                @context.PlacedByDisplayName
+                @if (context.PlacedByUserId != context.UserId)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Primary" Style="display:inline;"> (más nevében)</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Leadás ideje">@context.PlacedAtUtc.ToString("MM.dd. HH:mm")</MudTd>
+            <MudTd DataLabel="Lemondta / ok">
+                @if (context.Status == OrderStatus.Cancelled)
+                {
+                    @($"{context.CancelledByDisplayName} — {Describe(context.CancellationReason)}, {context.CancelledAtUtc:MM.dd. HH:mm}")
+                }
+                else
+                {
+                    <text>—</text>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private RenderFragment<DateOnly> SummaryCell => date =>
+    @<MudStack Spacing="1" Style="height:100%;">
+        <MudText Typo="Typo.subtitle2" Color="Color.Primary" Style="font-weight:700;">@date.ToString("MM.dd.")</MudText>
+
+        @if (!activeCountsByDate.TryGetValue(date, out var variantCounts) || variantCounts.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Nincs aktív rendelés</MudText>
+        }
+        else
+        {
+            @foreach (var (variantCode, variantName, orderCount) in variantCounts.OrderBy(v => v.Code))
+            {
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.body2">@variantCode menü — @variantName</MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Primary" Style="font-weight:700;">@orderCount</MudText>
+                </MudStack>
+            }
+            <MudStack Row Justify="Justify.SpaceBetween" Class="admin-orders-calendar__total mt-1 pt-1">
+                <MudText Typo="Typo.caption">Összesen</MudText>
+                <MudText Typo="Typo.caption" Style="font-weight:700;">@variantCounts.Sum(v => v.Count) adag</MudText>
+            </MudStack>
+        }
+    </MudStack>;
+
+    private static readonly Dictionary<CancellationReason, string> ReasonText = new()
+    {
+        [CancellationReason.ByUser] = "saját lemondás",
+        [CancellationReason.DayExcluded] = "nap kizárása",
+        [CancellationReason.MenuDeleted] = "menü törölve",
+        [CancellationReason.VariantRemoved] = "menüvariáns megszűnt",
+    };
+
+    private static string Describe(CancellationReason? reason) => reason is { } r ? ReasonText.GetValueOrDefault(r, r.ToString()) : string.Empty;
+
+    private readonly record struct VariantCount(string Code, string Name, int Count);
+
+    private List<OrderingPeriodDto> periods = [];
+    private int selectedPeriodId;
+    private IReadOnlyList<EbedrendeloApp.Common.Security.DevUserOption> users = [];
+    private int? selectedUserId;
+    private string statusFilter = "Mind";
+    private List<UserOrderDto>? orders;
+    private Dictionary<DateOnly, List<VariantCount>> activeCountsByDate = [];
+    private string? errorMessage;
+
+    private IEnumerable<UserOrderDto> filteredOrders => orders is null
+        ? []
+        : orders.Where(o => statusFilter switch
+        {
+            "Aktív" => o.Status == OrderStatus.Active,
+            "Lemondva" => o.Status == OrderStatus.Cancelled,
+            _ => true,
+        });
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        users = await DevUserSwitcher.GetUsersAsync();
+
+        periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();
+
+        if (current is not null)
+        {
+            selectedPeriodId = current.Id;
+            await LoadOrdersAsync();
+        }
+        else
+        {
+            orders = [];
+            errorMessage = "Nincs még rendelési időszak.";
+        }
+    }
+
+    private async Task OnPeriodSelectedAsync(int periodId)
+    {
+        selectedPeriodId = periodId;
+        orders = null;
+        StateHasChanged();
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnUserSelectedAsync(int? userId)
+    {
+        selectedUserId = userId;
+        await LoadOrdersAsync();
+    }
+
+    private static readonly string[] StatusFilterOptions = ["Mind", "Aktív", "Lemondva"];
+
+    private void SetStatusFilter(string option) => statusFilter = option;
+
+    private async Task LoadOrdersAsync()
+    {
+        var result = await Mediator.Send(new GetUserOrdersQuery(selectedPeriodId, selectedUserId, null));
+        if (!result.IsSuccess)
+        {
+            orders = [];
+            errorMessage = result.ErrorMessage;
+            return;
+        }
+
+        errorMessage = null;
+        orders = result.Value!.ToList();
+        activeCountsByDate = orders
+            .Where(o => o.Status == OrderStatus.Active)
+            .GroupBy(o => o.Date)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(o => (o.VariantCode, o.VariantName))
+                      .Select(vg => new VariantCount(vg.Key.VariantCode, vg.Key.VariantName, vg.Count()))
+                      .ToList());
+    }
+
+    private List<DateOnly?[]> BuildWeeks()
+    {
+        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
+        if (period is null)
+        {
+            return [];
+        }
+
+        var weeks = new List<DateOnly?[]>();
+        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
+        {
+            var week = new DateOnly?[5];
+            for (var i = 0; i < 5; i++)
+            {
+                var date = weekStart.AddDays(i);
+                week[i] = date >= period.StartDate && date <= period.EndDate ? date : null;
+            }
+
+            weeks.Add(week);
+        }
+
+        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
+        {
+            weeks.RemoveAt(0);
+        }
+
+        return weeks;
+    }
+
+    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
+
+    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+}

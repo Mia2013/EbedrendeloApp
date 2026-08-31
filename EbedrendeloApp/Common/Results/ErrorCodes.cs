@@ -11,6 +11,7 @@ public static class ErrorCodes
     public const string OutsidePeriod = nameof(OutsidePeriod);
     public const string AlreadyOrdered = nameof(AlreadyOrdered);
     public const string NoActiveOrder = nameof(NoActiveOrder);
+    public const string InvalidVariantCode = nameof(InvalidVariantCode);
 
     public const string Overlaps = nameof(Overlaps);
     public const string NotFutureDate = nameof(NotFutureDate);

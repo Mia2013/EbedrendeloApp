@@ -12,8 +12,7 @@ public sealed class UpsertDailyMenuValidator : AbstractValidator<UpsertDailyMenu
         RuleForEach(x => x.Variants).ChildRules(variant =>
         {
             variant.RuleFor(v => v.Code).NotEmpty().MaximumLength(8);
-            variant.RuleFor(v => v.Name).NotEmpty().MaximumLength(128);
-            variant.RuleFor(v => v.Description).MaximumLength(500);
+            variant.RuleFor(v => v.SoupDishId).GreaterThan(0).WithMessage("Válassz levest a katalógusból.");
             variant.RuleFor(v => v.SoupAllergens).MaximumLength(300);
             variant.RuleFor(v => v.MainCourseAllergens).MaximumLength(300);
 

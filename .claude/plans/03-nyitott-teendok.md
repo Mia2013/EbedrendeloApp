@@ -19,13 +19,6 @@
 - [ ] Rendelési időszak jelenleg nem törölhető. Ha az admin rosszul vette fel, és még nincs
       hozzá rendelés, engedjük a törlést (ha már van rendelés hozzá, maradjon tiltva).
 
-## Rendelés (Epic 3)
-
-- [ ] US-2.1 AC 2.1.3 (menü ár snapshotolása rendeléskor) jelenleg nem valósítható meg és
-      nem tesztelhető, mert Epic 3 (Menü Előrendelés és Lemondás) még nincs megírva —
-      nincs `PlacePeriodOrderCommand`/`Features/Orders`. Az `AppSetting.MenuPortionHuf` és a
-      `MenuOrder.PriceHuf` mező már megvan az adatmodellben, csak az író use case hiányzik.
-
 ## UI / komponensek
 
 - [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
@@ -70,6 +63,16 @@
       kezeletlen `InvalidOperationException`-t dobna a "mai menü" oldalon. Érdemes a többi
       lekérdezéshez hasonlóan `RemovedAtUtc == null` + `FirstOrDefaultAsync`-re javítani, kis
       védelemként.
+
+## Rendelés (Epic 3)
+
+- [ ] Köteges lemondás UI hiányzik. A `CancelMenuOrdersCommand` dátumlistát fogad, és a handler
+      több dátummal is tesztelve van (`CancelMenuOrdersHandlerTests.cs`), de az egyetlen UI belépési
+      pont (`CancelMenuOrderDialog.razor`) mindig egyelemű listát küld — minden naptár-cellán külön
+      "Lemondás" gomb van, egyesével kell megerősíteni. US-3.2 leírása ("egy **vagy több** korábban
+      megrendelt menüt lemondani") és a rendelés-leadás oldal már meglévő "jelölj ki többet, majd
+      küldd el egyben" mintája (`UserCalendar.razor` `pendingSelections`) alapján ennek a lemondásnál
+      is lenne párja.
 
 ---
 

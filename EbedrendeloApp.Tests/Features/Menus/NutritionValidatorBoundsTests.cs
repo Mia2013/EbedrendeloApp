@@ -49,7 +49,7 @@ public class NutritionValidatorBoundsTests
         var command = new UpsertDailyMenuCommand(
             new DateOnly(2026, 8, 20),
             null,
-            [new MenuVariantInput("A", "Menü", null, 0, SoupEnergyKcal: 99999)],
+            [new MenuVariantInput("A", 1, null, 0, SoupEnergyKcal: 99999)],
             PerformedByUserId: 1);
 
         var result = new UpsertDailyMenuValidator().Validate(command);

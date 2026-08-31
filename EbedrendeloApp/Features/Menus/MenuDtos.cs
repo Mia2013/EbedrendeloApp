@@ -1,14 +1,15 @@
 using EbedrendeloApp.Common.Allergens;
 using EbedrendeloApp.Domain.Entities;
-using EbedrendeloApp.Domain.Enums;
 
 namespace EbedrendeloApp.Features.Menus;
 
 public sealed record MenuVariantDto(
     string Code,
-    string Name,
-    string? Description,
+    string SoupName,
+    string? MainCourseName,
     int SortOrder,
+    int SoupDishId = 0,
+    int? MainCourseDishId = null,
     string? SoupAllergens = null,
     string? MainCourseAllergens = null,
     decimal? SoupEnergyKcal = null,
@@ -30,27 +31,29 @@ public sealed record DailyMenuDto(DateOnly Date, bool IsPublished, string? Note,
 
 /// <summary>
 /// Builds a <see cref="MenuVariantDto"/> for a persisted <see cref="MenuVariant"/>, joining its
-/// soup/main-course allergens and nutrition from the dish catalog by name
+/// soup/main-course allergens and nutrition from the dish catalog by Id
 /// (<see cref="EbedrendeloApp.Common.Services.MenuDishAllergenLookup"/>). Shared by every handler that
 /// reads menus (GetDailyMenu, GetPeriodMenu, GetTodayMenuForUser) so the 14 nutrition fields only need
 /// wiring in one place.
 /// </summary>
 public static class MenuVariantDtoFactory
 {
-    public static MenuVariantDto Create(MenuVariant variant, IReadOnlyDictionary<(MenuDishKind Kind, string Name), MenuDish> dishes)
+    public static MenuVariantDto Create(MenuVariant variant, IReadOnlyDictionary<int, MenuDish> dishes)
     {
-        dishes.TryGetValue((MenuDishKind.Leves, variant.Name), out var soup);
+        dishes.TryGetValue(variant.SoupDishId, out var soup);
         MenuDish? mainCourse = null;
-        if (variant.Description is not null)
+        if (variant.MainCourseDishId is { } mainCourseDishId)
         {
-            dishes.TryGetValue((MenuDishKind.Foetel, variant.Description), out mainCourse);
+            dishes.TryGetValue(mainCourseDishId, out mainCourse);
         }
 
         return new MenuVariantDto(
             variant.Code,
-            variant.Name,
-            variant.Description,
+            variant.SoupName,
+            variant.MainCourseName,
             variant.SortOrder,
+            variant.SoupDishId,
+            variant.MainCourseDishId,
             soup?.Allergens,
             mainCourse?.Allergens,
             soup?.EnergyKcal,

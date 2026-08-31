@@ -22,11 +22,19 @@
         <MudNavLink Href="etlap" Icon="@Icons.Material.Filled.RestaurantMenu">
             Napi menü szerkesztése
         </MudNavLink>
+
+        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">RENDELÉS</MudText>
+        <MudNavLink Href="rendelesek" Icon="@Icons.Material.Filled.ListAlt">
+            Rendelések
+        </MudNavLink>
     }
     else if (CurrentUser.IsLoaded)
     {
         <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
             Naptár
+        </MudNavLink>
+        <MudNavLink Href="rendeleseim" Icon="@Icons.Material.Filled.Receipt">
+            Rendeléseim
         </MudNavLink>
         <MudNavLink Href="mai-menu" Icon="@Icons.Material.Filled.RestaurantMenu">
             Mai menü

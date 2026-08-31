@@ -1,7 +1,9 @@
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Entities;
+using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Menus.GetPeriodMenu;
 using EbedrendeloApp.Tests.TestSupport;
+using Microsoft.EntityFrameworkCore;
 
 namespace EbedrendeloApp.Tests.Features.Menus;
 
@@ -72,8 +74,16 @@ public class GetPeriodMenuHandlerTests : IDisposable
     private async Task SeedMenuAsync(DateOnly date, bool isPublished)
     {
         await using var db = dbFactory.CreateDbContext();
+        var dish = await db.MenuDishes.SingleOrDefaultAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Menü");
+        if (dish is null)
+        {
+            dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Menü" };
+            db.MenuDishes.Add(dish);
+            await db.SaveChangesAsync();
+        }
+
         var menu = new DailyMenu { Date = date, IsPublished = isPublished };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Menü", SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Menü", SoupDishId = dish.Id, SortOrder = 0 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
     }

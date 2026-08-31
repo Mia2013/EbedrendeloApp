@@ -1,0 +1,25 @@
+.weekday-header-row {
+    position: sticky;
+    top: var(--mud-appbar-height);
+    z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: 12px;
+}
+
+.weekday-header-row__day {
+    background: var(--mud-palette-warning);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+}
+
+.weekday-header-row__day ::deep .mud-typography {
+    letter-spacing: .08em;
+}
+
+@media (max-width: 1279px) {
+    .weekday-header-row {
+        display: none;
+    }
+}

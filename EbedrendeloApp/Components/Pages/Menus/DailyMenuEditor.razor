@@ -1,6 +1,7 @@
 @page "/etlap"
 @using EbedrendeloApp.Common.Allergens
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.Calendar
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
@@ -51,14 +52,7 @@
 }
 else
 {
-    <div class="menu-calendar__weekday-row">
-        @foreach (var weekdayLabel in WeekdayLabels)
-        {
-             <MudText Typo="Typo.caption" class="text-uppercase menu-calendar__weekday">
-                @weekdayLabel
-            </MudText> 
-        }
-    </div>
+    <WeekdayHeaderRow />
 
     <div class="menu-calendar mt-3">
         @foreach (var week in BuildWeeks())
@@ -121,7 +115,7 @@ else
                             <MudAvatar Color="@(day.IsPastDay ? Color.Default : Color.Warning)" Size="Size.Small" Rounded="true">@variant.Code</MudAvatar>
                             <MudStack Spacing="0" Class="flex-grow-1" Style="min-width:0;">
                                 <MudText Typo="Typo.body2" Class="@GetTextClass(day)">
-                                    @variant.Name
+                                    @variant.SoupName
                                     @if (FormatAllergensShort(variant.SoupDish) is { } soupAllergensShort)
                                     {
                                         <text> (@soupAllergensShort)</text>
@@ -135,10 +129,10 @@ else
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutritionText</MudText>
                                 }
 
-                                @if (!string.IsNullOrWhiteSpace(variant.Description))
+                                @if (!string.IsNullOrWhiteSpace(variant.MainCourseName))
                                 {
                                     <MudText Typo="Typo.body2" Class="@GetTextClass(day, "mt-1")">
-                                        @variant.Description
+                                        @variant.MainCourseName
                                         @if (FormatAllergensShort(variant.MainCourseDish) is { } mainCourseAllergensShort)
                                         {
                                             <text> (@mainCourseAllergensShort)</text>
@@ -166,8 +160,6 @@ else
 }
 
 @code {
-    private static readonly string[] WeekdayLabels = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek"];
-
     private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
 
     private sealed class VariantRow
@@ -176,8 +168,8 @@ else
         public MenuDishDto? SoupDish { get; set; }
         public MenuDishDto? MainCourseDish { get; set; }
 
-        public string Name => SoupDish?.Name ?? string.Empty;
-        public string Description => MainCourseDish?.Name ?? string.Empty;
+        public string SoupName => SoupDish?.Name ?? string.Empty;
+        public string MainCourseName => MainCourseDish?.Name ?? string.Empty;
     }
 
     private sealed class DayRow
@@ -320,10 +312,10 @@ else
     {
         Code = v.Code,
         SoupDish = new MenuDishDto(
-            v.Name, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
+            v.SoupName, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
             v.SoupCarbohydrateGrams, v.SoupSugarGrams, v.SoupProteinGrams, v.SoupSaltGrams, Kind: MenuDishKind.Leves),
-        MainCourseDish = v.Description is null ? null : new MenuDishDto(
-            v.Description, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams, v.MainCourseSaturatedFatGrams,
+        MainCourseDish = v.MainCourseName is null ? null : new MenuDishDto(
+            v.MainCourseName, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams, v.MainCourseSaturatedFatGrams,
             v.MainCourseCarbohydrateGrams, v.MainCourseSugarGrams, v.MainCourseProteinGrams, v.MainCourseSaltGrams, Kind: MenuDishKind.Foetel),
     };
 

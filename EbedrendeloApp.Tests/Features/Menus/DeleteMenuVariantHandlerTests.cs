@@ -155,11 +155,22 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         userId = user.Id;
         adminId = admin.Id;
 
-        var menu = new DailyMenu { Date = date, IsPublished = true };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = codeA, Name = $"{codeA} menü", SortOrder = 0 });
+        var dishA = new MenuDish { Kind = MenuDishKind.Leves, Name = $"{codeA} menü" };
+        db.MenuDishes.Add(dishA);
+        MenuDish? dishB = null;
         if (codeB is not null)
         {
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = codeB, Name = $"{codeB} menü", SortOrder = 1 });
+            dishB = new MenuDish { Kind = MenuDishKind.Leves, Name = $"{codeB} menü" };
+            db.MenuDishes.Add(dishB);
+        }
+
+        await db.SaveChangesAsync();
+
+        var menu = new DailyMenu { Date = date, IsPublished = true };
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = codeA, SoupName = $"{codeA} menü", SoupDishId = dishA.Id, SortOrder = 0 });
+        if (codeB is not null)
+        {
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = codeB, SoupName = $"{codeB} menü", SoupDishId = dishB!.Id, SortOrder = 1 });
         }
 
         db.DailyMenus.Add(menu);

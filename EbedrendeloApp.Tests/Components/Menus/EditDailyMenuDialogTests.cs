@@ -56,7 +56,11 @@ public class EditDailyMenuDialogTests : MudBunitContext
     [Fact]
     public async Task Saving_sends_the_upsert_command_for_the_dialogs_date()
     {
-        var mediator = BaseMediator(new DailyMenuDto(Date, IsPublished: false, Note: null, Variants: [new MenuVariantDto("A", "Rántott hús", null, 0)]));
+        var mediator = new FakeMediator();
+        mediator.Register<GetMenuDishSuggestionsQuery, MenuDishSuggestionsDto>(
+            _ => new MenuDishSuggestionsDto([new MenuDishDto("Rántott hús", null, Id: 11, Kind: MenuDishKind.Leves)], []));
+        mediator.Register<GetDailyMenuQuery, DailyMenuDto?>(
+            _ => new DailyMenuDto(Date, IsPublished: false, Note: null, Variants: [new MenuVariantDto("A", "Rántott hús", null, 0, SoupDishId: 11)]));
         UpsertDailyMenuCommand? sentCommand = null;
         mediator.Register<UpsertDailyMenuCommand, Result<int>>(cmd =>
         {
@@ -73,6 +77,24 @@ public class EditDailyMenuDialogTests : MudBunitContext
         Assert.Equal(7, sentCommand.PerformedByUserId);
         var variant = Assert.Single(sentCommand.Variants);
         Assert.Equal("A", variant.Code);
+        Assert.Equal(11, variant.SoupDishId);
+    }
+
+    [Fact]
+    public async Task Saving_without_a_catalog_picked_soup_blocks_the_save()
+    {
+        // A friss A/B/C alapértelmezett sorokhoz nincs leves kiválasztva — mentés csak katalógusból
+        // választott levessel engedélyezett (AC 2.1.4).
+        var mediator = BaseMediator();
+        var saveCalled = false;
+        mediator.Register<UpsertDailyMenuCommand, Result<int>>(_ => { saveCalled = true; return Result.Success(1); });
+        var provider = await OpenAsync(mediator);
+
+        var saveButton = provider.FindAll("button").First(b => b.TextContent.Contains("Mentés"));
+        await provider.InvokeAsync(() => saveButton.Click());
+
+        Assert.False(saveCalled);
+        Assert.Contains("katalógusból választott leves", provider.Markup);
     }
 
     [Fact]
@@ -139,7 +161,11 @@ public class EditDailyMenuDialogTests : MudBunitContext
     [Fact]
     public async Task Saving_an_untouched_row_preserves_its_previously_selected_allergens()
     {
-        var mediator = BaseMediator(new DailyMenuDto(Date, true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupAllergens: "7,9")]));
+        var mediator = new FakeMediator();
+        mediator.Register<GetMenuDishSuggestionsQuery, MenuDishSuggestionsDto>(
+            _ => new MenuDishSuggestionsDto([new MenuDishDto("Gulyásleves", "7,9", Id: 42, Kind: MenuDishKind.Leves)], []));
+        mediator.Register<GetDailyMenuQuery, DailyMenuDto?>(
+            _ => new DailyMenuDto(Date, true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupDishId: 42, SoupAllergens: "7,9")]));
         UpsertDailyMenuCommand? sentCommand = null;
         mediator.Register<UpsertDailyMenuCommand, Result<int>>(cmd =>
         {
@@ -153,6 +179,7 @@ public class EditDailyMenuDialogTests : MudBunitContext
 
         Assert.NotNull(sentCommand);
         var variant = Assert.Single(sentCommand!.Variants);
+        Assert.Equal(42, variant.SoupDishId);
         Assert.Equal("7,9", variant.SoupAllergens);
     }
 
@@ -165,7 +192,7 @@ public class EditDailyMenuDialogTests : MudBunitContext
         mediator.Register<GetMenuDishSuggestionsQuery, MenuDishSuggestionsDto>(
             _ => new MenuDishSuggestionsDto([new MenuDishDto("Gulyásleves", "9", Id: 42, Kind: MenuDishKind.Leves)], []));
         mediator.Register<GetDailyMenuQuery, DailyMenuDto?>(
-            _ => new DailyMenuDto(Date, true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupAllergens: "9")]));
+            _ => new DailyMenuDto(Date, true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0, SoupDishId: 42, SoupAllergens: "9")]));
         var provider = await OpenAsync(mediator);
 
         Assert.DoesNotContain(provider.FindAll("button"), b => b.TextContent.Contains("Hozzáad") && !b.TextContent.Contains("Variáns"));
