@@ -41,7 +41,12 @@
                     <MudItem xs="12" md="4">
                         <MudPaper Outlined="true" Class="pa-3 d-flex flex-column" Style="height:100%;">
                             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-                                <MudTextField T="string" Label="Kód" @bind-Value="variant.Code" Variant="Variant.Outlined" MaxLength="8" Style="width:90px;" />
+                                <MudSelect T="string" Label="Kód" @bind-Value="variant.Code" Variant="Variant.Outlined" Style="width:90px;">
+                                    @foreach (var variantCode in DefaultVariantCodes)
+                                    {
+                                        <MudSelectItem Value="@variantCode">@variantCode</MudSelectItem>
+                                    }
+                                </MudSelect>
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
                                                title="Variáns törlése" OnClick="() => RemoveVariantAsync(variant)" Disabled="isSaving" />
                             </MudStack>
