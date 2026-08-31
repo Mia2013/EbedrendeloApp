@@ -97,7 +97,7 @@ public sealed class GetOrderableDaysHandler(
                 var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false);
                 var variant = variants.GetValueOrDefault(order.MenuVariantId);
                 var cancelReason = cancellable ? null : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
-                result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.Name, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null));
+                result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.SoupName, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null));
                 continue;
             }
 

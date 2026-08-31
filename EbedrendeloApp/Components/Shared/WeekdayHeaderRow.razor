@@ -1,0 +1,19 @@
+@* Hétfő–Péntek fejlécsor egy naptár-rács fölé — minden nap saját, elkülönített figyelmeztető
+   hátterű dobozban, nem egy folytonos sáv (lásd WeekdayHeaderRow.razor.css). Ugyanaz az 5 oszlopos
+   rács, mint a hozzá tartozó naptár-rács alatta, hogy az oszlopok pontosan illeszkedjenek. *@
+
+<div class="weekday-header-row">
+    @foreach (var label in Labels)
+    {
+        <div class="weekday-header-row__day">
+            <MudText Typo="Typo.caption" Class="text-uppercase" ><b>
+            @label
+            </b>
+            </MudText>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly string[] Labels = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek"];
+}

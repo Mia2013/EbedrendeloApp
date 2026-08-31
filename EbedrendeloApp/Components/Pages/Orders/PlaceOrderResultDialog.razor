@@ -1,0 +1,77 @@
+@using EbedrendeloApp.Common.Results
+@using EbedrendeloApp.Features.Orders
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icon" Color="@IconColor" Size="Size.Large" />
+            <MudText Typo="Typo.h6">@Title</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Row Spacing="3" Class="mb-4">
+            <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3" Style="background:var(--mud-palette-success-hover);">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.h5" Color="Color.Success">@Result.Succeeded.Count</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Success">Sikeres</MudText>
+                </MudStack>
+            </MudPaper>
+            <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.h5">@Result.Skipped.Count</MudText>
+                    <MudText Typo="Typo.caption">Kihagyva</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudStack>
+
+        @if (Result.Skipped.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Kihagyott napok</MudText>
+            @foreach (var skip in Result.Skipped.OrderBy(s => s.Date))
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-2">
+                    <MudText Typo="Typo.subtitle2">@skip.Date.ToString("yyyy.MM.dd.")</MudText>
+                    <MudText Typo="Typo.body2">Ok: @ReasonText.GetValueOrDefault(skip.Reason, skip.Reason).</MudText>
+                </MudPaper>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Check" OnClick="Close">Bezárás</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public BatchOrderResult Result { get; set; } = default!;
+
+    [Parameter]
+    public string Title { get; set; } = "Rendelés eredménye";
+
+    [Parameter]
+    public string Icon { get; set; } = Icons.Material.Filled.AddShoppingCart;
+
+    [Parameter]
+    public Color IconColor { get; set; } = Color.Primary;
+
+    private static readonly Dictionary<string, string> ReasonText = new()
+    {
+        [ErrorCodes.DeadlinePassed] = "A módosítási határidő lejárt",
+        [ErrorCodes.DayClosed] = "A nap már le van zárva",
+        [ErrorCodes.DayExcluded] = "Kizárt nap",
+        [ErrorCodes.NotWorkingDay] = "Nem munkanap",
+        [ErrorCodes.MenuNotPublished] = "Erre a napra még nincs publikált menü",
+        [ErrorCodes.OutsidePeriod] = "A nap az időszakon kívül esik",
+        [ErrorCodes.AlreadyOrdered] = "Már van aktív rendelésed erre a napra",
+        [ErrorCodes.NoActiveOrder] = "Nincs aktív rendelésed erre a napra",
+        [ErrorCodes.PeriodClosed] = "Az időszak le van zárva",
+        [ErrorCodes.InvalidVariantCode] = "A kiválasztott menü nem érvényes",
+    };
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+}

@@ -54,10 +54,16 @@ public class GetDailyMenuHandlerTests : IDisposable
         var date = new DateOnly(2026, 8, 20);
         await using (var db = dbFactory.CreateDbContext())
         {
+            var dishB = new MenuDish { Kind = MenuDishKind.Leves, Name = "B menü" };
+            var dishA = new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü" };
+            var dishRemoved = new MenuDish { Kind = MenuDishKind.Leves, Name = "Törölt" };
+            db.MenuDishes.AddRange(dishB, dishA, dishRemoved);
+            await db.SaveChangesAsync();
+
             var menu = new DailyMenu { Date = date, IsPublished = true };
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "B", Name = "B menü", SortOrder = 1 });
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "A menü", SortOrder = 0 });
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "C", Name = "Törölt", SortOrder = 2, RemovedAtUtc = DateTime.UtcNow });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "B", SoupName = "B menü", SoupDishId = dishB.Id, SortOrder = 1 });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "A menü", SoupDishId = dishA.Id, SortOrder = 0 });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "C", SoupName = "Törölt", SoupDishId = dishRemoved.Id, SortOrder = 2, RemovedAtUtc = DateTime.UtcNow });
             db.DailyMenus.Add(menu);
             await db.SaveChangesAsync();
         }
@@ -69,16 +75,28 @@ public class GetDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Joins_allergens_from_the_dish_catalog_by_name()
+    public async Task Joins_allergens_from_the_dish_catalog_by_id()
     {
         var date = new DateOnly(2026, 8, 20);
         await using (var db = dbFactory.CreateDbContext())
         {
+            var soupDish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", Allergens = "zeller" };
+            var mainCourseDish = new MenuDish { Kind = MenuDishKind.Foetel, Name = "Rántott hús", Allergens = "glutén, tojás" };
+            db.MenuDishes.AddRange(soupDish, mainCourseDish);
+            await db.SaveChangesAsync();
+
             var menu = new DailyMenu { Date = date, IsPublished = true };
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", Description = "Rántott hús", SortOrder = 0 });
+            menu.Variants.Add(new MenuVariant
+            {
+                DailyMenuId = 0,
+                Code = "A",
+                SoupName = "Gulyásleves",
+                SoupDishId = soupDish.Id,
+                MainCourseName = "Rántott hús",
+                MainCourseDishId = mainCourseDish.Id,
+                SortOrder = 0,
+            });
             db.DailyMenus.Add(menu);
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", Allergens = "zeller" });
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Foetel, Name = "Rántott hús", Allergens = "glutén, tojás" });
             await db.SaveChangesAsync();
         }
 
@@ -90,19 +108,24 @@ public class GetDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Joins_allergens_case_insensitively_after_a_dish_only_casing_rename()
+    public async Task Joins_allergens_by_id_even_after_the_dish_is_renamed_in_the_catalog()
     {
-        // Regression test: MenuVariant.Name/Description are denormalized free text, not FK-linked to
-        // MenuDish (see MenuDish.cs). A case-only rename via UpdateMenuDishHandler ("gulyásleves" ->
-        // "Gulyásleves") only guards against a case-SENSITIVE self-conflict, so it succeeds and leaves
-        // already-saved MenuVariant rows with the old casing. The join must still find the dish.
+        // Regression coverage for the FK-based join (MenuVariant.SoupDishId -> MenuDish.Id): renaming a
+        // catalog dish must not break the allergen join for menus that already reference it — the old
+        // by-name matching this replaced was exactly this fragile.
         var date = new DateOnly(2026, 8, 20);
         await using (var db = dbFactory.CreateDbContext())
         {
+            var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "gulyásleves", Allergens = "zeller" };
+            db.MenuDishes.Add(dish);
+            await db.SaveChangesAsync();
+
             var menu = new DailyMenu { Date = date, IsPublished = true };
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "gulyásleves", SortOrder = 0 });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "gulyásleves", SoupDishId = dish.Id, SortOrder = 0 });
             db.DailyMenus.Add(menu);
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", Allergens = "zeller" });
+            await db.SaveChangesAsync();
+
+            dish.Name = "Gulyásleves";
             await db.SaveChangesAsync();
         }
 
@@ -113,15 +136,18 @@ public class GetDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Joins_nutrition_from_the_dish_catalog_by_name()
+    public async Task Joins_nutrition_from_the_dish_catalog_by_id()
     {
         var date = new DateOnly(2026, 8, 20);
         await using (var db = dbFactory.CreateDbContext())
         {
+            var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", EnergyKcal = 108, SaltGrams = 0.14m };
+            db.MenuDishes.Add(dish);
+            await db.SaveChangesAsync();
+
             var menu = new DailyMenu { Date = date, IsPublished = true };
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", SortOrder = 0 });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Gulyásleves", SoupDishId = dish.Id, SortOrder = 0 });
             db.DailyMenus.Add(menu);
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves", EnergyKcal = 108, SaltGrams = 0.14m });
             await db.SaveChangesAsync();
         }
 
@@ -135,8 +161,12 @@ public class GetDailyMenuHandlerTests : IDisposable
     private async Task SeedMenuAsync(DateOnly date, bool isPublished)
     {
         await using var db = dbFactory.CreateDbContext();
+        var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Menü" };
+        db.MenuDishes.Add(dish);
+        await db.SaveChangesAsync();
+
         var menu = new DailyMenu { Date = date, IsPublished = isPublished };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Menü", SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Menü", SoupDishId = dish.Id, SortOrder = 0 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
     }

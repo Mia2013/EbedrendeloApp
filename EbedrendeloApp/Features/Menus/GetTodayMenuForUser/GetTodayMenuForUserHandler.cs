@@ -57,7 +57,7 @@ public sealed class GetTodayMenuForUserHandler(
         {
             var variant = menu.Variants.FirstOrDefault(v => v.Id == myOrder.MenuVariantId)
                 ?? await db.MenuVariants.FirstAsync(v => v.Id == myOrder.MenuVariantId, cancellationToken);
-            mySelection = new MyMenuSelectionDto(variant.Code, variant.Name, myOrder.PriceHuf);
+            mySelection = new MyMenuSelectionDto(variant.Code, variant.SoupName, myOrder.PriceHuf);
         }
 
         var offers = await db.ALaCarteDailyOffers

@@ -41,7 +41,12 @@
                     <MudItem xs="12" md="4">
                         <MudPaper Outlined="true" Class="pa-3 d-flex flex-column" Style="height:100%;">
                             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-                                <MudTextField T="string" Label="Kód" @bind-Value="variant.Code" Variant="Variant.Outlined" MaxLength="8" Style="width:90px;" />
+                                <MudSelect T="string" Label="Kód" @bind-Value="variant.Code" Variant="Variant.Outlined" Style="width:90px;">
+                                    @foreach (var variantCode in DefaultVariantCodes)
+                                    {
+                                        <MudSelectItem Value="@variantCode">@variantCode</MudSelectItem>
+                                    }
+                                </MudSelect>
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
                                                title="Variáns törlése" OnClick="() => RemoveVariantAsync(variant)" Disabled="isSaving" />
                             </MudStack>
@@ -104,9 +109,6 @@
         public string Code { get; set; } = string.Empty;
         public MenuDishDto? SoupDish { get; set; }
         public MenuDishDto? MainCourseDish { get; set; }
-
-        public string Name => SoupDish?.Name ?? string.Empty;
-        public string Description => MainCourseDish?.Name ?? string.Empty;
     }
 
     private bool isLoading = true;
@@ -144,28 +146,24 @@
         IsPersisted = true,
         Code = v.Code,
         SoupDish = ResolveDish(
-            dishSuggestions.Soups, MenuDishKind.Leves, v.Name, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
-            v.SoupCarbohydrateGrams, v.SoupSugarGrams, v.SoupProteinGrams, v.SoupSaltGrams),
-        MainCourseDish = v.Description is null ? null : ResolveDish(
-            dishSuggestions.MainCourses, MenuDishKind.Foetel, v.Description, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams,
-            v.MainCourseSaturatedFatGrams, v.MainCourseCarbohydrateGrams, v.MainCourseSugarGrams, v.MainCourseProteinGrams, v.MainCourseSaltGrams),
+            dishSuggestions.Soups, v.SoupDishId, v.SoupName, v.SoupAllergens, v.SoupEnergyKcal, v.SoupFatGrams, v.SoupSaturatedFatGrams,
+            v.SoupCarbohydrateGrams, v.SoupSugarGrams, v.SoupProteinGrams, v.SoupSaltGrams, MenuDishKind.Leves),
+        MainCourseDish = v.MainCourseDishId is not { } mainCourseDishId ? null : ResolveDish(
+            dishSuggestions.MainCourses, mainCourseDishId, v.MainCourseName ?? string.Empty, v.MainCourseAllergens, v.MainCourseEnergyKcal, v.MainCourseFatGrams,
+            v.MainCourseSaturatedFatGrams, v.MainCourseCarbohydrateGrams, v.MainCourseSugarGrams, v.MainCourseProteinGrams, v.MainCourseSaltGrams, MenuDishKind.Foetel),
     };
 
-    /// <summary>Egy elmentett variáns nevéhez tartozó katalógustételt a már betöltött <see cref="dishSuggestions"/>-ből
-    /// próbáljuk feloldani (ez adja az Id-t a szerkesztés-ceruzához). Ha a katalógusban már nincs ilyen nevű tétel,
-    /// a lekérdezésből kapott adatokból építünk egy Id nélküli DTO-t.</summary>
-    private static MenuDishDto? ResolveDish(
-        IReadOnlyList<MenuDishDto> catalog, MenuDishKind kind, string name, string? allergens,
+    /// <summary>Egy elmentett variáns dish-Id-jéhez tartozó katalógustételt a már betöltött <see cref="dishSuggestions"/>-ből
+    /// oldjuk fel Id szerint — ez adja a friss allergén/tápérték adatokat is, ha a katalógusban időközben változtak.
+    /// Ha a katalógusban már nincs ilyen Id (elméletileg nem fordulhat elő, katalógus-tétel törlése nincs), a
+    /// mentéskor kapott adatokból építünk egy fallback DTO-t ugyanazzal az Id-vel.</summary>
+    private static MenuDishDto ResolveDish(
+        IReadOnlyList<MenuDishDto> catalog, int dishId, string name, string? allergens,
         decimal? energyKcal, decimal? fatGrams, decimal? saturatedFatGrams, decimal? carbohydrateGrams,
-        decimal? sugarGrams, decimal? proteinGrams, decimal? saltGrams)
+        decimal? sugarGrams, decimal? proteinGrams, decimal? saltGrams, MenuDishKind kind)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return null;
-        }
-
-        var match = catalog.FirstOrDefault(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase));
-        return match ?? new MenuDishDto(name, allergens, energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams, Kind: kind);
+        var match = catalog.FirstOrDefault(d => d.Id == dishId);
+        return match ?? new MenuDishDto(name, allergens, energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams, dishId, kind);
     }
 
     private Task<IEnumerable<MenuDishDto>> SearchSoupsAsync(string value, CancellationToken ct)
@@ -237,9 +235,9 @@
             return;
         }
 
-        if (variants.Any(v => string.IsNullOrWhiteSpace(v.Code) || string.IsNullOrWhiteSpace(v.Name)))
+        if (variants.Any(v => string.IsNullOrWhiteSpace(v.Code) || v.SoupDish is null))
         {
-            errorMessage = "Minden variánsnak kell kód és leves.";
+            errorMessage = "Minden variánsnak kell kód és a katalógusból választott leves.";
             return;
         }
 
@@ -251,8 +249,8 @@
             .OrderBy(v => v.Code, StringComparer.OrdinalIgnoreCase)
             .Select((v, index) => new MenuVariantInput(
                 v.Code.Trim(),
-                v.Name.Trim(),
-                string.IsNullOrWhiteSpace(v.Description) ? null : v.Description.Trim(),
+                v.SoupDish!.Id!.Value,
+                v.MainCourseDish?.Id,
                 index,
                 v.SoupDish?.Allergens,
                 v.MainCourseDish?.Allergens,

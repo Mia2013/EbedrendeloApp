@@ -24,7 +24,9 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 
         Assert.Contains("Rendelési időszakok", cut.Markup);
         Assert.Contains("Nem rendelhető napok", cut.Markup);
+        Assert.Contains("Rendelések", cut.Markup);
         Assert.DoesNotContain("Naptár", cut.Markup);
+        Assert.DoesNotContain("Rendeléseim", cut.Markup);
     }
 
     [Fact]
@@ -35,7 +37,9 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
 
         Assert.Contains("Naptár", cut.Markup);
+        Assert.Contains("Rendeléseim", cut.Markup);
         Assert.DoesNotContain("Rendelési időszakok", cut.Markup);
         Assert.DoesNotContain("Nem rendelhető napok", cut.Markup);
+        Assert.DoesNotContain("Rendelések<", cut.Markup);
     }
 }

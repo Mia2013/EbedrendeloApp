@@ -101,8 +101,17 @@ public class DeleteDailyMenuHandlerTests : IDisposable
         var upsertHandler = new UpsertDailyMenuHandler(
             dbFactory, clock, new MenuReassignmentService(new CreditService(), new NotificationService()), new NotificationService());
 
+        int soupDishId;
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Új menü" };
+            db.MenuDishes.Add(dish);
+            await db.SaveChangesAsync();
+            soupDishId = dish.Id;
+        }
+
         var result = await upsertHandler.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Új menü", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupDishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -123,8 +132,12 @@ public class DeleteDailyMenuHandlerTests : IDisposable
         userId = user.Id;
         adminId = admin.Id;
 
+        var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü" };
+        db.MenuDishes.Add(dish);
+        await db.SaveChangesAsync();
+
         var menu = new DailyMenu { Date = date, IsPublished = true };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "A menü", SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "A menü", SoupDishId = dish.Id, SortOrder = 0 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
         return menu.Id;

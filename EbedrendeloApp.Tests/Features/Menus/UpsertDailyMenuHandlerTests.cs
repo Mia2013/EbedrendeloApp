@@ -31,9 +31,11 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public async Task Creates_new_menu_published_immediately()
     {
         await SeedUsersAsync();
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Rántott hús");
+        var mainCourseId = await SeedDishAsync(MenuDishKind.Foetel, "sülttel");
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(new DateOnly(2026, 8, 20), "Megjegyzés", [new MenuVariantInput("A", "Rántott hús", "sülttel", 0)], adminId),
+            new UpsertDailyMenuCommand(new DateOnly(2026, 8, 20), "Megjegyzés", [new MenuVariantInput("A", soupId, mainCourseId, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -51,6 +53,7 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         var date = new DateOnly(2026, 8, 20);
         await SeedUsersAsync();
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Menü");
         await using (var db = dbFactory.CreateDbContext())
         {
             db.KitchenClosures.Add(new KitchenClosure { Date = date, ClosedByUserId = adminId, TotalPortions = 0 });
@@ -58,7 +61,7 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         }
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Menü", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
@@ -69,10 +72,12 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public async Task Updating_only_name_and_description_leaves_active_orders_on_their_variant()
     {
         var date = new DateOnly(2026, 8, 20);
-        var (_, orderId, variantId) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        var (_, orderId, variantId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        var newSoupId = await SeedDishAsync(MenuDishKind.Leves, "Új név");
+        var newMainCourseId = await SeedDishAsync(MenuDishKind.Foetel, "Új leírás");
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Új név", "Új leírás", 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", newSoupId, newMainCourseId, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -84,17 +89,18 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         Assert.Null(order.ReassignedFromVariantCode);
 
         var variant = await db.MenuVariants.SingleAsync(v => v.Id == variantId);
-        Assert.Equal("Új név", variant.Name);
+        Assert.Equal("Új név", variant.SoupName);
     }
 
     [Fact]
     public async Task Updating_an_existing_menu_notifies_active_orderers_with_MenuChanged()
     {
         var date = new DateOnly(2026, 8, 20);
-        var (_, orderId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        var (_, orderId, _, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        var newSoupId = await SeedDishAsync(MenuDishKind.Leves, "Új név");
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Új név", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", newSoupId, null, 0)], adminId),
             CancellationToken.None);
 
         await using var db = dbFactory.CreateDbContext();
@@ -106,12 +112,12 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public async Task Resaving_an_existing_menu_with_no_actual_changes_sends_no_MenuChanged_notification()
     {
         // Regression test: re-opening and re-saving an already-published day without changing anything
-        // (same Note, same variant Code/Name/Description/SortOrder) must not spam every active orderer.
+        // (same Note, same variant Code/SoupDishId/SortOrder) must not spam every active orderer.
         var date = new DateOnly(2026, 8, 20);
-        var (_, orderId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        var (_, orderId, _, soupDishId) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Régi név", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupDishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -124,9 +130,10 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public async Task Creating_a_menu_sends_no_MenuChanged_notification()
     {
         await SeedUsersAsync();
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Menü");
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(new DateOnly(2026, 8, 20), null, [new MenuVariantInput("A", "Menü", null, 0)], adminId),
+            new UpsertDailyMenuCommand(new DateOnly(2026, 8, 20), null, [new MenuVariantInput("A", soupId, null, 0)], adminId),
             CancellationToken.None);
 
         await using var db = dbFactory.CreateDbContext();
@@ -137,18 +144,19 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public async Task Removing_a_variant_reassigns_active_orders_to_the_remaining_one()
     {
         var date = new DateOnly(2026, 8, 20);
-        var (menuId, orderId, variantAId) = await SeedMenuWithActiveOrderAsync(date, "A", "A menü");
+        var (menuId, orderId, variantAId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "A menü");
+        var bDishId = await SeedDishAsync(MenuDishKind.Leves, "B menü");
         int variantBId;
         await using (var db = dbFactory.CreateDbContext())
         {
-            var variantB = new MenuVariant { DailyMenuId = menuId, Code = "B", Name = "B menü", SortOrder = 1 };
+            var variantB = new MenuVariant { DailyMenuId = menuId, Code = "B", SoupName = "B menü", SoupDishId = bDishId, SortOrder = 1 };
             db.MenuVariants.Add(variantB);
             await db.SaveChangesAsync();
             variantBId = variantB.Id;
         }
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("B", "B menü", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("B", bDishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -174,10 +182,11 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         // SaveChangesAsync — this proves that flush happens before "D" is picked as the reassignment
         // target, so the order ends up reassigned rather than wrongly cancelled for "no target".
         var date = new DateOnly(2026, 8, 20);
-        var (_, orderId, _) = await SeedMenuWithActiveOrderAsync(date, "A", "A menü");
+        var (_, orderId, _, _) = await SeedMenuWithActiveOrderAsync(date, "A", "A menü");
+        var dDishId = await SeedDishAsync(MenuDishKind.Leves, "D menü");
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("D", "D menü", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("D", dDishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -196,18 +205,21 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         var date = new DateOnly(2026, 8, 20);
         await SeedUsersAsync();
+        var regiDishId = await SeedDishAsync(MenuDishKind.Leves, "Régi");
         int menuId;
         await using (var db = dbFactory.CreateDbContext())
         {
             var menu = new DailyMenu { Date = date, IsPublished = true, RemovedAtUtc = clock.UtcNow.UtcDateTime };
-            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Régi", SortOrder = 0, RemovedAtUtc = clock.UtcNow.UtcDateTime });
+            menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Régi", SoupDishId = regiDishId, SortOrder = 0, RemovedAtUtc = clock.UtcNow.UtcDateTime });
             db.DailyMenus.Add(menu);
             await db.SaveChangesAsync();
             menuId = menu.Id;
         }
 
+        var ujADishId = await SeedDishAsync(MenuDishKind.Leves, "Új A");
+
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Új A", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", ujADishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -219,26 +231,26 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         // A feléledt sor is azonnal publikáltnak számít — nincs külön piszkozat-állapot.
         Assert.True(menu2.IsPublished);
         var variant = Assert.Single(menu2.Variants, v => v.RemovedAtUtc == null);
-        Assert.Equal("Új A", variant.Name);
+        Assert.Equal("Új A", variant.SoupName);
     }
 
     [Fact]
-    public async Task Saving_a_menu_with_an_unknown_dish_name_does_not_create_a_catalog_entry()
+    public async Task Saving_a_menu_with_an_unknown_dish_id_fails_without_creating_a_catalog_entry()
     {
         await SeedUsersAsync();
 
         var result = await sut.Handle(
             new UpsertDailyMenuCommand(
                 new DateOnly(2026, 8, 20), null,
-                [new MenuVariantInput("A", "Gulyásleves", "Rántott hús", 0, "zeller", "glutén, tojás")],
+                [new MenuVariantInput("A", 999, null, 0, "zeller", "glutén, tojás")],
                 adminId),
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCodes.NotFound, result.ErrorCode);
 
         await using var db = dbFactory.CreateDbContext();
-        Assert.False(await db.MenuDishes.AnyAsync(d => d.Kind == MenuDishKind.Leves && d.Name == "Gulyásleves"));
-        Assert.False(await db.MenuDishes.AnyAsync(d => d.Kind == MenuDishKind.Foetel && d.Name == "Rántott hús"));
+        Assert.False(await db.MenuDishes.AnyAsync());
     }
 
     [Fact]
@@ -246,14 +258,14 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         await SeedUsersAsync();
         var date = new DateOnly(2026, 8, 20);
-        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller", null)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0, "zeller", null)], adminId),
             CancellationToken.None);
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, null, null)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0, null, null)], adminId),
             CancellationToken.None);
 
         await using var db = dbFactory.CreateDbContext();
@@ -266,14 +278,14 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         await SeedUsersAsync();
         var date = new DateOnly(2026, 8, 20);
-        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller", null)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0, "zeller", null)], adminId),
             CancellationToken.None);
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, "zeller, tejtermék", null)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0, "zeller, tejtermék", null)], adminId),
             CancellationToken.None);
 
         await using var db = dbFactory.CreateDbContext();
@@ -286,12 +298,12 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         await SeedUsersAsync();
         var date = new DateOnly(2026, 8, 20);
-        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
 
         await sut.Handle(
             new UpsertDailyMenuCommand(
                 date, null,
-                [new MenuVariantInput("A", "Gulyásleves", null, 0, SoupEnergyKcal: 108, SoupFatGrams: 1.8m, SoupSaltGrams: 0.14m)],
+                [new MenuVariantInput("A", soupId, null, 0, SoupEnergyKcal: 108, SoupFatGrams: 1.8m, SoupSaltGrams: 0.14m)],
                 adminId),
             CancellationToken.None);
 
@@ -307,14 +319,14 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     {
         await SeedUsersAsync();
         var date = new DateOnly(2026, 8, 20);
-        await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Gulyásleves");
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0, SoupEnergyKcal: 108)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0, SoupEnergyKcal: 108)], adminId),
             CancellationToken.None);
 
         await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", "Gulyásleves", null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", soupId, null, 0)], adminId),
             CancellationToken.None);
 
         await using var db = dbFactory.CreateDbContext();
@@ -322,11 +334,13 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         Assert.Equal(108, soup.EnergyKcal);
     }
 
-    private async Task SeedDishAsync(MenuDishKind kind, string name)
+    private async Task<int> SeedDishAsync(MenuDishKind kind, string name)
     {
         await using var db = dbFactory.CreateDbContext();
-        db.MenuDishes.Add(new MenuDish { Kind = kind, Name = name });
+        var dish = new MenuDish { Kind = kind, Name = name };
+        db.MenuDishes.Add(dish);
         await db.SaveChangesAsync();
+        return dish.Id;
     }
 
     private async Task SeedUsersAsync()
@@ -348,11 +362,15 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         _ = otherUserId;
     }
 
-    private async Task<(int menuId, int orderId, int variantId)> SeedMenuWithActiveOrderAsync(DateOnly date, string variantCode, string variantName)
+    private async Task<(int menuId, int orderId, int variantId, int soupDishId)> SeedMenuWithActiveOrderAsync(DateOnly date, string variantCode, string variantName)
     {
         await SeedUsersAsync();
 
         await using var db = dbFactory.CreateDbContext();
+
+        var soupDish = new MenuDish { Kind = MenuDishKind.Leves, Name = variantName };
+        db.MenuDishes.Add(soupDish);
+        await db.SaveChangesAsync();
 
         var period = new OrderingPeriod
         {
@@ -364,7 +382,7 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         db.OrderingPeriods.Add(period);
 
         var menu = new DailyMenu { Date = date, IsPublished = true };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = variantCode, Name = variantName, SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = variantCode, SoupName = variantName, SoupDishId = soupDish.Id, SortOrder = 0 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
 
@@ -381,6 +399,6 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         db.MenuOrders.Add(order);
         await db.SaveChangesAsync();
 
-        return (menu.Id, order.Id, menu.Variants[0].Id);
+        return (menu.Id, order.Id, menu.Variants[0].Id, soupDish.Id);
     }
 }

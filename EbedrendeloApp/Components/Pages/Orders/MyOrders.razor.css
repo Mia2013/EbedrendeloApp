@@ -1,0 +1,36 @@
+.my-orders__header-card {
+    border-radius: 16px;
+    background: var(--mud-palette-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 1px 10px rgba(0, 0, 0, .04);
+}
+
+.my-orders-calendar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: 12px;
+    row-gap: 14px;
+}
+
+.my-orders-calendar__cell {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 8px 10px;
+    min-height: 90px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 1px 10px rgba(0, 0, 0, .04);
+}
+
+.my-orders-calendar__cell--empty {
+    background: transparent;
+    box-shadow: none;
+    border: 1.5px dashed var(--mud-palette-lines-default);
+}
+
+.my-orders-calendar__cell--today {
+    background: var(--mud-palette-primary-hover);
+}
+
+@media (max-width: 1279px) {
+    .my-orders-calendar {
+        grid-template-columns: 1fr;
+    }
+}

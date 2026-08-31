@@ -68,16 +68,30 @@ public sealed class UpsertDailyMenuHandler(
         // fresh insert).
         var existingByCode = menu.Variants.ToDictionary(v => v.Code, StringComparer.Ordinal);
 
-        // Single batch load instead of a query per variant per dish-kind: the same (Kind, Name) lookup
-        // MenuDishAllergenLookup uses for reads, but tracked here since UpdateDishAsync mutates in place.
+        // Single batch load instead of a query per variant per dish: tracked, since UpdateDish mutates in
+        // place. Keyed by Id — the admin already picked these from the catalog via MudAutocomplete, so
+        // there's no name to match, only a straight lookup.
         var dishes = await LoadTrackedDishesAsync(db, request.Variants, cancellationToken);
 
         foreach (var input in request.Variants)
         {
+            if (!dishes.TryGetValue(input.SoupDishId, out var soupDish))
+            {
+                return Result.Failure<int>(ErrorCodes.NotFound, $"A(z) {input.Code} variáns levese nem található a katalógusban.");
+            }
+
+            MenuDish? mainCourseDish = null;
+            if (input.MainCourseDishId is { } mainCourseDishId && !dishes.TryGetValue(mainCourseDishId, out mainCourseDish))
+            {
+                return Result.Failure<int>(ErrorCodes.NotFound, $"A(z) {input.Code} variáns főétele nem található a katalógusban.");
+            }
+
             if (existingByCode.TryGetValue(input.Code, out var variant))
             {
-                variant.Name = input.Name;
-                variant.Description = input.Description;
+                variant.SoupDishId = input.SoupDishId;
+                variant.SoupName = soupDish.Name;
+                variant.MainCourseDishId = input.MainCourseDishId;
+                variant.MainCourseName = mainCourseDish?.Name;
                 variant.SortOrder = input.SortOrder;
                 variant.RemovedAtUtc = null;
             }
@@ -87,20 +101,22 @@ public sealed class UpsertDailyMenuHandler(
                 {
                     DailyMenuId = menu.Id,
                     Code = input.Code,
-                    Name = input.Name,
-                    Description = input.Description,
+                    SoupDishId = input.SoupDishId,
+                    SoupName = soupDish.Name,
+                    MainCourseDishId = input.MainCourseDishId,
+                    MainCourseName = mainCourseDish?.Name,
                     SortOrder = input.SortOrder,
                 });
             }
 
             UpdateDish(
-                dishes, MenuDishKind.Leves, input.Name, input.SoupAllergens,
+                soupDish, input.SoupAllergens,
                 input.SoupEnergyKcal, input.SoupFatGrams, input.SoupSaturatedFatGrams, input.SoupCarbohydrateGrams,
                 input.SoupSugarGrams, input.SoupProteinGrams, input.SoupSaltGrams);
-            if (!string.IsNullOrWhiteSpace(input.Description))
+            if (mainCourseDish is not null)
             {
                 UpdateDish(
-                    dishes, MenuDishKind.Foetel, input.Description, input.MainCourseAllergens,
+                    mainCourseDish, input.MainCourseAllergens,
                     input.MainCourseEnergyKcal, input.MainCourseFatGrams, input.MainCourseSaturatedFatGrams,
                     input.MainCourseCarbohydrateGrams, input.MainCourseSugarGrams, input.MainCourseProteinGrams,
                     input.MainCourseSaltGrams);
@@ -171,47 +187,39 @@ public sealed class UpsertDailyMenuHandler(
         '|',
         variants
             .OrderBy(v => v.Code, StringComparer.Ordinal)
-            .Select(v => $"{v.Code}:{v.Name}:{v.Description}:{v.SortOrder}"));
+            .Select(v => $"{v.Code}:{v.SoupName}:{v.MainCourseName}:{v.SortOrder}"));
 
     /// <summary>
     /// Batch-loads every dish catalog row this request could touch (tracked, not <see cref="MenuDishAllergenLookup"/>'s
-    /// NoTracking read) in a single query, keyed the same way — avoids a per-variant per-dish-kind round trip in
+    /// NoTracking read) in a single query, keyed by Id — avoids a per-variant round trip in
     /// <see cref="UpdateDish"/> below.
     /// </summary>
-    private static async Task<Dictionary<(MenuDishKind Kind, string Name), MenuDish>> LoadTrackedDishesAsync(
+    private static async Task<Dictionary<int, MenuDish>> LoadTrackedDishesAsync(
         EbedrendeloDbContext db, IReadOnlyList<MenuVariantInput> variants, CancellationToken cancellationToken)
     {
-        var soupNames = variants.Select(v => v.Name).Distinct().ToList();
-        var mainCourseNames = variants.Where(v => !string.IsNullOrWhiteSpace(v.Description))
-            .Select(v => v.Description!).Distinct().ToList();
+        var dishIds = variants
+            .Select(v => (int?)v.SoupDishId)
+            .Concat(variants.Select(v => v.MainCourseDishId))
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
 
-        var dishes = await db.MenuDishes
-            .Where(d => (d.Kind == MenuDishKind.Leves && soupNames.Contains(d.Name))
-                     || (d.Kind == MenuDishKind.Foetel && mainCourseNames.Contains(d.Name)))
-            .ToListAsync(cancellationToken);
-
-        return dishes.ToDictionary(d => (d.Kind, d.Name), MenuDishAllergenLookup.KeyComparer);
+        var dishes = await db.MenuDishes.Where(d => dishIds.Contains(d.Id)).ToListAsync(cancellationToken);
+        return dishes.ToDictionary(d => d.Id);
     }
 
     /// <summary>
-    /// Updates an *existing* dish catalog row's allergens/nutrition in place when a daily menu referencing
-    /// it is saved — a same-day correction doesn't need a separate screen. Does **not** create a new row
-    /// for an unknown name: brand-new dishes are only ever added explicitly via
-    /// Features/Menus/CreateMenuDish (the "+ Új étel" dialog), so a name that somehow doesn't match any
-    /// catalog entry here is silently skipped rather than failing the whole save. A blank field (allergens
-    /// or any nutrition value) is treated as "no change", so re-saving a day without touching that field
-    /// can't accidentally wipe out data recorded earlier.
+    /// Updates an existing dish catalog row's allergens/nutrition in place when a daily menu referencing
+    /// it is saved — a same-day correction doesn't need a separate screen. A blank field (allergens or any
+    /// nutrition value) is treated as "no change", so re-saving a day without touching that field can't
+    /// accidentally wipe out data recorded earlier.
     /// </summary>
     private static void UpdateDish(
-        IReadOnlyDictionary<(MenuDishKind Kind, string Name), MenuDish> dishes, MenuDishKind kind, string name, string? allergens,
+        MenuDish dish, string? allergens,
         decimal? energyKcal, decimal? fatGrams, decimal? saturatedFatGrams, decimal? carbohydrateGrams,
         decimal? sugarGrams, decimal? proteinGrams, decimal? saltGrams)
     {
-        if (!dishes.TryGetValue((kind, name), out var dish))
-        {
-            return;
-        }
-
         if (!string.IsNullOrWhiteSpace(allergens))
         {
             dish.Allergens = allergens.Trim();

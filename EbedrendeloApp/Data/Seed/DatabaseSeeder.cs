@@ -165,6 +165,9 @@ public static class DatabaseSeeder
             return existing.ToDictionary(m => m.Date, m => m.Variants.OrderBy(v => v.SortOrder).ToList());
         }
 
+        var soupDishIdByName = await EnsureMenuDishesAsync(db, MenuDishKind.Leves, SeedCatalog.Recipes.Select(r => r.Name), ct);
+        var mainCourseDishIdByName = await EnsureMenuDishesAsync(db, MenuDishKind.Foetel, SeedCatalog.Recipes.Select(r => r.Description), ct);
+
         var weekdays = periods.SelectMany(p => GetWeekdays(p.StartDate, p.EndDate)).Distinct().OrderBy(d => d).ToList();
         var recipeCount = SeedCatalog.Recipes.Count;
 
@@ -179,8 +182,10 @@ public static class DatabaseSeeder
                 {
                     DailyMenuId = 0,
                     Code = VariantCodes[v],
-                    Name = recipe.Name,
-                    Description = recipe.Description,
+                    SoupName = recipe.Name,
+                    SoupDishId = soupDishIdByName[recipe.Name],
+                    MainCourseName = recipe.Description,
+                    MainCourseDishId = mainCourseDishIdByName[recipe.Description],
                     SortOrder = v,
                 });
             }
@@ -196,6 +201,28 @@ public static class DatabaseSeeder
         db.DailyMenus.AddRange(dailyMenus);
         await db.SaveChangesAsync(ct);
         return dailyMenus.ToDictionary(m => m.Date, m => m.Variants.OrderBy(v => v.SortOrder).ToList());
+    }
+
+    /// <summary>Looks up (or creates) the <see cref="MenuDish"/> catalog rows the seeded recipes need, so
+    /// SeedDailyMenusAsync can populate MenuVariant's required SoupDishId/MainCourseDishId FKs.</summary>
+    private static async Task<Dictionary<string, int>> EnsureMenuDishesAsync(
+        EbedrendeloDbContext db, MenuDishKind kind, IEnumerable<string> names, CancellationToken ct)
+    {
+        var distinctNames = names.Distinct().ToList();
+        var existing = await db.MenuDishes.Where(d => d.Kind == kind && distinctNames.Contains(d.Name)).ToListAsync(ct);
+        var existingNames = existing.Select(d => d.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missing = distinctNames.Where(n => !existingNames.Contains(n))
+            .Select(n => new MenuDish { Kind = kind, Name = n })
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            db.MenuDishes.AddRange(missing);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return existing.Concat(missing).ToDictionary(d => d.Name, d => d.Id, StringComparer.OrdinalIgnoreCase);
     }
 
     private static async Task<List<ALaCarteItem>> SeedALaCarteItemsAsync(EbedrendeloDbContext db, CancellationToken ct)

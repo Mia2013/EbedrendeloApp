@@ -5,8 +5,8 @@ namespace EbedrendeloApp.Features.Menus.UpsertDailyMenu;
 
 public sealed record MenuVariantInput(
     string Code,
-    string Name,
-    string? Description,
+    int SoupDishId,
+    int? MainCourseDishId,
     int SortOrder,
     string? SoupAllergens = null,
     string? MainCourseAllergens = null,

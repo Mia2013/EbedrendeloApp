@@ -93,8 +93,12 @@ public class GetOrderableDaysHandlerTests : IDisposable
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
+        var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves" };
+        db.MenuDishes.Add(dish);
+        await db.SaveChangesAsync();
+
         var menu = new DailyMenu { Date = closedPeriod.StartDate, IsPublished = true };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Gulyásleves", SoupDishId = dish.Id, SortOrder = 0 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
 
@@ -140,12 +144,17 @@ public class GetOrderableDaysHandlerTests : IDisposable
 
         db.ExcludedDays.Add(new ExcludedDay { Date = ExcludedDay, Reason = "Karbantartás", CreatedByUserId = user.Id });
 
+        var dish1 = new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves" };
+        var dish2 = new MenuDish { Kind = MenuDishKind.Leves, Name = "Rántott szelet" };
+        db.MenuDishes.AddRange(dish1, dish2);
+        await db.SaveChangesAsync();
+
         var orderedDayMenu = new DailyMenu { Date = AlreadyOrderedDay, IsPublished = true };
-        orderedDayMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Gulyásleves", SortOrder = 0 });
+        orderedDayMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Gulyásleves", SoupDishId = dish1.Id, SortOrder = 0 });
         db.DailyMenus.Add(orderedDayMenu);
 
         var orderableDayMenu = new DailyMenu { Date = OrderableDay, IsPublished = true };
-        orderableDayMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Rántott szelet", SortOrder = 0 });
+        orderableDayMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Rántott szelet", SoupDishId = dish2.Id, SortOrder = 0 });
         db.DailyMenus.Add(orderableDayMenu);
 
         // UnpublishedDay intentionally has no DailyMenu at all.

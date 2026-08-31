@@ -4,6 +4,7 @@ using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Menus.GetTodayMenuForUser;
 using EbedrendeloApp.Tests.TestSupport;
+using Microsoft.EntityFrameworkCore;
 
 namespace EbedrendeloApp.Tests.Features.Menus;
 
@@ -78,7 +79,7 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
     public async Task Returns_the_users_own_active_selection()
     {
         await SeedUserAsync();
-        var (_, variantAId) = await SeedPublishedMenuAsync();
+        var (_, variantAId, _) = await SeedPublishedMenuAsync();
         await SeedActiveOrderAsync(variantAId);
 
         var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
@@ -115,10 +116,11 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
     public async Task Includes_soup_allergens_from_the_dish_catalog()
     {
         await SeedUserAsync();
-        await SeedPublishedMenuAsync();
+        var (_, _, soupADishId) = await SeedPublishedMenuAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü", Allergens = "glutén" });
+            var dish = await db.MenuDishes.SingleAsync(d => d.Id == soupADishId);
+            dish.Allergens = "glutén";
             await db.SaveChangesAsync();
         }
 
@@ -132,10 +134,12 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
     public async Task Includes_soup_nutrition_from_the_dish_catalog()
     {
         await SeedUserAsync();
-        await SeedPublishedMenuAsync();
+        var (_, _, soupADishId) = await SeedPublishedMenuAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
-            db.MenuDishes.Add(new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü", EnergyKcal = 108, FatGrams = 1.8m });
+            var dish = await db.MenuDishes.SingleAsync(d => d.Id == soupADishId);
+            dish.EnergyKcal = 108;
+            dish.FatGrams = 1.8m;
             await db.SaveChangesAsync();
         }
 
@@ -159,15 +163,20 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
         userId = user.Id;
     }
 
-    private async Task<(int menuId, int variantAId)> SeedPublishedMenuAsync()
+    private async Task<(int menuId, int variantAId, int soupADishId)> SeedPublishedMenuAsync()
     {
         await using var db = dbFactory.CreateDbContext();
+        var dishA = new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü" };
+        var dishB = new MenuDish { Kind = MenuDishKind.Leves, Name = "B menü" };
+        db.MenuDishes.AddRange(dishA, dishB);
+        await db.SaveChangesAsync();
+
         var menu = new DailyMenu { Date = clock.Today, IsPublished = true };
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "A menü", SortOrder = 0 });
-        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "B", Name = "B menü", SortOrder = 1 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "A menü", SoupDishId = dishA.Id, SortOrder = 0 });
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "B", SoupName = "B menü", SoupDishId = dishB.Id, SortOrder = 1 });
         db.DailyMenus.Add(menu);
         await db.SaveChangesAsync();
-        return (menu.Id, menu.Variants[0].Id);
+        return (menu.Id, menu.Variants[0].Id, dishA.Id);
     }
 
     private async Task SeedActiveOrderAsync(int variantId)

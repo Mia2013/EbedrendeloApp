@@ -163,8 +163,12 @@ public class UpsertOrderingPeriodHandlerTests : IDisposable
     {
         using var db = dbFactory.CreateDbContext();
 
+        var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Teszt menü" };
+        db.MenuDishes.Add(dish);
+        await db.SaveChangesAsync();
+
         var dailyMenu = new DailyMenu { Date = date, IsPublished = true };
-        dailyMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", Name = "Teszt menü", SortOrder = 0 });
+        dailyMenu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Teszt menü", SoupDishId = dish.Id, SortOrder = 0 });
         db.DailyMenus.Add(dailyMenu);
 
         var role = new Role { Name = "User" };

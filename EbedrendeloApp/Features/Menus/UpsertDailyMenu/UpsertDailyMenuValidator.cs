@@ -11,9 +11,11 @@ public sealed class UpsertDailyMenuValidator : AbstractValidator<UpsertDailyMenu
 
         RuleForEach(x => x.Variants).ChildRules(variant =>
         {
-            variant.RuleFor(v => v.Code).NotEmpty().MaximumLength(8);
-            variant.RuleFor(v => v.Name).NotEmpty().MaximumLength(128);
-            variant.RuleFor(v => v.Description).MaximumLength(500);
+            // A variánskód zárt halmaz (A/B/C) — a megjelenítési szöveg ("A menü" stb.) mindig a UI
+            // dolga, a Code önmagában sosem tartalmazhatja azt.
+            variant.RuleFor(v => v.Code).Must(code => code is "A" or "B" or "C")
+                .WithMessage("A variánskód csak A, B vagy C lehet.");
+            variant.RuleFor(v => v.SoupDishId).GreaterThan(0).WithMessage("Válassz levest a katalógusból.");
             variant.RuleFor(v => v.SoupAllergens).MaximumLength(300);
             variant.RuleFor(v => v.MainCourseAllergens).MaximumLength(300);
 

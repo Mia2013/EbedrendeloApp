@@ -509,14 +509,12 @@ namespace EbedrendeloApp.Data.Migrations
                     b.Property<int>("DailyMenuId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Description")
+                    b.Property<int?>("MainCourseDishId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MainCourseName")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
 
                     b.Property<DateTime?>("RemovedAtUtc")
                         .HasColumnType("datetime2");
@@ -524,7 +522,19 @@ namespace EbedrendeloApp.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<int>("SoupDishId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SoupName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("MainCourseDishId");
+
+                    b.HasIndex("SoupDishId");
 
                     b.HasIndex("DailyMenuId", "Code")
                         .IsUnique();
@@ -909,7 +919,22 @@ namespace EbedrendeloApp.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("EbedrendeloApp.Domain.Entities.MenuDish", "MainCourseDish")
+                        .WithMany()
+                        .HasForeignKey("MainCourseDishId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EbedrendeloApp.Domain.Entities.MenuDish", "SoupDish")
+                        .WithMany()
+                        .HasForeignKey("SoupDishId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("DailyMenu");
+
+                    b.Navigation("MainCourseDish");
+
+                    b.Navigation("SoupDish");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.PeriodInvoice", b =>

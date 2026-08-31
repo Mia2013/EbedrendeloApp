@@ -44,7 +44,7 @@ else
                             }
                         </MudStack>
                         <MudText Typo="Typo.body2">
-                            Leves: @variant.Name
+                            Leves: @variant.SoupName
                             @if (AllergenCatalog.Format(variant.SoupAllergens) is { } soupAllergens)
                             {
                                 <span class="mud-text-secondary"> (allergén: @soupAllergens)</span>
@@ -54,10 +54,10 @@ else
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutrition</MudText>
                         }
-                        @if (!string.IsNullOrEmpty(variant.Description))
+                        @if (!string.IsNullOrEmpty(variant.MainCourseName))
                         {
                             <MudText Typo="Typo.body2">
-                                Főétel: @variant.Description
+                                Főétel: @variant.MainCourseName
                                 @if (AllergenCatalog.Format(variant.MainCourseAllergens) is { } mainCourseAllergens)
                                 {
                                     <span class="mud-text-secondary"> (allergén: @mainCourseAllergens)</span>

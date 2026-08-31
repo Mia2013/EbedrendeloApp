@@ -1,0 +1,56 @@
+.order-calendar__header-card {
+    border-radius: 16px;
+    background: var(--mud-palette-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 1px 10px rgba(0, 0, 0, .04);
+}
+
+.order-calendar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: 12px;
+    row-gap: 14px;
+}
+
+.order-calendar__cell {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 8px 10px;
+    min-height: 90px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 1px 10px rgba(0, 0, 0, .04);
+    transition: box-shadow .15s ease;
+}
+
+.order-calendar__cell:hover {
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .1);
+}
+
+.order-calendar__cell--empty {
+    background: transparent;
+    box-shadow: none;
+    border: 1.5px dashed var(--mud-palette-lines-default);
+}
+
+.order-calendar__cell--empty:hover {
+    box-shadow: none;
+}
+
+.order-calendar__cell--today {
+    background: var(--mud-palette-primary-hover);
+}
+
+.order-calendar__cell-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.order-calendar__submit-bar {
+    position: sticky;
+    bottom: 16px;
+}
+
+@media (max-width: 1279px) {
+    .order-calendar {
+        grid-template-columns: 1fr;
+    }
+}
