@@ -19,4 +19,10 @@ public static class ErrorCodes
     public const string NotFound = nameof(NotFound);
     public const string NoVariants = nameof(NoVariants);
     public const string DuplicateName = nameof(DuplicateName);
+
+    public const string OutOfStock = nameof(OutOfStock);
+    public const string OfferNotFound = nameof(OfferNotFound);
+    public const string NotDirectlyOrderable = nameof(NotDirectlyOrderable);
+    public const string SoupAlreadyOffered = nameof(SoupAlreadyOffered);
+    public const string CapacityBelowReserved = nameof(CapacityBelowReserved);
 }

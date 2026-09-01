@@ -1,0 +1,14 @@
+<MudPaper Elevation="2" Class="pa-1 px-2 date-navigator-bar" Style="display:inline-flex; align-items:center; border-radius:24px; background:var(--mud-palette-primary-hover);">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Primary" title="Előző" OnClick="() => OnStep.InvokeAsync(-1)" />
+    <MudText Typo="Typo.h6" Color="Color.Primary" Style="min-width:170px; text-align:center; font-weight:700;">@Label</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Primary" title="Következő" OnClick="() => OnStep.InvokeAsync(1)" />
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>+1/-1 lépés — a hívó dönti el, mit jelent (nap, hónap, stb.).</summary>
+    [Parameter]
+    public EventCallback<int> OnStep { get; set; }
+}

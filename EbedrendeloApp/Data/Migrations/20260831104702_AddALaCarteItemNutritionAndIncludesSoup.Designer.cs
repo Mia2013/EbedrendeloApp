@@ -4,6 +4,7 @@ using EbedrendeloApp.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EbedrendeloApp.Data.Migrations
 {
     [DbContext(typeof(EbedrendeloDbContext))]
-    partial class EbedrendeloDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260831104702_AddALaCarteItemNutritionAndIncludesSoup")]
+    partial class AddALaCarteItemNutritionAndIncludesSoup
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -49,7 +52,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Date", "ALaCarteItemId")
                         .IsUnique();
 
-                    b.ToTable("ALaCarteDailyOffers", (string)null);
+                    b.ToTable("ALaCarteDailyOffers");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ALaCarteItem", b =>
@@ -108,7 +111,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ALaCarteItems", (string)null);
+                    b.ToTable("ALaCarteItems");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ALaCarteOrder", b =>
@@ -146,7 +149,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("UserId", "Date")
                         .IsUnique();
 
-                    b.ToTable("ALaCarteOrders", (string)null);
+                    b.ToTable("ALaCarteOrders");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ALaCarteOrderLine", b =>
@@ -184,7 +187,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("ALaCarteOrderId", "ALaCarteDailyOfferId")
                         .IsUnique();
 
-                    b.ToTable("ALaCarteOrderLines", (string)null);
+                    b.ToTable("ALaCarteOrderLines");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.AppSetting", b =>
@@ -217,7 +220,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("UpdatedByUserId");
 
-                    b.ToTable("AppSettings", (string)null);
+                    b.ToTable("AppSettings");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.CreditEntry", b =>
@@ -271,7 +274,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("CreditEntries", (string)null);
+                    b.ToTable("CreditEntries");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.DailyMenu", b =>
@@ -300,7 +303,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Date")
                         .IsUnique();
 
-                    b.ToTable("DailyMenus", (string)null);
+                    b.ToTable("DailyMenus");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ExcludedDay", b =>
@@ -332,7 +335,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Date")
                         .IsUnique();
 
-                    b.ToTable("ExcludedDays", (string)null);
+                    b.ToTable("ExcludedDays");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.KitchenClosure", b =>
@@ -362,7 +365,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Date")
                         .IsUnique();
 
-                    b.ToTable("KitchenClosures", (string)null);
+                    b.ToTable("KitchenClosures");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.KitchenClosureLine", b =>
@@ -393,7 +396,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("KitchenClosureId");
 
-                    b.ToTable("KitchenClosureLines", (string)null);
+                    b.ToTable("KitchenClosureLines");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.MenuDish", b =>
@@ -449,7 +452,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Kind", "Name")
                         .IsUnique();
 
-                    b.ToTable("MenuDishes", (string)null);
+                    b.ToTable("MenuDishes");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.MenuOrder", b =>
@@ -521,7 +524,7 @@ namespace EbedrendeloApp.Data.Migrations
                         .IsUnique()
                         .HasFilter("[Status] = 0");
 
-                    b.ToTable("MenuOrders", (string)null);
+                    b.ToTable("MenuOrders");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.MenuVariant", b =>
@@ -570,7 +573,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("DailyMenuId", "Code")
                         .IsUnique();
 
-                    b.ToTable("MenuVariants", (string)null);
+                    b.ToTable("MenuVariants");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.OrderingPeriod", b =>
@@ -611,7 +614,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("StartDate", "EndDate");
 
-                    b.ToTable("OrderingPeriods", (string)null);
+                    b.ToTable("OrderingPeriods");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.PeriodInvoice", b =>
@@ -670,7 +673,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("UserId", "OrderingPeriodId")
                         .IsUnique();
 
-                    b.ToTable("PeriodInvoices", (string)null);
+                    b.ToTable("PeriodInvoices");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.Role", b =>
@@ -691,7 +694,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Roles", (string)null);
+                    b.ToTable("Roles");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.User", b =>
@@ -739,7 +742,7 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("UserName")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.UserNotification", b =>
@@ -784,7 +787,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("UserId", "ReadAtUtc", "CreatedAtUtc");
 
-                    b.ToTable("UserNotifications", (string)null);
+                    b.ToTable("UserNotifications");
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ALaCarteDailyOffer", b =>

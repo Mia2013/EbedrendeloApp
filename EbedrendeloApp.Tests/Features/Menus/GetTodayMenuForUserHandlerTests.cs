@@ -96,7 +96,7 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
         await SeedPublishedMenuAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
-            var item = new ALaCarteItem { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true, Allergens = "1,9" };
+            var item = new ALaCarteItem { Name = "Rántott sertés szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true, Allergens = "1,9" };
             db.ALaCarteItems.Add(item);
             await db.SaveChangesAsync();
 
@@ -107,9 +107,152 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
         var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
 
         var offer = Assert.Single(result.ALaCarteOffers);
-        Assert.Equal("Húsleves", offer.Name);
+        Assert.Equal("Rántott sertés szelet", offer.Name);
         Assert.Equal(7, offer.FreeCount);
         Assert.Equal("1,9", offer.Allergens);
+    }
+
+    [Fact]
+    public async Task Excludes_leves_offers_from_ala_carte_offers_list()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var soup = new ALaCarteItem { Name = "Csontleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true };
+            db.ALaCarteItems.Add(soup);
+            await db.SaveChangesAsync();
+
+            db.ALaCarteDailyOffers.Add(new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = soup.Id, Capacity = int.MaxValue, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        Assert.Empty(result.ALaCarteOffers);
+    }
+
+    [Fact]
+    public async Task Combines_main_course_price_with_todays_soup_price()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var soup = new ALaCarteItem { Name = "Csontleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true };
+            var mainCourse = new ALaCarteItem { Name = "Rántott sertés szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true };
+            db.ALaCarteItems.AddRange(soup, mainCourse);
+            await db.SaveChangesAsync();
+
+            db.ALaCarteDailyOffers.AddRange(
+                new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = soup.Id, Capacity = int.MaxValue, OrderedCount = 0 },
+                new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = mainCourse.Id, Capacity = 10, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var offer = Assert.Single(result.ALaCarteOffers);
+        Assert.Equal(2550, offer.PriceHuf);
+        Assert.True(offer.IncludesSoup);
+    }
+
+    [Fact]
+    public async Task Foetel_price_excludes_soup_when_no_leves_offer_exists_today()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var mainCourse = new ALaCarteItem { Name = "Rántott sertés szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true };
+            db.ALaCarteItems.Add(mainCourse);
+            await db.SaveChangesAsync();
+
+            db.ALaCarteDailyOffers.Add(new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = mainCourse.Id, Capacity = 10, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var offer = Assert.Single(result.ALaCarteOffers);
+        Assert.Equal(1900, offer.PriceHuf);
+        Assert.False(offer.IncludesSoup);
+    }
+
+    [Fact]
+    public async Task Passes_through_ala_carte_item_nutrition_fields()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var item = new ALaCarteItem
+            {
+                Name = "Túrós derelye", Category = ALaCarteCategory.Desszert, PriceHuf = 750, IsActive = true,
+                EnergyKcal = 320, FatGrams = 12, SaturatedFatGrams = 6, CarbohydrateGrams = 40, SugarGrams = 15, ProteinGrams = 8, SaltGrams = 0.5m,
+            };
+            db.ALaCarteItems.Add(item);
+            await db.SaveChangesAsync();
+
+            db.ALaCarteDailyOffers.Add(new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = item.Id, Capacity = 10, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var offer = Assert.Single(result.ALaCarteOffers);
+        Assert.Equal(320, offer.EnergyKcal);
+        Assert.Equal(8, offer.ProteinGrams);
+    }
+
+    [Fact]
+    public async Task My_ala_carte_line_reports_the_ordered_items_id()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync();
+        int itemId;
+        int periodId;
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var item = new ALaCarteItem { Name = "Hasábburgonya", Category = ALaCarteCategory.Koret, PriceHuf = 550, IsActive = true };
+            db.ALaCarteItems.Add(item);
+            await db.SaveChangesAsync();
+            itemId = item.Id;
+
+            var offer = new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = item.Id, Capacity = 10, OrderedCount = 1 };
+            db.ALaCarteDailyOffers.Add(offer);
+
+            var period = new OrderingPeriod { Name = "Teszt időszak", StartDate = clock.Today, EndDate = clock.Today, OrderDeadline = clock.Today.ToDateTime(new TimeOnly(10, 0)) };
+            db.OrderingPeriods.Add(period);
+            await db.SaveChangesAsync();
+            periodId = period.Id;
+
+            var order = new ALaCarteOrder { UserId = userId, Date = clock.Today, OrderingPeriodId = periodId, PlacedByUserId = userId, TotalHuf = 550 };
+            order.Lines.Add(new ALaCarteOrderLine { ALaCarteOrderId = 0, ALaCarteDailyOfferId = offer.Id, ItemNameSnapshot = item.Name, CategorySnapshot = item.Category, UnitPriceHuf = 550 });
+            db.ALaCarteOrders.Add(order);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        var line = Assert.Single(result.MyALaCarteOrderLines);
+        Assert.Equal(itemId, line.ALaCarteItemId);
+    }
+
+    [Fact]
+    public async Task Reports_the_ala_carte_deadline_and_whether_its_still_orderable()
+    {
+        await SeedUserAsync();
+        await SeedPublishedMenuAsync(); // seeds AppSettings with ALaCarteOrderDeadlineLocalTime = 10:30
+
+        var beforeDeadline = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None); // clock is 09:00
+        Assert.Equal(new TimeOnly(10, 30), beforeDeadline.ALaCarteOrderDeadlineLocalTime);
+        Assert.True(beforeDeadline.IsALaCarteOrderableNow);
+
+        var afterDeadlineClock = new FixedAppClock(new DateTime(2026, 8, 17, 11, 0, 0));
+        var afterDeadlineHandler = new GetTodayMenuForUserHandler(dbFactory, afterDeadlineClock, new WorkingDayCalculator());
+        var afterDeadline = await afterDeadlineHandler.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+        Assert.False(afterDeadline.IsALaCarteOrderableNow);
     }
 
     [Fact]
@@ -166,6 +309,19 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
     private async Task<(int menuId, int variantAId, int soupADishId)> SeedPublishedMenuAsync()
     {
         await using var db = dbFactory.CreateDbContext();
+
+        if (!await db.AppSettings.AnyAsync())
+        {
+            db.AppSettings.Add(new AppSetting
+            {
+                MenuPortionHuf = 1400,
+                ChangeDeadlineWorkingDays = 3,
+                ChangeDeadlineLocalTime = new TimeOnly(11, 0),
+                ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
+            });
+            await db.SaveChangesAsync();
+        }
+
         var dishA = new MenuDish { Kind = MenuDishKind.Leves, Name = "A menü" };
         var dishB = new MenuDish { Kind = MenuDishKind.Leves, Name = "B menü" };
         db.MenuDishes.AddRange(dishA, dishB);

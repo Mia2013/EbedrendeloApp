@@ -3,6 +3,7 @@
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte.PlaceALaCarteOrder
 @using EbedrendeloApp.Features.Menus
 @using EbedrendeloApp.Features.Menus.GetTodayMenuForUser
 @using MediatR
@@ -81,10 +82,29 @@ else
     </MudAlert>
 
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-            <MudIcon Icon="@Icons.Material.Filled.Fastfood" Color="Color.Primary" />
-            <MudText Typo="Typo.h6">Mai à la carte kínálat</MudText>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Fastfood" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Mai à la carte kínálat</MudText>
+            </MudStack>
+            @if (today.IsALaCarteOrderableNow)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Schedule">
+                    @today.ALaCarteOrderDeadlineLocalTime.ToString("HH:mm")-ig rendelhető
+                </MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Icon="@Icons.Material.Filled.Schedule">
+                    A mai rendelési határidő lejárt
+                </MudChip>
+            }
         </MudStack>
+
+        @if (!string.IsNullOrEmpty(orderErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@orderErrorMessage</MudAlert>
+        }
 
         @if (today.ALaCarteOffers.Count == 0)
         {
@@ -99,10 +119,17 @@ else
                     <MudTh>Allergén</MudTh>
                     <MudTh>Ár</MudTh>
                     <MudTh>Szabad</MudTh>
+                    <MudTh>Művelet</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Kategória">@CategoryName(context.Category)</MudTd>
-                    <MudTd DataLabel="Tétel">@context.Name</MudTd>
+                    <MudTd DataLabel="Tétel">
+                        @context.Name@(context.IncludesSoup ? " (levessel)" : "")
+                        @if (FormatALaCarteNutrition(context) is { } nutrition)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">@nutrition</MudText>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="Allergén">
                         @if (AllergenCatalog.Format(context.Allergens) is { } allergens)
                         {
@@ -111,6 +138,24 @@ else
                     </MudTd>
                     <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
                     <MudTd DataLabel="Szabad">@context.FreeCount</MudTd>
+                    <MudTd DataLabel="Művelet">
+                        @if (IsOrdered(context))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">Megrendelve</MudChip>
+                        }
+                        else if (context.FreeCount == 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       Disabled="!today.IsALaCarteOrderableNow || orderingItemIds.Contains(context.ALaCarteItemId)"
+                                       OnClick="() => SelectAsync(context)">
+                                Kiválaszt
+                            </MudButton>
+                        }
+                    </MudTd>
                 </RowTemplate>
             </MudTable>
         }
@@ -125,7 +170,7 @@ else
             <MudStack Spacing="1" Class="mt-1">
                 @foreach (var line in today.MyALaCarteOrderLines)
                 {
-                    <MudText Typo="Typo.body2">@line.ItemName (@CategoryName(line.Category)) — @line.UnitPriceHuf Ft</MudText>
+                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@CategoryName(line.Category)) — @line.UnitPriceHuf Ft</MudText>
                 }
             </MudStack>
         }
@@ -140,7 +185,21 @@ else
         [ErrorCodes.MenuNotPublished] = "Mára még nincs publikált menü.",
     };
 
+    private static readonly Dictionary<string, string> ALaCarteOrderErrorText = new()
+    {
+        [ErrorCodes.OutOfStock] = "Ez a tétel időközben elfogyott.",
+        [ErrorCodes.AlreadyOrdered] = "Ezt a tételt már megrendelted ma.",
+        [ErrorCodes.DeadlinePassed] = "A mai à la carte rendelési határidő már lejárt.",
+        [ErrorCodes.NotDirectlyOrderable] = "A leves önállóan nem rendelhető.",
+        [ErrorCodes.OfferNotFound] = "A tétel ma már nem elérhető.",
+        [ErrorCodes.NotWorkingDay] = "Ma nem munkanap.",
+        [ErrorCodes.DayExcluded] = "A mai nap ki van zárva.",
+        [ErrorCodes.OutsidePeriod] = "Ma nincs érvényes rendelési időszak.",
+    };
+
     private TodayMenuDto? today;
+    private readonly HashSet<int> orderingItemIds = [];
+    private string? orderErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -150,12 +209,37 @@ else
 
     private static string Describe(string? reason) => reason is null ? string.Empty : ReasonText.GetValueOrDefault(reason, reason);
 
+    private bool IsOrdered(ALaCarteOfferDto offer) => today!.MyALaCarteOrderLines.Any(l => l.ALaCarteItemId == offer.ALaCarteItemId);
+
+    private async Task SelectAsync(ALaCarteOfferDto offer)
+    {
+        orderingItemIds.Add(offer.ALaCarteItemId);
+        orderErrorMessage = null;
+
+        var result = await Mediator.Send(new PlaceALaCarteOrderCommand(CurrentUser.UserId, [offer.ALaCarteItemId]));
+
+        orderingItemIds.Remove(offer.ALaCarteItemId);
+
+        if (result.IsSuccess)
+        {
+            today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
+        }
+        else
+        {
+            orderErrorMessage = result.ErrorCode is { } code && ALaCarteOrderErrorText.TryGetValue(code, out var text) ? text : result.ErrorMessage;
+        }
+    }
+
     private static string CategoryName(ALaCarteCategory category) => category switch
     {
         ALaCarteCategory.Leves => "Leves",
         ALaCarteCategory.Foetel => "Főétel",
         ALaCarteCategory.Koret => "Köret",
         ALaCarteCategory.Desszert => "Desszert",
+        ALaCarteCategory.Ontet => "Öntet",
         _ => category.ToString(),
     };
+
+    private static string? FormatALaCarteNutrition(ALaCarteOfferDto offer) => MenuVariantNutritionFormat.Format(
+        offer.EnergyKcal, offer.FatGrams, offer.SaturatedFatGrams, offer.CarbohydrateGrams, offer.SugarGrams, offer.ProteinGrams, offer.SaltGrams);
 }

@@ -3,6 +3,8 @@ using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Menus;
 using EbedrendeloApp.Domain.Enums;
+using EbedrendeloApp.Features.ALaCarte;
+using EbedrendeloApp.Features.ALaCarte.PlaceALaCarteOrder;
 using EbedrendeloApp.Features.Menus;
 using EbedrendeloApp.Features.Menus.GetTodayMenuForUser;
 using EbedrendeloApp.Tests.TestSupport;
@@ -83,15 +85,15 @@ public class TodayMenuTests : MudBunitContext
             Today, true, null,
             [new MenuVariantDto("A", "Rántott hús", null, 0)],
             MySelection: null,
-            ALaCarteOffers: [new ALaCarteOfferDto(1, "Húsleves", ALaCarteCategory.Leves, 650, 7)],
-            MyALaCarteOrderLines: [new MyALaCarteLineDto("Somlói galuska", ALaCarteCategory.Desszert, 750)]));
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+            MyALaCarteOrderLines: [new MyALaCarteLineDto(1, "Somlói galuska", ALaCarteCategory.Desszert, 750)]));
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
-        Assert.Contains("Húsleves", cut.Markup);
-        Assert.Contains("650 Ft", cut.Markup);
-        Assert.Contains("Leves", cut.Markup);
+        Assert.Contains("Rántott sertés szelet", cut.Markup);
+        Assert.Contains("2550 Ft", cut.Markup);
+        Assert.Contains("Főétel", cut.Markup);
         Assert.Contains("Somlói galuska", cut.Markup);
         Assert.Contains("Desszert", cut.Markup);
     }
@@ -105,7 +107,7 @@ public class TodayMenuTests : MudBunitContext
             Today, true, null,
             [new MenuVariantDto("A", "Rántott hús", null, 0)],
             MySelection: null,
-            ALaCarteOffers: [new ALaCarteOfferDto(1, "Húsleves", ALaCarteCategory.Leves, 650, 7, Allergens: "1,9")],
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7, Allergens: "1,9")],
             MyALaCarteOrderLines: []));
         Services.AddSingleton<IMediator>(mediator);
 
@@ -113,5 +115,122 @@ public class TodayMenuTests : MudBunitContext
 
         Assert.Contains("1 – Glutén", cut.Markup);
         Assert.Contains("9 – Zeller", cut.Markup);
+    }
+
+    [Fact]
+    public void Shows_the_ontet_category_label()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Tartár mártás", ALaCarteCategory.Ontet, 350, 7)],
+            MyALaCarteOrderLines: []));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("Öntet", cut.Markup);
+    }
+
+    [Fact]
+    public void Shows_a_levessel_note_for_main_courses_that_include_soup()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7, IncludesSoup: true)],
+            MyALaCarteOrderLines: [new MyALaCarteLineDto(2, "Rántott csirke", ALaCarteCategory.Foetel, 2500, IncludesSoup: false)]));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("Rántott sertés szelet (levessel)", cut.Markup);
+        Assert.DoesNotContain("Rántott csirke (levessel)", cut.Markup);
+    }
+
+    [Fact]
+    public void Clicking_kivalaszt_places_the_order_and_refreshes_the_offers()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        var loadCount = 0;
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ =>
+        {
+            loadCount++;
+            var myLines = loadCount == 1 ? [] : new List<MyALaCarteLineDto> { new(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550) };
+            return new TodayMenuDto(
+                Today, true, null,
+                [new MenuVariantDto("A", "Rántott hús", null, 0)],
+                MySelection: null,
+                ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+                MyALaCarteOrderLines: myLines,
+                ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+                IsALaCarteOrderableNow: true);
+        });
+        PlaceALaCarteOrderCommand? sentCommand = null;
+        mediator.Register<PlaceALaCarteOrderCommand, Result<PlacedALaCarteOrderLinesDto>>(cmd =>
+        {
+            sentCommand = cmd;
+            return Result.Success(new PlacedALaCarteOrderLinesDto([new PlacedALaCarteOrderLineDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, false)], 2550));
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+        var selectButton = cut.FindAll("button").First(b => b.TextContent.Contains("Kiválaszt"));
+        cut.InvokeAsync(() => selectButton.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.Equal(1, sentCommand!.UserId);
+        Assert.Equal([1], sentCommand.ALaCarteItemIds);
+        Assert.Contains("Megrendelve", cut.Markup);
+    }
+
+    [Fact]
+    public void Shows_an_elfogyott_chip_instead_of_the_button_when_free_count_is_zero()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 0)],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("Elfogyott", cut.Markup);
+        Assert.DoesNotContain("Kiválaszt", cut.Markup);
+    }
+
+    [Fact]
+    public void Disables_kivalaszt_and_shows_a_deadline_passed_badge_when_the_daily_deadline_has_passed()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: false));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("A mai rendelési határidő lejárt", cut.Markup);
+        var selectButton = cut.FindAll("button").First(b => b.TextContent.Contains("Kiválaszt"));
+        Assert.True(selectButton.HasAttribute("disabled"));
     }
 }

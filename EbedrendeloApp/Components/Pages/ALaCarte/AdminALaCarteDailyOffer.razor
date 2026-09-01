@@ -1,0 +1,325 @@
+@page "/alacarte-napi-kinalat"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
+@using EbedrendeloApp.Features.ALaCarte.GetDailyOffers
+@using EbedrendeloApp.Features.ALaCarte.RemoveDailyOffer
+@using EbedrendeloApp.Features.ALaCarte.SetDailyOffer
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+
+<PageTitle>À la carte napi kínálat</PageTitle>
+
+<MudPaper Elevation="0" Class="pa-4 page-header-card">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+            <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Large" Color="Color.Primary" />
+            <MudStack Spacing="0" Class="flex-grow-1">
+                <MudText Typo="Typo.h4">À la carte napi kínálat</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Állítsd be, mely aktív tételek rendelhetők az adott napon, és mekkora a keretük. Naponta legfeljebb
+                    egy leves ajánlható — annak nincs kerete, az ára minden főétel árába beleolvad.
+                </MudText>
+            </MudStack>
+        </MudStack>
+
+        @if (!isLoading)
+        {
+            <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
+                @if (isEditing)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" Disabled="isSaving" OnClick="SaveAllAsync">
+                        Mentés
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Disabled="isSaving" OnClick="CancelEditing">
+                        Mégse
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RestartAlt" Disabled="isSaving" OnClick="ResetAllToZero">
+                        Nullázás
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => isEditing = true">
+                        Szerkesztés
+                    </MudButton>
+                }
+            </MudStack>
+        }
+    </MudStack>
+</MudPaper>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-center my-4">
+        <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+    </div>
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else
+{
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4 mb-2">@errorMessage</MudAlert>
+    }
+
+    <div class="d-flex justify-center my-4">
+        <MudStack Row Spacing="3" Justify="Justify.Center" AlignItems="AlignItems.Stretch" Wrap="Wrap.Wrap">
+            <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+
+            <MudPaper Outlined="true" Class="pa-3" Style="max-width:420px;">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6">Leves</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudText Typo="Typo.body2" Color="Color.Primary" Class="mb-1" Style="font-weight:700;">@SoupPortionCount levesadag ma</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">
+                    Minden főétel-rendeléshez jár egy adag leves — a leves önmagában nem rendelhető.
+                </MudText>
+
+                @if (SoupOffer is { } soupOffer)
+                {
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body1">@soupOffer.ItemName</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@soupOffer.ItemPriceHuf Ft — korlátlan, nincs keret</MudText>
+                        </MudStack>
+                        @if (isEditing)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" title="Visszavonás" OnClick="() => RemoveOfferAsync(soupOffer)" />
+                        }
+                    </MudStack>
+                }
+                else if (isEditing)
+                {
+                    <MudSelect T="int?" Label="Leves kiválasztása" Value="selectedSoupItemId" ValueChanged="v => selectedSoupItemId = v" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+                        @foreach (var soup in AvailableSoups)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)soup.Id)">@soup.Name (@soup.PriceHuf Ft)</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Ma nincs leves beállítva.</MudText>
+                }
+            </MudPaper>
+        </MudStack>
+    </div>
+
+    <MudGrid Spacing="3">
+        @foreach (var category in NonSoupCategories)
+        {
+            <MudItem xs="12" md="6">
+                <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                        <MudIcon Icon="@CategoryIcon(category)" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6">@CategoryName(category)</MudText>
+                    </MudStack>
+
+                    <MudTable Items="rowsByCategory[category]" Hover="true" Elevation="0" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Tétel</MudTh>
+                            <MudTh>Kapacitás</MudTh>
+                            <MudTh>Lefoglalva</MudTh>
+                            <MudTh>Szabad</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Tétel">@context.Item.Name</MudTd>
+                            <MudTd DataLabel="Kapacitás">
+                                @if (isEditing)
+                                {
+                                    <MudNumericField T="int" Value="context.CapacityInput" ValueChanged="v => context.CapacityInput = v" Min="0" Style="width:90px;" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                }
+                                else
+                                {
+                                    @(context.Offer is null ? "—" : context.Offer.Capacity.ToString())
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Lefoglalva">@(context.Offer?.OrderedCount ?? 0)</MudTd>
+                            <MudTd DataLabel="Szabad">@(context.Offer is null ? "—" : context.Offer.FreeCount.ToString())</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private sealed class ItemRow
+    {
+        public required ALaCarteItemDto Item { get; init; }
+        public ALaCarteDailyOfferDto? Offer { get; set; }
+        public int CapacityInput { get; set; }
+    }
+
+    private static readonly ALaCarteCategory[] NonSoupCategories =
+        [ALaCarteCategory.Foetel, ALaCarteCategory.Koret, ALaCarteCategory.Desszert, ALaCarteCategory.Ontet];
+
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private List<ALaCarteItemDto> activeItems = [];
+    private List<ALaCarteDailyOfferDto> offers = [];
+    private int? selectedSoupItemId;
+    private bool isLoading = true;
+    private bool isEditing;
+    private bool isSaving;
+    private string? errorMessage;
+
+    private ALaCarteDailyOfferDto? SoupOffer => offers.FirstOrDefault(o => o.Category == ALaCarteCategory.Leves);
+
+    /// <summary>Nem tárolt/külön lekérdezett érték — a mai Főétel-ajánlatok OrderedCount összegéből
+    /// vezetjük le (minden Főétel-rendeléshez jár egy adag leves — a leves önállóan nem rendelhető).</summary>
+    private int SoupPortionCount => offers.Where(o => o.Category == ALaCarteCategory.Foetel).Sum(o => o.OrderedCount);
+
+    private IEnumerable<ALaCarteItemDto> AvailableSoups => activeItems.Where(i => i.Category == ALaCarteCategory.Leves);
+
+    /// <summary>Kategóriánként előre legyártott, stabil <see cref="ItemRow"/> példányok — a <see cref="MudTable"/>
+    /// ezekhez van kötve. Enélkül (pl. egy metódushívással minden renderkor újraszámolva) minden billentyűleütés
+    /// után újra létrejönnének a sorok az eredeti (mentett) kapacitással, és a beírt érték azonnal eltűnne.</summary>
+    private Dictionary<ALaCarteCategory, List<ItemRow>> rowsByCategory = [];
+
+    private void RebuildRows() => rowsByCategory = NonSoupCategories.ToDictionary(
+        category => category,
+        category => activeItems
+            .Where(i => i.Category == category)
+            .Select(i =>
+            {
+                var offer = offers.FirstOrDefault(o => o.ALaCarteItemId == i.Id);
+                return new ItemRow { Item = i, Offer = offer, CapacityInput = offer?.Capacity ?? 0 };
+            })
+            .ToList());
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        isEditing = false;
+        selectedSoupItemId = null;
+        StateHasChanged();
+
+        var itemsTask = Mediator.Send(new GetALaCarteItemsQuery());
+        var offersTask = Mediator.Send(new GetDailyOffersQuery(selectedDate));
+        await Task.WhenAll(itemsTask, offersTask);
+
+        activeItems = itemsTask.Result.Where(i => i.IsActive).ToList();
+        offers = offersTask.Result.ToList();
+        RebuildRows();
+        isLoading = false;
+    }
+
+    private async Task ChangeDayAsync(int deltaDays)
+    {
+        selectedDate = selectedDate.AddDays(deltaDays);
+        await LoadAsync();
+    }
+
+    private async Task RemoveOfferAsync(ALaCarteDailyOfferDto offer)
+    {
+        errorMessage = null;
+        var result = await Mediator.Send(new RemoveDailyOfferCommand(offer.OfferId));
+        if (!result.IsSuccess)
+        {
+            errorMessage = result.ErrorMessage;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private void CancelEditing()
+    {
+        isEditing = false;
+        RebuildRows(); // discard any typed, unsaved capacity values
+    }
+
+    private void ResetAllToZero()
+    {
+        foreach (var row in rowsByCategory.Values.SelectMany(rows => rows))
+        {
+            row.CapacityInput = 0;
+        }
+    }
+
+    /// <summary>Csak azokra a sorokra küld <see cref="SetDailyOfferCommand"/>-ot, ahol a beírt kapacitás
+    /// eltér a szerveren mentett értéktől (plusz a kiválasztott levest, ha van), az admin egyetlen Mentés
+    /// kattintással véglegesíti a teljes oldal módosításait, nem soronként/gombonként — sem a "Hozzáadás",
+    /// sem az önálló levesmentés gomb nem kell: a 0-ról nem-nullára állítás, illetve a leves kiválasztása
+    /// önmagában adja hozzá a tételt a mai kínálathoz, amint Mentésre kattintanak.</summary>
+    private async Task SaveAllAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+        var failures = new List<string>();
+
+        if (selectedSoupItemId is { } soupItemId)
+        {
+            var soupResult = await Mediator.Send(new SetDailyOfferCommand(selectedDate, soupItemId, 0));
+            if (!soupResult.IsSuccess)
+            {
+                failures.Add($"Leves: {soupResult.ErrorMessage}");
+            }
+        }
+
+        foreach (var row in rowsByCategory.Values.SelectMany(rows => rows))
+        {
+            var committedCapacity = row.Offer?.Capacity ?? 0;
+            if (row.CapacityInput == committedCapacity)
+            {
+                continue;
+            }
+
+            var result = await Mediator.Send(new SetDailyOfferCommand(selectedDate, row.Item.Id, row.CapacityInput));
+            if (!result.IsSuccess)
+            {
+                failures.Add($"{row.Item.Name}: {result.ErrorMessage}");
+            }
+        }
+
+        await LoadAsync();
+        isSaving = false;
+
+        if (failures.Count > 0)
+        {
+            errorMessage = string.Join(" ", failures);
+            isEditing = true; // maradjunk szerkesztő módban, hogy a hibás sor(oka)t javítani lehessen
+        }
+    }
+
+    private static string CategoryName(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => "Leves",
+        ALaCarteCategory.Foetel => "Főétel",
+        ALaCarteCategory.Koret => "Köret",
+        ALaCarteCategory.Desszert => "Desszert",
+        ALaCarteCategory.Ontet => "Öntet",
+        _ => category.ToString(),
+    };
+
+    private static string CategoryIcon(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
+        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
+        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
+        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
+        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
+        _ => Icons.Material.Filled.Fastfood,
+    };
+}

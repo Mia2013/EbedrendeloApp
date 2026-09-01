@@ -1,0 +1,149 @@
+@page "/alacarte-konyhai-lista"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteMonthlySummary
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+
+<PageTitle>À la carte konyhai lista</PageTitle>
+
+<MudPaper Elevation="0" Class="pa-4 page-header-card">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">À la carte konyhai lista</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Az à la carte rendelések összesítője, ez alapján tudja a konyha, mennyit kell főznie — napi vagy havi bontásban.
+            </MudText>
+        </MudStack>
+        <MudIconButton Icon="@Icons.Material.Filled.Print" title="Nyomtatás" OnClick="PrintAsync" />
+    </MudStack>
+</MudPaper>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
+    <MudStack Row Spacing="2">
+        @foreach (var option in ViewModeOptions)
+        {
+            <MudChip T="string" Color="@(viewMode == option ? Color.Primary : Color.Default)"
+                     Variant="@(viewMode == option ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => SetViewModeAsync(option)">
+                @option
+            </MudChip>
+        }
+    </MudStack>
+
+    @if (viewMode == "Napi")
+    {
+        <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+    }
+    else
+    {
+        <DateNavigatorBar Label="@selectedMonth.ToString("yyyy. MMMM", HungarianCulture)" OnStep="ChangeMonthAsync" />
+    }
+</MudStack>
+
+@if (currentLines is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else
+{
+    @if (currentLines.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">@NoOrdersMessage</MudText>
+    }
+    else
+    {
+        @foreach (var category in NonSoupCategories)
+        {
+            var lines = currentLines.Where(l => l.Category == category).ToList();
+            if (lines.Count == 0)
+            {
+                continue;
+            }
+
+            <MudText Typo="Typo.h6" Class="mt-4 mb-1">@CategoryName(category)</MudText>
+            <MudTable Items="lines" Hover="true" Elevation="1" Dense="true">
+                <HeaderContent>
+                    <MudTh>Tétel</MudTh>
+                    <MudTh>Darab</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
+                    <MudTd DataLabel="Darab">@context.Count</MudTd>
+                </RowTemplate>
+                <FooterContent>
+                    <MudTd>Részösszeg</MudTd>
+                    <MudTd>@lines.Sum(l => l.Count)</MudTd>
+                </FooterContent>
+            </MudTable>
+        }
+
+        <MudText Typo="Typo.h6" Class="mt-4">Végösszeg: @currentLines.Sum(l => l.Count) tétel</MudText>
+    }
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+    private static readonly string[] ViewModeOptions = ["Napi", "Havi"];
+    private static readonly ALaCarteCategory[] NonSoupCategories =
+        [ALaCarteCategory.Foetel, ALaCarteCategory.Koret, ALaCarteCategory.Desszert, ALaCarteCategory.Ontet];
+
+    private string viewMode = "Napi";
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly selectedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private IReadOnlyList<ALaCarteSummaryLineDto>? currentLines;
+
+    private string NoOrdersMessage => viewMode == "Napi" ? "Erre a napra még nincs à la carte rendelés." : "Erre a hónapra még nincs à la carte rendelés.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => currentLines = viewMode == "Napi"
+        ? (await Mediator.Send(new GetALaCarteDailySummaryQuery(selectedDate))).Lines
+        : (await Mediator.Send(new GetALaCarteMonthlySummaryQuery(selectedMonth.Year, selectedMonth.Month))).Lines;
+
+    private async Task SetViewModeAsync(string mode)
+    {
+        viewMode = mode;
+        await LoadAsync();
+    }
+
+    private async Task ChangeDayAsync(int deltaDays)
+    {
+        selectedDate = selectedDate.AddDays(deltaDays);
+        await LoadAsync();
+    }
+
+    private async Task ChangeMonthAsync(int deltaMonths)
+    {
+        selectedMonth = selectedMonth.AddMonths(deltaMonths);
+        await LoadAsync();
+    }
+
+    private async Task PrintAsync() => await JsRuntime.InvokeVoidAsync("print");
+
+    private static string CategoryName(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => "Leves",
+        ALaCarteCategory.Foetel => "Főétel",
+        ALaCarteCategory.Koret => "Köret",
+        ALaCarteCategory.Desszert => "Desszert",
+        ALaCarteCategory.Ontet => "Öntet",
+        _ => category.ToString(),
+    };
+}
