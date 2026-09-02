@@ -24,3 +24,20 @@ public static class VariantDisplayName
     public static string Combine(string soupName, string? mainCourseName) =>
         string.IsNullOrEmpty(mainCourseName) ? soupName : $"{soupName} + {mainCourseName}";
 }
+
+/// <summary>One variant's share of a not-yet-submitted batch order selection, with the count and its
+/// price at the flat per-portion rate (<see cref="EbedrendeloApp.Domain.Entities.AppSetting.MenuPortionHuf"/>).</summary>
+public sealed record PendingVariantSummary(string VariantCode, int Count, int TotalHuf);
+
+/// <summary>Pure aggregation of a draft (not-yet-submitted) day→variant selection into a per-variant
+/// darab/ár summary — kept out of UserCalendar.razor's @code block so this arithmetic isn't "üzleti
+/// logika a .razor fájlban" (CLAUDE.md).</summary>
+public static class PendingOrderSummary
+{
+    public static IReadOnlyList<PendingVariantSummary> Summarize(IEnumerable<string> selectedVariantCodes, int menuPortionHuf) =>
+        selectedVariantCodes
+            .GroupBy(code => code)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new PendingVariantSummary(g.Key, g.Count(), g.Count() * menuPortionHuf))
+            .ToList();
+}

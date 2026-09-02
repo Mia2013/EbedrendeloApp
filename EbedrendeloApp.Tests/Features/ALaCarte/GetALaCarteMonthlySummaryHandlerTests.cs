@@ -46,11 +46,24 @@ public class GetALaCarteMonthlySummaryHandlerTests : IDisposable
         var order = new ALaCarteOrder { UserId = userId, Date = date, OrderingPeriodId = periodId, PlacedByUserId = userId, TotalHuf = 0 };
         foreach (var (category, name) in items)
         {
-            var item = new ALaCarteItem { Name = name, Category = category, PriceHuf = 1000 };
-            db.ALaCarteItems.Add(item);
-            await db.SaveChangesAsync();
-            var offer = new ALaCarteDailyOffer { Date = date, ALaCarteItemId = item.Id, Capacity = 10, OrderedCount = 1 };
-            db.ALaCarteDailyOffers.Add(offer);
+            // Egy (Category, Name) párhoz a valóságban is egyetlen katalógus-tétel tartozik (unique index) —
+            // több felhasználó ugyanazt a tételt ugyanarra a napra az ő aznapi ajánlatán (offer) osztozva
+            // rendeli, nem külön-külön tétel/ajánlat párral.
+            var item = await db.ALaCarteItems.FirstOrDefaultAsync(i => i.Category == category && i.Name == name);
+            if (item is null)
+            {
+                item = new ALaCarteItem { Name = name, Category = category, PriceHuf = 1000 };
+                db.ALaCarteItems.Add(item);
+                await db.SaveChangesAsync();
+            }
+
+            var offer = await db.ALaCarteDailyOffers.FirstOrDefaultAsync(o => o.Date == date && o.ALaCarteItemId == item.Id);
+            if (offer is null)
+            {
+                offer = new ALaCarteDailyOffer { Date = date, ALaCarteItemId = item.Id, Capacity = 10, OrderedCount = 0 };
+                db.ALaCarteDailyOffers.Add(offer);
+            }
+            offer.OrderedCount++;
             await db.SaveChangesAsync();
 
             order.Lines.Add(new ALaCarteOrderLine

@@ -85,14 +85,13 @@ else
                     <MudTd DataLabel="Darab">@context.Count</MudTd>
                 </RowTemplate>
                 <FooterContent>
-                    <MudTd>Részösszeg</MudTd>
+                    <MudTd>Összesen</MudTd>
                     <MudTd>@lines.Sum(l => l.Count)</MudTd>
                 </FooterContent>
             </MudTable>
         }
 
-        <MudText Typo="Typo.h6" Class="mt-4">Végösszeg: @currentLines.Sum(l => l.Count) tétel</MudText>
-    }
+     }
 }
 
 @code {

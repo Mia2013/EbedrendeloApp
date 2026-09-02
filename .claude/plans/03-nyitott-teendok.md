@@ -66,13 +66,18 @@
 
 ## Rendelés (Epic 3)
 
-- [ ] Köteges lemondás UI hiányzik. A `CancelMenuOrdersCommand` dátumlistát fogad, és a handler
-      több dátummal is tesztelve van (`CancelMenuOrdersHandlerTests.cs`), de az egyetlen UI belépési
-      pont (`CancelMenuOrderDialog.razor`) mindig egyelemű listát küld — minden naptár-cellán külön
-      "Lemondás" gomb van, egyesével kell megerősíteni. US-3.2 leírása ("egy **vagy több** korábban
-      megrendelt menüt lemondani") és a rendelés-leadás oldal már meglévő "jelölj ki többet, majd
-      küldd el egyben" mintája (`UserCalendar.razor` `pendingSelections`) alapján ennek a lemondásnál
-      is lenne párja.
+- [x] `GetOrderableDaysQuery` mostantól minden sorban visszaadja az `AppSetting.MenuPortionHuf`
+      adagárat is (`OrderableDayDto.MenuPortionHuf`, régi hívóknak `= 0` default). A
+      `UserCalendar.razor` checkboxos napi kiválasztásánál ebből épül fel a variánsonkénti
+      darab/ár összesítő táblázat (+ végösszeg) a "Rendelés leadása" gomb fölött, beküldés előtt —
+      korábban csak a kiválasztott napok száma látszott, ár nélkül.
+- [x] Köteges lemondás UI — megoldva. A `UserCalendar.razor` (`/naptar`) a rendelés-leadáshoz
+      hasonló "jelölj ki többet, majd küldd el egyben" mintát követi: minden lemondható napon egy
+      törlés-ikon jelöli be a napot a `pendingCancellations` halmazba (kattintásra checkboxként
+      viselkedik, vissza is vonható), majd a "Lemondás megerősítése (N nap)" gomb egyetlen
+      `CancelMenuOrdersCommand` hívásban küldi be az összes kijelölt dátumot. A leírásban említett,
+      egyelemű listát küldő `CancelMenuOrderDialog.razor` időközben meg is szűnt — nincs már
+      egyesével megerősítendő "Lemondás" gomb naptár-cellánként.
 
 ---
 

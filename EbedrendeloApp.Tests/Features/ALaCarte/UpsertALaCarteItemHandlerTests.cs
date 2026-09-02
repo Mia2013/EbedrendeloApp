@@ -137,4 +137,29 @@ public class UpsertALaCarteItemHandlerTests : IDisposable
         Assert.False(result.IsSuccess);
         Assert.Equal(ErrorCodes.DuplicateName, result.ErrorCode);
     }
+
+    [Fact]
+    public async Task Two_concurrent_creates_of_the_same_name_never_both_succeed()
+    {
+        // The pre-check (see the comment on Rejects_creating_a_second_item_with_the_same_name_in_the_same_category)
+        // can't see another admin's not-yet-committed insert — this proves the (Category, Name) unique
+        // index + the SaveChangesAsync catch block are what actually stop the duplicate, not the pre-check.
+        var dbPath = Path.Combine(Path.GetTempPath(), $"ebedrendelo-alacarteitem-race-{Guid.NewGuid():N}.db");
+        using var factoryA = new FileSqliteDbContextFactory(dbPath, ensureCreated: true);
+        using var factoryB = new FileSqliteDbContextFactory(dbPath, ensureCreated: false);
+
+        var handlerA = new UpsertALaCarteItemHandler(factoryA);
+        var handlerB = new UpsertALaCarteItemHandler(factoryB);
+
+        var command = new UpsertALaCarteItemCommand(null, "Rántott sertés szelet", ALaCarteCategory.Foetel, 1900, true, []);
+        var results = await Task.WhenAll(
+            handlerA.Handle(command, CancellationToken.None),
+            handlerB.Handle(command, CancellationToken.None));
+
+        Assert.Equal(1, results.Count(r => r.IsSuccess));
+        Assert.Equal(1, results.Count(r => !r.IsSuccess && r.ErrorCode == ErrorCodes.DuplicateName));
+
+        await using var verifyDb = factoryA.CreateDbContext();
+        Assert.Single(verifyDb.ALaCarteItems);
+    }
 }

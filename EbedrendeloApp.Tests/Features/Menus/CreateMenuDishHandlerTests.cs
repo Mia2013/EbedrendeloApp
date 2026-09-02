@@ -69,4 +69,29 @@ public class CreateMenuDishHandlerTests : IDisposable
 
         Assert.True(result.IsSuccess);
     }
+
+    [Fact]
+    public async Task Two_concurrent_creates_of_the_same_name_never_both_succeed()
+    {
+        // Same reasoning as UpsertALaCarteItemHandlerTests' equivalent race test: the pre-check can't
+        // see another admin's not-yet-committed insert — the (Kind, Name) unique index + the
+        // SaveChangesAsync catch block are what actually stop the duplicate.
+        var dbPath = Path.Combine(Path.GetTempPath(), $"ebedrendelo-menudish-race-{Guid.NewGuid():N}.db");
+        using var factoryA = new FileSqliteDbContextFactory(dbPath, ensureCreated: true);
+        using var factoryB = new FileSqliteDbContextFactory(dbPath, ensureCreated: false);
+
+        var handlerA = new CreateMenuDishHandler(factoryA);
+        var handlerB = new CreateMenuDishHandler(factoryB);
+
+        var command = new CreateMenuDishCommand(MenuDishKind.Leves, "Gulyásleves", []);
+        var results = await Task.WhenAll(
+            handlerA.Handle(command, CancellationToken.None),
+            handlerB.Handle(command, CancellationToken.None));
+
+        Assert.Equal(1, results.Count(r => r.IsSuccess));
+        Assert.Equal(1, results.Count(r => !r.IsSuccess && r.ErrorCode == ErrorCodes.DuplicateName));
+
+        await using var verifyDb = factoryA.CreateDbContext();
+        Assert.Single(verifyDb.MenuDishes);
+    }
 }

@@ -41,7 +41,19 @@
 .order-calendar__cell-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
+}
+
+.order-calendar__cell-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.order-calendar__cell-header ::deep .mud-icon-button {
+    padding: 4px;
 }
 
 .order-calendar__submit-bar {

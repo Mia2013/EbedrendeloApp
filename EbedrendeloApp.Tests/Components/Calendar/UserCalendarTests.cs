@@ -75,11 +75,11 @@ public class UserCalendarTests : MudBunitContext
     }
 
     [Fact]
-    public void Checking_a_variant_shows_the_submit_bar_with_the_selected_count()
+    public void Checking_a_variant_shows_the_submit_bar_with_the_selected_count_and_price()
     {
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
-            new OrderableDayDto(Today, true, false, null, null, ErrorCodes.NoActiveOrder, null),
+            new OrderableDayDto(Today, true, false, null, null, ErrorCodes.NoActiveOrder, null, MenuPortionHuf: 1400),
         ]));
         mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>(
         [
@@ -88,13 +88,13 @@ public class UserCalendarTests : MudBunitContext
 
         var cut = Render<UserCalendar>();
 
-        Assert.DoesNotContain("kiválasztva a rendeléshez", cut.Markup);
+        Assert.DoesNotContain("Rendelés leadása", cut.Markup);
 
         var checkbox = cut.Find("input[type=checkbox]:not([disabled])");
         checkbox.Change(true);
 
-        Assert.Contains("1 nap</strong> kiválasztva a rendeléshez", cut.Markup);
-        Assert.Contains("Rendelés leadása (1 nap)", cut.Markup);
+        Assert.Contains("1400 Ft", cut.Markup);
+        Assert.Contains("Rendelés leadása (1 nap, 1400 Ft)", cut.Markup);
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public class UserCalendarTests : MudBunitContext
     }
 
     [Fact]
-    public void An_active_and_cancellable_order_shows_a_locked_checkbox_and_a_cancel_toggle()
+    public void An_active_and_cancellable_order_shows_a_locked_checkbox_and_a_cancel_icon()
     {
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
@@ -212,11 +212,10 @@ public class UserCalendarTests : MudBunitContext
         var cut = Render<UserCalendar>();
 
         Assert.Contains("A menü — Gulyásleves", cut.Markup);
-        Assert.Contains("Lemondás", cut.Markup);
         var checkboxes = cut.FindAll(".order-calendar__cell input[type=checkbox]");
-        Assert.Equal(2, checkboxes.Count);
-        Assert.True(checkboxes[0].HasAttribute("disabled")); // the read-only "active order" checkbox
-        Assert.False(checkboxes[1].HasAttribute("disabled")); // the togglable "mark for cancellation" checkbox
+        var checkbox = Assert.Single(checkboxes); // only the read-only "active order" checkbox
+        Assert.True(checkbox.HasAttribute("disabled"));
+        Assert.NotNull(cut.Find("button[title='Lemondásra jelölés']"));
     }
 
     [Fact]
@@ -245,13 +244,14 @@ public class UserCalendarTests : MudBunitContext
 
         Assert.DoesNotContain("kiválasztva lemondásra", cut.Markup);
 
-        var cancelCheckbox = cut.FindAll("input[type=checkbox]").Single(c => !c.HasAttribute("disabled"));
-        cancelCheckbox.Change(true);
+        var toggleButton = cut.Find("button[title='Lemondásra jelölés']");
+        toggleButton.Click();
 
         Assert.Contains("1 nap</strong> kiválasztva lemondásra", cut.Markup);
         Assert.Contains("Lemondás megerősítése (1 nap)", cut.Markup);
 
-        cancelCheckbox.Change(false);
+        var undoButton = cut.Find("button[title='Lemondás visszavonása']");
+        undoButton.Click();
 
         Assert.DoesNotContain("kiválasztva lemondásra", cut.Markup);
     }
@@ -276,9 +276,10 @@ public class UserCalendarTests : MudBunitContext
         Render<MudDialogProvider>();
         var cut = Render<UserCalendar>();
 
-        foreach (var checkbox in cut.FindAll("input[type=checkbox]").Where(c => !c.HasAttribute("disabled")))
+        var daysToMark = cut.FindAll("button[title='Lemondásra jelölés']").Count;
+        for (var i = 0; i < daysToMark; i++)
         {
-            checkbox.Change(true);
+            cut.Find("button[title='Lemondásra jelölés']").Click();
         }
 
         var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("Lemondás megerősítése"));
@@ -291,7 +292,7 @@ public class UserCalendarTests : MudBunitContext
     }
 
     [Fact]
-    public async Task Successful_cancellation_clears_the_selection_and_opens_the_result_dialog()
+    public async Task Successful_cancellation_with_nothing_skipped_clears_the_selection_and_shows_a_snackbar_instead_of_the_dialog()
     {
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
@@ -300,17 +301,19 @@ public class UserCalendarTests : MudBunitContext
         mediator.Register<CancelMenuOrdersCommand, Result<BatchOrderResult>>(
             _ => Result.Success(new BatchOrderResult([new DayResult(Today, "A")], [])));
 
-        var provider = Render<MudDialogProvider>();
+        var dialogProvider = Render<MudDialogProvider>();
+        var snackbarProvider = Render<MudSnackbarProvider>();
         var cut = Render<UserCalendar>();
 
-        var cancelCheckbox = cut.FindAll("input[type=checkbox]").Single(c => !c.HasAttribute("disabled"));
-        cancelCheckbox.Change(true);
+        var toggleButton = cut.Find("button[title='Lemondásra jelölés']");
+        toggleButton.Click();
 
         var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("Lemondás megerősítése"));
         await cut.InvokeAsync(() => submitButton.Click());
 
         Assert.DoesNotContain("kiválasztva lemondásra", cut.Markup);
-        Assert.Contains("Lemondás eredménye", provider.Markup);
+        Assert.DoesNotContain("Lemondás eredménye", dialogProvider.Markup);
+        Assert.Contains("1 nap sikeresen lemondva", snackbarProvider.Markup);
     }
 
     [Fact]
@@ -326,8 +329,8 @@ public class UserCalendarTests : MudBunitContext
         var provider = Render<MudDialogProvider>();
         var cut = Render<UserCalendar>();
 
-        var cancelCheckbox = cut.FindAll("input[type=checkbox]").Single(c => !c.HasAttribute("disabled"));
-        cancelCheckbox.Change(true);
+        var toggleButton = cut.Find("button[title='Lemondásra jelölés']");
+        toggleButton.Click();
 
         var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("Lemondás megerősítése"));
         await cut.InvokeAsync(() => submitButton.Click());
@@ -356,8 +359,8 @@ public class UserCalendarTests : MudBunitContext
         var targetSelect = cut.FindComponents<MudSelect<int?>>().Single(s => s.Instance.Label == "Kinek rendelek");
         await cut.InvokeAsync(() => targetSelect.Instance.ValueChanged.InvokeAsync(2));
 
-        var cancelCheckbox = cut.FindAll("input[type=checkbox]").Single(c => !c.HasAttribute("disabled"));
-        cancelCheckbox.Change(true);
+        var toggleButton = cut.Find("button[title='Lemondásra jelölés']");
+        toggleButton.Click();
 
         var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("Lemondás megerősítése"));
         await cut.InvokeAsync(() => submitButton.Click());

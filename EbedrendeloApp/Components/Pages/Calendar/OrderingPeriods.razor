@@ -10,20 +10,20 @@
 
 <PageTitle>Rendelési időszakok</PageTitle>
 
-<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
-    <MudStack Spacing="0">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="Color.Primary" Size="Size.Large" />
+<MudPaper Elevation="0" Class="pa-4 page-header-card mb-4">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
+            </MudText>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
-        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
+            Új időszak
+        </MudButton>
     </MudStack>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
-        Új időszak
-    </MudButton>
-</MudStack>
+</MudPaper>
 
 <MudAlert Severity="Severity.Info" Class="my-4">
     Ha egy időszakhoz már tartozik rendelés, a kezdő-, záró- és leadási határidő nem módosítható — csak a

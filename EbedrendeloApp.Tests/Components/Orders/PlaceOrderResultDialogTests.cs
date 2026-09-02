@@ -38,6 +38,20 @@ public class PlaceOrderResultDialogTests : MudBunitContext
     }
 
     [Fact]
+    public async Task Hides_the_skipped_card_when_nothing_was_skipped()
+    {
+        var result = new BatchOrderResult([new DayResult(new DateOnly(2026, 8, 17), "A")], []);
+
+        var provider = Render<MudDialogProvider>();
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        var parameters = new DialogParameters<PlaceOrderResultDialog> { { x => x.Result, result } };
+        await provider.InvokeAsync(() => dialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters));
+
+        Assert.Contains("Sikeres", provider.Markup);
+        Assert.DoesNotContain("Kihagyva", provider.Markup);
+    }
+
+    [Fact]
     public async Task Shows_a_custom_title_when_reused_for_a_different_batch_operation()
     {
         // The cancellation flow (UserCalendar.razor) reuses this dialog with its own Title/Icon/IconColor

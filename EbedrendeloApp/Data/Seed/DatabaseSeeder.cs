@@ -56,7 +56,7 @@ public static class DatabaseSeeder
             MenuPortionHuf = 1400,
             ChangeDeadlineWorkingDays = 3,
             ChangeDeadlineLocalTime = new TimeOnly(11, 0),
-            ALaCarteOrderDeadlineLocalTime = new TimeOnly(23, 59), // TODO: fejlesztés/tesztelés alatt gyakorlatilag kikapcsolva (10:30 volt) — állítsd vissza éles előtt
+            ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
             UpdatedAtUtc = DateTime.UtcNow,
         };
 
@@ -100,7 +100,10 @@ public static class DatabaseSeeder
         var today = DateOnly.FromDateTime(DateTime.Now);
         var period1Start = new DateOnly(today.Year, today.Month, 5);
         var period1End = period1Start.AddMonths(1);
-        var period2Start = period1End;
+        // Egy nap rés a két időszak közt — a StartDate/EndDate a kódbázisban mindenhol inkluzív
+        // (StartDate <= today && today <= EndDate), tehát period2Start = period1End átfedést jelentene:
+        // a határnap egyszerre két időszakhoz tartozna.
+        var period2Start = period1End.AddDays(1);
         var period2End = period2Start.AddMonths(1);
 
         var periods = new List<OrderingPeriod>

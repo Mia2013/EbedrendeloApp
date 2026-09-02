@@ -408,8 +408,9 @@ Azért, hogy a konyha pontosan tudja, miből hány adagot kell elkészítenie.
 * **AC 4.6.1:** A lista tételenként adja a megrendelt darabszámot, kategória szerint csoportosítva.
 * **AC 4.6.2:** Az összesítés a rendeléskori snapshot neveket használja, így egy időközbeni átnevezés nem írja át a mai listát.
 * **AC 4.6.3 (Levesadag — levezetett érték):** A lista feltünteti az aznap elkészítendő levesadagok számát is; ez **nem tárolt sorból**, hanem az aznapi, `CategorySnapshot == Foetel` rendelési sorok darabszámából származik (minden rendelt főétel egy tányér levest jelent).
+* **AC 4.6.4 (Havi bontás):** Az admin felület napi nézet mellett havi összesítőt is tud mutatni ugyanazzal a tételenkénti/levesadag-logikával, egy adott hónap összes napjára összevonva — visszamenőleges rendelési igény kiszolgálására.
 
-**Technikai hivatkozás:** `GetALaCarteDailySummaryQuery`
+**Technikai hivatkozás:** `GetALaCarteDailySummaryQuery`, `GetALaCarteMonthlySummaryQuery`
 
 ---
 
@@ -757,6 +758,7 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetDailyOffersQuery` | A/U | US-4.5 |
 | `PlaceALaCarteOrderCommand` | U | US-4.2 |
 | `GetALaCarteDailySummaryQuery` | A | US-4.6 |
+| `GetALaCarteMonthlySummaryQuery` | A | US-4.6 |
 | `GetKitchenSummaryQuery` | A | US-6.1 |
 | `GetKitchenSummaryRangeQuery` | A | US-6.1 |
 | `CloseDayCommand` | A | US-6.2 |
@@ -773,5 +775,14 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-**Nincs lefedetlen use case**, és nincs olyan story, amely mögött ne állna use case. A kereszt-metsző
-követelmények (Epic 10) minden sorra vonatkoznak.
+Minden use case-hez tartozik story és fordítva. A kereszt-metsző követelmények (Epic 10) minden sorra
+vonatkoznak.
+
+**Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
+implementálva van. Az Epic 5–8 (Jóváírás, Konyha/napzárás, Számlázás, Értesítések — a fenti táblázat
+`GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig terjedő 15 sora) egyelőre csak
+tervezve van, a kód még nem készült el hozzá (ld. `01-szerver-architektura.md` "10. Végrehajtási
+sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se `NavMenu` link ezekhez. Emiatt a jóváírás/
+értesítés-írás (`ICreditService`/`INotificationService`, ami már ma is fut lemondás/kizárás/menütörlés
+esetén) jelenleg write-only: a dolgozó felé nincs még olvasó oldal az egyenlegéhez vagy az
+értesítéseihez.

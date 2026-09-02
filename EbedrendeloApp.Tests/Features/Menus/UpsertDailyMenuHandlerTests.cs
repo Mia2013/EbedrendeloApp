@@ -28,6 +28,20 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     [Fact]
+    public async Task Rejects_a_past_date()
+    {
+        await SeedUsersAsync();
+        var soupId = await SeedDishAsync(MenuDishKind.Leves, "Rántott hús");
+
+        var result = await sut.Handle(
+            new UpsertDailyMenuCommand(new DateOnly(2026, 8, 16), null, [new MenuVariantInput("A", soupId, null, 0)], adminId),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCodes.NotFutureDate, result.ErrorCode);
+    }
+
+    [Fact]
     public async Task Creates_new_menu_published_immediately()
     {
         await SeedUsersAsync();
@@ -177,16 +191,16 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     [Fact]
     public async Task Renaming_the_only_variants_code_reassigns_its_active_order_to_the_new_code()
     {
-        // A code rename is, from the removal loop's point of view, "A" disappearing and a brand-new "D"
+        // A code rename is, from the removal loop's point of view, "A" disappearing and a brand-new "C"
         // appearing in the same call. The new variant only gets a real Id after the mid-handler
-        // SaveChangesAsync — this proves that flush happens before "D" is picked as the reassignment
+        // SaveChangesAsync — this proves that flush happens before "C" is picked as the reassignment
         // target, so the order ends up reassigned rather than wrongly cancelled for "no target".
         var date = new DateOnly(2026, 8, 20);
         var (_, orderId, _, _) = await SeedMenuWithActiveOrderAsync(date, "A", "A menü");
-        var dDishId = await SeedDishAsync(MenuDishKind.Leves, "D menü");
+        var cDishId = await SeedDishAsync(MenuDishKind.Leves, "C menü");
 
         var result = await sut.Handle(
-            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("D", dDishId, null, 0)], adminId),
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("C", cDishId, null, 0)], adminId),
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
@@ -197,7 +211,7 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         Assert.Equal("A", order.ReassignedFromVariantCode);
 
         var newVariant = await db.MenuVariants.SingleAsync(v => v.Id == order.MenuVariantId);
-        Assert.Equal("D", newVariant.Code);
+        Assert.Equal("C", newVariant.Code);
     }
 
     [Fact]

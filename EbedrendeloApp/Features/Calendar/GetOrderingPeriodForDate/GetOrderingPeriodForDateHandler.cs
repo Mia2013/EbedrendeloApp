@@ -12,7 +12,9 @@ public sealed class GetOrderingPeriodForDateHandler(IDbContextFactory<Ebedrendel
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
         var period = await db.OrderingPeriods
-            .FirstOrDefaultAsync(p => p.StartDate <= request.Date && p.EndDate >= request.Date, cancellationToken);
+            .Where(p => p.StartDate <= request.Date && p.EndDate >= request.Date)
+            .OrderBy(p => p.StartDate)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (period is null)
         {

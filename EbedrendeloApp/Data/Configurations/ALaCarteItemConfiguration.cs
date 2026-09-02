@@ -8,6 +8,8 @@ public sealed class ALaCarteItemConfiguration : IEntityTypeConfiguration<ALaCart
 {
     public void Configure(EntityTypeBuilder<ALaCarteItem> builder)
     {
+        builder.HasIndex(i => new { i.Category, i.Name }).IsUnique();
+
         builder.Property(i => i.Name).HasMaxLength(128);
         builder.Property(i => i.Allergens).HasMaxLength(300);
 

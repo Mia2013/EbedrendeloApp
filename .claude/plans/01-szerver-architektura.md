@@ -713,6 +713,8 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetALaCarteDailySummaryQuery` **[A]** — aznapi konyhai lista tételenként, kategóriánként
   csoportosítva; a levesadag-szám **levezetett** érték: az aznapi `CategorySnapshot == Foetel` sorok
   darabszáma
+- `GetALaCarteMonthlySummaryQuery` **[A]** — ugyanez a tételenkénti/levesadag-összesítés, egy teljes
+  hónap napjaira összevonva (visszamenőleges rendelési igény kiszolgálására)
 
 ### Kitchen
 - `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő)
@@ -978,6 +980,9 @@ bUnit tesztek.
 13. **A „legfeljebb egy Leves ajánlat naponta" szabály csak handler-szinten él.** A Category az
     `ALaCarteItem`-en van, nem az `ALaCarteDailyOffer`-en, ezért nincs rá EF-szinten kifejezhető szűrt
     unique index (a `MenuOrderConfiguration` `WHERE [Status] = 0` mintája csak azonos táblán belüli
-    oszlopra működik). A `DatabaseSeeder` közvetlen EF-insertje is megkerüli ezt az ellenőrzést — ha a
-    Leves katalógus valaha egynél több tételt kap, a seed-logika óvatlanul két Leves ajánlatot is
-    beszúrhat ugyanarra a napra.
+    oszlopra működik). A `SetDailyOfferHandler` a `UpsertOrderingPeriodHandler` mintáját követve
+    `IsolationLevel.Serializable` tranzakcióban fut, tehát a handler-szintű védelem **ténylegesen
+    megbízható** két egyidejű admin-hívás ellen is — csak a DB-szintű kikényszerítés hiányzik továbbra
+    is (tudatos döntés, ld. fent). A `DatabaseSeeder` közvetlen EF-insertje ettől függetlenül megkerüli
+    ezt az ellenőrzést — ha a Leves katalógus valaha egynél több tételt kap, a seed-logika óvatlanul két
+    Leves ajánlatot is beszúrhat ugyanarra a napra.

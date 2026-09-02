@@ -10,22 +10,22 @@
 
 <PageTitle>Nem rendelhető napok</PageTitle>
 
-<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
-    <MudStack Spacing="0" Style="max-width: 680px;">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Primary" Size="Size.Large" />
+<MudPaper Elevation="0" Class="pa-4 page-header-card mb-4">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Nem rendelhető napok</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
+                <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
+                Mindkettőt itt látod egy helyen.
+            </MudText>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
-            <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
-            Mindkettőt itt látod egy helyen.
-        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenExcludeDialogAsync">
+            Nap kizárása
+        </MudButton>
     </MudStack>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenExcludeDialogAsync">
-        Nap kizárása
-    </MudButton>
-</MudStack>
+</MudPaper>
 
 <MudPaper Class="pa-4 mt-4" Elevation="1">
     <MudStack Row Spacing="4" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">

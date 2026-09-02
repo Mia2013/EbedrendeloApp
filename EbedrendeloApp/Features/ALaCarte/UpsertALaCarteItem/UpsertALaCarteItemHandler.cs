@@ -18,8 +18,10 @@ public sealed class UpsertALaCarteItemHandler(IDbContextFactory<EbedrendeloDbCon
 
         // Pre-check instead of relying on the UI's client-side name match — a CreateMenuDishHandler
         // mintáját követve: két admin egyidejű felvitele esetén a UI-oldali egyezés-keresés (a másik
-        // fél mentése előtt betöltött listával) nem látja a duplikátumot, ez a szerveri kapu az egyetlen
-        // hely, ami biztosan megakadályozza két azonos nevű tétel létrejöttét ugyanabban a kategóriában.
+        // fél mentése előtt betöltött listával) nem látja a duplikátumot. Ez a pre-check önmagában nem
+        // garancia (verseny esetén mindkét hívás átjuthat rajta) — a tényleges védelmet a
+        // (Category, Name) unique index adja (ALaCarteItemConfiguration), a lenti catch pedig
+        // barátságos hibává alakítja az abból eredő DbUpdateException-t.
         var duplicateExists = await db.ALaCarteItems.AnyAsync(
             i => i.Category == request.Category && i.Name == name && i.Id != (request.Id ?? 0), cancellationToken);
         if (duplicateExists)
@@ -59,7 +61,14 @@ public sealed class UpsertALaCarteItemHandler(IDbContextFactory<EbedrendeloDbCon
         item.ProteinGrams = request.ProteinGrams;
         item.SaltGrams = request.SaltGrams;
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<ALaCarteItemDto>(ErrorCodes.DuplicateName, "Már létezik ilyen nevű tétel ebben a kategóriában.");
+        }
 
         return Result.Success(new ALaCarteItemDto(
             item.Id, item.Name, item.Category, item.PriceHuf, item.IsActive, item.Allergens,

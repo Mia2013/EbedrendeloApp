@@ -15,6 +15,11 @@ public sealed class DeleteMenuVariantHandler(
 {
     public async Task<Result> Handle(DeleteMenuVariantCommand request, CancellationToken cancellationToken)
     {
+        if (request.Date < clock.Today)
+        {
+            return Result.Failure(ErrorCodes.NotFutureDate, "Elmúlt nap variánsa már nem törölhető.");
+        }
+
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
