@@ -3,6 +3,7 @@
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.ALaCarte
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary
 @using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
 @using EbedrendeloApp.Features.ALaCarte.GetDailyOffers
 @using EbedrendeloApp.Features.ALaCarte.RemoveDailyOffer
@@ -78,7 +79,7 @@ else
                         <MudText Typo="Typo.h6">Leves</MudText>
                     </MudStack>
                 </MudStack>
-                <MudText Typo="Typo.body2" Color="Color.Primary" Class="mb-1" Style="font-weight:700;">@SoupPortionCount levesadag ma</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Primary" Class="mb-1" Style="font-weight:700;">@soupPortionCount levesadag ma</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">
                     Minden főétel-rendeléshez jár egy adag leves — a leves önmagában nem rendelhető.
                 </MudText>
@@ -174,9 +175,9 @@ else
 
     private ALaCarteDailyOfferDto? SoupOffer => offers.FirstOrDefault(o => o.Category == ALaCarteCategory.Leves);
 
-    /// <summary>Nem tárolt/külön lekérdezett érték — a mai Főétel-ajánlatok OrderedCount összegéből
-    /// vezetjük le (minden Főétel-rendeléshez jár egy adag leves — a leves önállóan nem rendelhető).</summary>
-    private int SoupPortionCount => offers.Where(o => o.Category == ALaCarteCategory.Foetel).Sum(o => o.OrderedCount);
+    // A levesadag-szám a GetALaCarteDailySummaryHandler-ből jön (AC 4.6.3) — nem számoljuk újra itt, hogy
+    // ne legyen két, egymástól függetlenül karbantartott forrása ugyanannak az üzleti számnak.
+    private int soupPortionCount;
 
     private IEnumerable<ALaCarteItemDto> AvailableSoups => activeItems.Where(i => i.Category == ALaCarteCategory.Leves);
 
@@ -217,10 +218,12 @@ else
 
         var itemsTask = Mediator.Send(new GetALaCarteItemsQuery());
         var offersTask = Mediator.Send(new GetDailyOffersQuery(selectedDate));
-        await Task.WhenAll(itemsTask, offersTask);
+        var summaryTask = Mediator.Send(new GetALaCarteDailySummaryQuery(selectedDate));
+        await Task.WhenAll(itemsTask, offersTask, summaryTask);
 
         activeItems = itemsTask.Result.Where(i => i.IsActive).ToList();
         offers = offersTask.Result.ToList();
+        soupPortionCount = summaryTask.Result.SoupPortionCount;
         RebuildRows();
         isLoading = false;
     }

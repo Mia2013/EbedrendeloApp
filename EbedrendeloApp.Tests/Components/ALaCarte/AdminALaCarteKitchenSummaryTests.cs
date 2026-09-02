@@ -55,6 +55,21 @@ public class AdminALaCarteKitchenSummaryTests : MudBunitContext
     }
 
     [Fact]
+    public void Shows_the_soup_portion_count_from_the_summary()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(
+            Today, 5, [new ALaCarteSummaryLineDto(ALaCarteCategory.Foetel, "Rántott szelet", 5)]));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminALaCarteKitchenSummary>((ComponentParameterCollectionBuilder<AdminALaCarteKitchenSummary> _) => { });
+
+        Assert.Contains("5", cut.Markup);
+        Assert.Contains("levesadag", cut.Markup);
+    }
+
+    [Fact]
     public void Switching_to_havi_loads_the_monthly_summary_instead_of_the_daily_one()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
@@ -65,7 +80,7 @@ public class AdminALaCarteKitchenSummaryTests : MudBunitContext
         mediator.Register<GetALaCarteMonthlySummaryQuery, ALaCarteMonthlySummaryDto>(q =>
         {
             sentQuery = q;
-            return new ALaCarteMonthlySummaryDto(q.Year, q.Month, [new ALaCarteSummaryLineDto(ALaCarteCategory.Foetel, "Havi rántott szelet", 42)]);
+            return new ALaCarteMonthlySummaryDto(q.Year, q.Month, 42, [new ALaCarteSummaryLineDto(ALaCarteCategory.Foetel, "Havi rántott szelet", 42)]);
         });
         Services.AddSingleton<IMediator>(mediator);
 

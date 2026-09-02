@@ -88,10 +88,25 @@ public class GetALaCarteMonthlySummaryHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Derives_the_soup_portion_count_from_the_months_foetel_lines()
+    {
+        var (userA, periodId) = await SeedUserAndPeriodAsync(1);
+        var (userB, _) = await SeedUserAndPeriodAsync(2);
+
+        await AddOrderAsync(userA, periodId, EarlyInMonth, (ALaCarteCategory.Foetel, "Rántott szelet"), (ALaCarteCategory.Koret, "Rizi-bizi"));
+        await AddOrderAsync(userB, periodId, LateInMonth, (ALaCarteCategory.Foetel, "Rántott szelet"));
+
+        var result = await sut.Handle(new GetALaCarteMonthlySummaryQuery(2026, 9), CancellationToken.None);
+
+        Assert.Equal(2, result.SoupPortionCount);
+    }
+
+    [Fact]
     public async Task Returns_empty_when_there_are_no_orders_in_the_month()
     {
         var result = await sut.Handle(new GetALaCarteMonthlySummaryQuery(2026, 9), CancellationToken.None);
 
+        Assert.Equal(0, result.SoupPortionCount);
         Assert.Empty(result.Lines);
     }
 }

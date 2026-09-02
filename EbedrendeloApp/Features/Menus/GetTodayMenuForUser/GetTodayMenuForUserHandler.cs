@@ -37,27 +37,32 @@ public sealed class GetTodayMenuForUserHandler(
             .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
             .FirstOrDefaultAsync(m => m.Date == today && m.RemovedAtUtc == null, cancellationToken);
 
-        if (menu is null || !menu.IsPublished)
-        {
-            return NotOrderable(today, ErrorCodes.MenuNotPublished);
-        }
+        var menuPublished = menu is not null && menu.IsPublished;
 
-        var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
-
-        var variants = menu.Variants
-            .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
-            .Select(v => MenuVariantDtoFactory.Create(v, dishes))
-            .ToList();
-
-        var myOrder = await db.MenuOrders
-            .FirstOrDefaultAsync(o => o.UserId == request.UserId && o.Date == today && o.Status == OrderStatus.Active, cancellationToken);
-
+        var variants = new List<MenuVariantDto>();
         MyMenuSelectionDto? mySelection = null;
-        if (myOrder is not null)
+
+        // Az à la carte kínálat a napi A/B/C menü publikálási állapotától függetlenül megjelenik
+        // (AC 4.2.6) — ezért itt nincs korai return: a nem publikált/hiányzó menü csak a menüre
+        // vonatkozó mezőket üresíti ki, az à la carte rész alább mindig kiszámolódik.
+        if (menuPublished)
         {
-            var variant = menu.Variants.FirstOrDefault(v => v.Id == myOrder.MenuVariantId)
-                ?? await db.MenuVariants.FirstAsync(v => v.Id == myOrder.MenuVariantId, cancellationToken);
-            mySelection = new MyMenuSelectionDto(variant.Code, variant.SoupName, myOrder.PriceHuf);
+            var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
+
+            variants = menu!.Variants
+                .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
+                .Select(v => MenuVariantDtoFactory.Create(v, dishes))
+                .ToList();
+
+            var myOrder = await db.MenuOrders
+                .FirstOrDefaultAsync(o => o.UserId == request.UserId && o.Date == today && o.Status == OrderStatus.Active, cancellationToken);
+
+            if (myOrder is not null)
+            {
+                var variant = menu.Variants.FirstOrDefault(v => v.Id == myOrder.MenuVariantId)
+                    ?? await db.MenuVariants.FirstAsync(v => v.Id == myOrder.MenuVariantId, cancellationToken);
+                mySelection = new MyMenuSelectionDto(variant.Code, variant.SoupName, myOrder.PriceHuf);
+            }
         }
 
         var offers = await db.ALaCarteDailyOffers
@@ -96,7 +101,7 @@ public sealed class GetTodayMenuForUserHandler(
         var isALaCarteOrderableNow = clock.LocalNow.TimeOfDay <= settings.ALaCarteOrderDeadlineLocalTime.ToTimeSpan();
 
         return new TodayMenuDto(
-            today, true, null, variants, mySelection, offerDtos, myLines,
+            today, menuPublished, menuPublished ? null : ErrorCodes.MenuNotPublished, variants, mySelection, offerDtos, myLines,
             settings.ALaCarteOrderDeadlineLocalTime, isALaCarteOrderableNow);
     }
 

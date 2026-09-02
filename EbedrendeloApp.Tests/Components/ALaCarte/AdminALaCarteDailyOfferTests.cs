@@ -5,6 +5,7 @@ using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.ALaCarte;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.ALaCarte;
+using EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary;
 using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems;
 using EbedrendeloApp.Features.ALaCarte.GetDailyOffers;
 using EbedrendeloApp.Features.ALaCarte.RemoveDailyOffer;
@@ -33,6 +34,9 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
     private static ALaCarteDailyOfferDto Offer(int offerId, int itemId, string name, ALaCarteCategory category, int capacity, int ordered) =>
         new(offerId, Today, itemId, name, category, 500, capacity, ordered, capacity - ordered);
 
+    private static void RegisterZeroSummary(FakeMediator mediator) =>
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(Today, 0, []));
+
     [Fact]
     public void Redirects_non_admin_users_to_the_today_menu_page()
     {
@@ -52,6 +56,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(1, "Csontleves", ALaCarteCategory.Leves)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => []);
+        RegisterZeroSummary(mediator);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminALaCarteDailyOffer>((ComponentParameterCollectionBuilder<AdminALaCarteDailyOffer> _) => { });
@@ -67,6 +72,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(1, "Csontleves", ALaCarteCategory.Leves)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => []);
+        RegisterZeroSummary(mediator);
         SetDailyOfferCommand? sentCommand = null;
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(cmd =>
         {
@@ -87,17 +93,15 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
     }
 
     [Fact]
-    public void Derives_the_soup_portion_count_from_the_foetel_offers_ordered_count()
+    public void Shows_the_soup_portion_count_from_the_daily_summary_query()
     {
+        // The page must reuse GetALaCarteDailySummaryHandler's derived value (AC 4.6.3) rather than
+        // recomputing it locally from the offers list — a single source of truth for this number.
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(
-            _ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel), Item(3, "Csirkemell", ALaCarteCategory.Foetel), Item(4, "Rizi-bizi", ALaCarteCategory.Koret)]);
-        mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => [
-            Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 10, 3),
-            Offer(12, 3, "Csirkemell", ALaCarteCategory.Foetel, 10, 2),
-            Offer(13, 4, "Rizi-bizi", ALaCarteCategory.Koret, 10, 7), // not a Főétel — must not count toward the soup portions
-        ]);
+        mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => []);
+        mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => []);
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(Today, 5, []));
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminALaCarteDailyOffer>((ComponentParameterCollectionBuilder<AdminALaCarteDailyOffer> _) => { });
@@ -118,6 +122,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => [Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 5, 0)]);
+        RegisterZeroSummary(mediator);
         SetDailyOfferCommand? sentCommand = null;
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(cmd =>
         {
@@ -148,6 +153,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
             _ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel), Item(3, "Csirkemell", ALaCarteCategory.Foetel)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(
             _ => [Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 5, 0)]);
+        RegisterZeroSummary(mediator);
         var sentItemIds = new List<int>();
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(cmd =>
         {
@@ -174,6 +180,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => [Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 5, 0)]);
+        RegisterZeroSummary(mediator);
         var saveCalled = false;
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(cmd =>
         {
@@ -200,6 +207,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(_ => [Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 5, 0)]);
+        RegisterZeroSummary(mediator);
         SetDailyOfferCommand? sentCommand = null;
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(cmd =>
         {
@@ -232,6 +240,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
             requestedDates.Add(q.Date);
             return [];
         });
+        RegisterZeroSummary(mediator);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminALaCarteDailyOffer>((ComponentParameterCollectionBuilder<AdminALaCarteDailyOffer> _) => { });
@@ -248,6 +257,7 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(2, "Rántott szelet", ALaCarteCategory.Foetel)]);
         mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(
             _ => [Offer(11, 2, "Rántott szelet", ALaCarteCategory.Foetel, 10, 3)]);
+        RegisterZeroSummary(mediator);
         mediator.Register<SetDailyOfferCommand, Result<ALaCarteDailyOfferDto>>(
             _ => Result.Failure<ALaCarteDailyOfferDto>(ErrorCodes.CapacityBelowReserved, "A keret nem csökkenthető a már lefoglalt darabszám alá."));
         Services.AddSingleton<IMediator>(mediator);

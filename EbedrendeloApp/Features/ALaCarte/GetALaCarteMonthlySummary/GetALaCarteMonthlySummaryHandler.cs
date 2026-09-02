@@ -1,4 +1,5 @@
 using EbedrendeloApp.Data;
+using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,8 @@ public sealed class GetALaCarteMonthlySummaryHandler(IDbContextFactory<Ebedrende
             .OrderBy(l => l.Category).ThenBy(l => l.ItemName, StringComparer.Ordinal)
             .ToList();
 
-        return new ALaCarteMonthlySummaryDto(request.Year, request.Month, grouped);
+        var soupPortionCount = lines.Count(l => l.CategorySnapshot == ALaCarteCategory.Foetel);
+
+        return new ALaCarteMonthlySummaryDto(request.Year, request.Month, soupPortionCount, grouped);
     }
 }

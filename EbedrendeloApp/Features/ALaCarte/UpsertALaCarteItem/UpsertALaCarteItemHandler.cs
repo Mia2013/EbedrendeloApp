@@ -16,6 +16,17 @@ public sealed class UpsertALaCarteItemHandler(IDbContextFactory<EbedrendeloDbCon
 
         var name = request.Name.Trim();
 
+        // Pre-check instead of relying on the UI's client-side name match — a CreateMenuDishHandler
+        // mintáját követve: két admin egyidejű felvitele esetén a UI-oldali egyezés-keresés (a másik
+        // fél mentése előtt betöltött listával) nem látja a duplikátumot, ez a szerveri kapu az egyetlen
+        // hely, ami biztosan megakadályozza két azonos nevű tétel létrejöttét ugyanabban a kategóriában.
+        var duplicateExists = await db.ALaCarteItems.AnyAsync(
+            i => i.Category == request.Category && i.Name == name && i.Id != (request.Id ?? 0), cancellationToken);
+        if (duplicateExists)
+        {
+            return Result.Failure<ALaCarteItemDto>(ErrorCodes.DuplicateName, "Már létezik ilyen nevű tétel ebben a kategóriában.");
+        }
+
         ALaCarteItem item;
         if (request.Id is { } id)
         {

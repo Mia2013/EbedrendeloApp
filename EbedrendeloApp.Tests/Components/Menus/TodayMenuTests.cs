@@ -39,6 +39,39 @@ public class TodayMenuTests : MudBunitContext
     }
 
     [Fact]
+    public void Shows_ala_carte_offers_alongside_the_not_published_message_when_todays_menu_is_not_published()
+    {
+        // AC 4.2.6: à la carte ordering is independent of the A/B/C daily menu's publication state.
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, false, ErrorCodes.MenuNotPublished, [], null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+            MyALaCarteOrderLines: []));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("Mára még nincs publikált menü", cut.Markup);
+        Assert.Contains("Rántott sertés szelet", cut.Markup);
+    }
+
+    [Fact]
+    public void Hides_the_ala_carte_section_on_a_non_working_day()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(
+            _ => new TodayMenuDto(Today, false, ErrorCodes.NotWorkingDay, [], null, [], []));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        Assert.Contains("Ma hétvége van, nincs kiszolgálás.", cut.Markup);
+        Assert.DoesNotContain("à la carte", cut.Markup);
+    }
+
+    [Fact]
     public void Shows_an_explicit_not_ordered_message_when_the_user_has_no_selection()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));

@@ -55,10 +55,59 @@ public class GetTodayMenuForUserHandlerTests : IDisposable
     [Fact]
     public async Task Reports_not_orderable_when_there_is_no_published_menu()
     {
-        var result = await sut.Handle(new GetTodayMenuForUserQuery(1), CancellationToken.None);
+        await SeedUserAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            // À la carte info is now computed unconditionally (AC 4.2.6), so AppSettings must exist
+            // even when there's no menu to look at.
+            db.AppSettings.Add(new AppSetting
+            {
+                MenuPortionHuf = 1400,
+                ChangeDeadlineWorkingDays = 3,
+                ChangeDeadlineLocalTime = new TimeOnly(11, 0),
+                ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
 
         Assert.False(result.IsOrderableToday);
         Assert.Equal(ErrorCodes.MenuNotPublished, result.NotOrderableReason);
+    }
+
+    [Fact]
+    public async Task Includes_ala_carte_offers_even_when_todays_menu_is_not_published()
+    {
+        // AC 4.2.6: the à la carte ordering flow is independent of the A/B/C daily menu's publication
+        // state — only the menu-selection part of the response should be empty here, not everything.
+        await SeedUserAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.AppSettings.Add(new AppSetting
+            {
+                MenuPortionHuf = 1400,
+                ChangeDeadlineWorkingDays = 3,
+                ChangeDeadlineLocalTime = new TimeOnly(11, 0),
+                ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
+            });
+
+            var item = new ALaCarteItem { Name = "Rántott sertés szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true };
+            db.ALaCarteItems.Add(item);
+            await db.SaveChangesAsync();
+
+            db.ALaCarteDailyOffers.Add(new ALaCarteDailyOffer { Date = clock.Today, ALaCarteItemId = item.Id, Capacity = 10, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetTodayMenuForUserQuery(userId), CancellationToken.None);
+
+        Assert.False(result.IsOrderableToday);
+        Assert.Equal(ErrorCodes.MenuNotPublished, result.NotOrderableReason);
+        Assert.Empty(result.Variants);
+        Assert.Null(result.MySelection);
+        var offer = Assert.Single(result.ALaCarteOffers);
+        Assert.Equal("Rántott sertés szelet", offer.Name);
     }
 
     [Fact]

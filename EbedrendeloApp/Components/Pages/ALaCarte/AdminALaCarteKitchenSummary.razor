@@ -53,6 +53,13 @@
 }
 else
 {
+    <MudPaper Outlined="true" Class="pa-3 mb-4" Style="max-width:420px;">
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
+            <MudText Typo="Typo.body1"><b>@soupPortionCount</b> levesadag @(viewMode == "Napi" ? "erre a napra" : "erre a hónapra")</MudText>
+        </MudStack>
+    </MudPaper>
+
     @if (currentLines.Count == 0)
     {
         <MudText Typo="Typo.body2" Class="mud-text-secondary">@NoOrdersMessage</MudText>
@@ -98,6 +105,7 @@ else
     private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly selectedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private IReadOnlyList<ALaCarteSummaryLineDto>? currentLines;
+    private int soupPortionCount;
 
     private string NoOrdersMessage => viewMode == "Napi" ? "Erre a napra még nincs à la carte rendelés." : "Erre a hónapra még nincs à la carte rendelés.";
 
@@ -113,9 +121,21 @@ else
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => currentLines = viewMode == "Napi"
-        ? (await Mediator.Send(new GetALaCarteDailySummaryQuery(selectedDate))).Lines
-        : (await Mediator.Send(new GetALaCarteMonthlySummaryQuery(selectedMonth.Year, selectedMonth.Month))).Lines;
+    private async Task LoadAsync()
+    {
+        if (viewMode == "Napi")
+        {
+            var summary = await Mediator.Send(new GetALaCarteDailySummaryQuery(selectedDate));
+            currentLines = summary.Lines;
+            soupPortionCount = summary.SoupPortionCount;
+        }
+        else
+        {
+            var summary = await Mediator.Send(new GetALaCarteMonthlySummaryQuery(selectedMonth.Year, selectedMonth.Month));
+            currentLines = summary.Lines;
+            soupPortionCount = summary.SoupPortionCount;
+        }
+    }
 
     private async Task SetViewModeAsync(string mode)
     {

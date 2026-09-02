@@ -82,18 +82,26 @@ public sealed class PlaceALaCarteOrderHandler(
             .FirstOrDefaultAsync(cancellationToken);
 
         // Az első feltételes (nem-üres Where-es) ExecuteUpdateAsync a kódbázisban — a 3.4. fejezet
-        // dokumentált versenyhelyzet-elve: 0 érintett sor jelenti, hogy időközben elfogyott.
-        foreach (var offer in offers)
-        {
-            var reserved = await db.ALaCarteDailyOffers
-                .Where(o => o.Id == offer.Id && o.OrderedCount < o.Capacity)
-                .ExecuteUpdateAsync(s => s.SetProperty(o => o.OrderedCount, o => o.OrderedCount + 1), cancellationToken);
+        // dokumentált versenyhelyzet-elve: egyetlen köteges UPDATE-tel foglal minden kért tételre
+        // egyszerre (nem tételenként külön kör-úttal) — csak azok a sorok inkrementálódnak, amelyeknél
+        // OrderedCount < Capacity még igaz a végrehajtás pillanatában.
+        var offerIds = offers.Select(o => o.Id).ToList();
+        var reserved = await db.ALaCarteDailyOffers
+            .Where(o => offerIds.Contains(o.Id) && o.OrderedCount < o.Capacity)
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.OrderedCount, o => o.OrderedCount + 1), cancellationToken);
 
-            if (reserved == 0)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.OutOfStock, $"{offer.ALaCarteItem!.Name} elfogyott.");
-            }
+        if (reserved != offers.Count)
+        {
+            // Nem fért bele minden tétel a keretbe — mielőtt visszagörgetjük a részlegesen már
+            // megtörtént foglalásokat (AC 4.2.4: nincs részleges a la carte rendelés), kiderítjük,
+            // melyik tétel maradt a foglalás előtti darabszámon (az nem fért bele).
+            var currentCounts = await db.ALaCarteDailyOffers
+                .Where(o => offerIds.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.OrderedCount, cancellationToken);
+            var outOfStockOffer = offers.First(o => currentCounts[o.Id] == o.OrderedCount);
+
+            await transaction.RollbackAsync(cancellationToken);
+            return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.OutOfStock, $"{outOfStockOffer.ALaCarteItem!.Name} elfogyott.");
         }
 
         var order = existingOrder;
