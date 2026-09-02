@@ -4,8 +4,8 @@ using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.ALaCarte;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.ALaCarte;
-using EbedrendeloApp.Features.ALaCarte.DeactivateALaCarteItem;
 using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems;
+using EbedrendeloApp.Features.ALaCarte.SetALaCarteItemActive;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -54,7 +54,7 @@ public class AdminALaCarteItemsTests : MudBunitContext
     }
 
     [Fact]
-    public void Deactivating_an_item_sends_the_command_and_reloads_the_list()
+    public void Toggling_an_active_item_deactivates_it_and_reloads_the_list()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
@@ -64,8 +64,8 @@ public class AdminALaCarteItemsTests : MudBunitContext
             loadCount++;
             return loadCount == 1 ? [Item(1, "Rántott sertés szelet", ALaCarteCategory.Foetel)] : [Item(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, isActive: false)];
         });
-        DeactivateALaCarteItemCommand? sentCommand = null;
-        mediator.Register<DeactivateALaCarteItemCommand, EbedrendeloApp.Common.Results.Result>(cmd =>
+        SetALaCarteItemActiveCommand? sentCommand = null;
+        mediator.Register<SetALaCarteItemActiveCommand, EbedrendeloApp.Common.Results.Result>(cmd =>
         {
             sentCommand = cmd;
             return EbedrendeloApp.Common.Results.Result.Success();
@@ -73,11 +73,36 @@ public class AdminALaCarteItemsTests : MudBunitContext
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminALaCarteItems>((ComponentParameterCollectionBuilder<AdminALaCarteItems> _) => { });
-        var deactivateButton = cut.Find("button[title='Kivezetés']");
-        cut.InvokeAsync(() => deactivateButton.Click());
+        var statusChip = cut.FindAll("td .mud-chip").First(c => c.TextContent.Trim() == "Aktív");
+        cut.InvokeAsync(() => statusChip.Click());
 
         Assert.NotNull(sentCommand);
         Assert.Equal(1, sentCommand!.Id);
+        Assert.False(sentCommand.IsActive);
         Assert.Equal(2, loadCount);
+    }
+
+    [Fact]
+    public void Toggling_an_inactive_item_reactivates_it()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(
+            _ => [Item(1, "Somlói galuska", ALaCarteCategory.Desszert, isActive: false)]);
+        SetALaCarteItemActiveCommand? sentCommand = null;
+        mediator.Register<SetALaCarteItemActiveCommand, EbedrendeloApp.Common.Results.Result>(cmd =>
+        {
+            sentCommand = cmd;
+            return EbedrendeloApp.Common.Results.Result.Success();
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminALaCarteItems>((ComponentParameterCollectionBuilder<AdminALaCarteItems> _) => { });
+        var statusChip = cut.FindAll("td .mud-chip").First(c => c.TextContent.Trim() == "Inaktív");
+        cut.InvokeAsync(() => statusChip.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.Equal(1, sentCommand!.Id);
+        Assert.True(sentCommand.IsActive);
     }
 }

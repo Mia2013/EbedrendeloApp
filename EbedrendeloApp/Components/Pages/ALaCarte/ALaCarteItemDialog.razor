@@ -33,15 +33,17 @@
                 else
                 {
                     <MudAutocomplete T="string" Label="Név" Value="name" ValueChanged="OnNameChanged" SearchFunc="SearchNamesAsync"
-                                     CoerceText="true" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="128" FullWidth="true" />
+                                     CoerceText="true" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="128" FullWidth="true" />
                 }
             </MudItem>
-            <MudItem xs="4" Class="d-flex align-center">
-                <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Success" Label="Aktív" />
+            <MudItem xs="4">
+                <MudStack Row Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Style="height:100%;">
+                    <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Success" Label="Aktív" />
+                </MudStack>
             </MudItem>
 
             <MudItem xs="6">
-                <MudSelect T="ALaCarteCategory" Label="Kategória" @bind-Value="category" Disabled="IsEditMode || matchedExistingId is not null" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelect T="ALaCarteCategory" Label="Kategória" @bind-Value="category" Disabled="IsCategoryLocked" Variant="Variant.Outlined" Margin="Margin.Dense">
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Leves">Leves</MudSelectItem>
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Foetel">Főétel</MudSelectItem>
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Koret">Köret</MudSelectItem>
@@ -62,8 +64,10 @@
                 </MudSelect>
             </MudItem>
 
-            <MudItem xs="12" Class="d-flex justify-center">
-                <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+            <MudItem xs="12">
+                <MudStack Row Justify="Justify.Center">
+                    <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+                </MudStack>
             </MudItem>
 
             <MudItem xs="12">
@@ -90,9 +94,17 @@
         </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
-                   OnClick="SaveAsync" Disabled="!CanSave">
-            Mentés
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)"
+                   OnClick="SaveAsync" Disabled="!CanSubmit">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Mentés...</MudText>
+            }
+            else
+            {
+                <MudText>Mentés</MudText>
+            }
         </MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => MudDialog.Cancel()" Disabled="isSaving">
             Mégse
@@ -112,7 +124,11 @@
 
     private bool IsEditMode => Existing is not null;
 
-    private bool CanSave => !isSaving && !string.IsNullOrWhiteSpace(name) && priceHuf >= 0;
+    private bool CanSave => !string.IsNullOrWhiteSpace(name) && priceHuf >= 0;
+
+    private bool CanSubmit => CanSave && !isSaving;
+
+    private bool IsCategoryLocked => IsEditMode || matchedExistingId is not null;
 
     private string name = string.Empty;
     private ALaCarteCategory category = ALaCarteCategory.Foetel;

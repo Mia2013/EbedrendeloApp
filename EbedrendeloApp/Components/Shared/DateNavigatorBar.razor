@@ -1,7 +1,9 @@
-<MudPaper Elevation="2" Class="px-5 py-3 date-navigator-bar rounded-xl" Style="display:inline-flex; align-items:center;  background:var(--mud-palette-primary-hover);">
-    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Primary" title="Előző" OnClick="() => OnStep.InvokeAsync(-1)" />
-    <MudText Typo="Typo.h6" Color="Color.Primary" Style="min-width:170px; text-align:center; font-weight:700;">@Label</MudText>
-    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Primary" title="Következő" OnClick="() => OnStep.InvokeAsync(1)" />
+<MudPaper Elevation="2" Class="px-5 py-3 rounded-xl" Style="display:inline-block; background:var(--mud-palette-primary-hover);">
+    <MudStack Row AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Primary" title="Előző" OnClick="() => OnStep.InvokeAsync(-1)" />
+        <MudText Typo="Typo.h6" Color="Color.Primary" Style="min-width:170px; text-align:center; font-weight:700;">@Label</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Primary" title="Következő" OnClick="() => OnStep.InvokeAsync(1)" />
+    </MudStack>
 </MudPaper>
 
 @code {

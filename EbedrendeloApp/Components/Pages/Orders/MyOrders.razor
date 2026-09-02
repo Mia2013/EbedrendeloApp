@@ -11,7 +11,7 @@
 
 <PageTitle>Rendeléseim</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 my-orders__header-card">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0">
@@ -22,7 +22,7 @@
             @if (periods is { Count: > 0 })
             {
                 <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                           Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
                            Class="mt-4" Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
                     @foreach (var period in periods)
                     {

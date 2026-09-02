@@ -7,10 +7,11 @@
 @inject IDialogService DialogService
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <PageTitle>Rendelési időszakok</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 page-header-card mb-4">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0" Class="flex-grow-1">
@@ -30,13 +31,7 @@
     a nyitva tartás. Egy dátum kizárásához a „Nem rendelhető napok" funkciót használd.
 </MudAlert>
 
-@if (periods is null)
-{
-    <MudProgressCircular Indeterminate="true" />
-}
-else
-{
-    <MudTable Items="periods" Hover="true" Elevation="1">
+<MudTable Items="@(periods ?? [])" Loading="@(periods is null)" Hover="true" Elevation="1">
         <HeaderContent>
             <MudTh>Név</MudTh>
             <MudTh>Kezdés</MudTh>
@@ -60,7 +55,6 @@ else
             </MudTd>
         </RowTemplate>
     </MudTable>
-}
 
 @code {
     private IReadOnlyList<OrderingPeriodDto>? periods;
@@ -82,12 +76,20 @@ else
         periods = await Mediator.Send(new GetOrderingPeriodsQuery());
     }
 
+    private static readonly DialogOptions DefaultDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
     private async Task OpenCreateDialogAsync()
     {
-        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak");
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak", DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Rendelési időszak létrehozva.", Severity.Success);
             await LoadAsync();
         }
     }
@@ -98,10 +100,11 @@ else
         {
             { x => x.Existing, period },
         };
-        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Rendelési időszak szerkesztése", parameters);
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Rendelési időszak szerkesztése", parameters, DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Rendelési időszak mentve.", Severity.Success);
             await LoadAsync();
         }
     }

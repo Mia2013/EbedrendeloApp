@@ -696,9 +696,10 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetMyPeriodOrderQuery` **[U]**, `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
 
 ### ALaCarte
-- `UpsertALaCarteItemCommand` **[A]**, `DeactivateALaCarteItemCommand` **[A]**,
-  `GetALaCarteItemsQuery` **[A]** — az 5 kategória (`Leves`/`Foetel`/`Koret`/`Desszert`/`Ontet`)
-  egyikéhez tartozó törzsadat, a `MenuDish` mintáját követő 7 tápérték-mezővel (2. fejezet)
+- `UpsertALaCarteItemCommand` **[A]**, `SetALaCarteItemActiveCommand` **[A]** (kétirányú — kivezetés
+  ÉS visszaaktiválás egyaránt ezt hívja), `GetALaCarteItemsQuery` **[A]** — az 5 kategória
+  (`Leves`/`Foetel`/`Koret`/`Desszert`/`Ontet`) egyikéhez tartozó törzsadat, a `MenuDish` mintáját
+  követő 7 tápérték-mezővel (2. fejezet)
 - `SetDailyOfferCommand` **[A]** — napi keret beállítása (`Capacity` nem csökkenthető a lefoglalt alá);
   **Leves kategóriájú tételre naponta legfeljebb egy aktív ajánlat rögzíthető** — egy második felvétele
   ugyanarra a napra elutasításra kerül

@@ -12,10 +12,12 @@
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>À la carte napi kínálat</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 page-header-card">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
         <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
             <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Large" Color="Color.Primary" />
@@ -33,8 +35,16 @@
             <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
                 @if (isEditing)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" Disabled="isSaving" OnClick="SaveAllAsync">
-                        Mentés
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)" Disabled="isSaving" OnClick="SaveAllAsync">
+                        @if (isSaving)
+                        {
+                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                            <MudText Class="ms-2">Mentés...</MudText>
+                        }
+                        else
+                        {
+                            <MudText>Mentés</MudText>
+                        }
                     </MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Disabled="isSaving" OnClick="CancelEditing">
                         Mégse
@@ -56,9 +66,9 @@
 
 @if (isLoading)
 {
-    <div class="d-flex justify-center my-4">
+    <MudStack Row Justify="Justify.Center" Class="my-4">
         <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
-    </div>
+    </MudStack>
     <MudProgressCircular Indeterminate="true" Class="mt-4" />
 }
 else
@@ -68,15 +78,14 @@ else
         <MudAlert Severity="Severity.Error" Class="mt-4 mb-2">@errorMessage</MudAlert>
     }
 
-
- 
     <MudGrid Spacing="3" class="mt-3">
-                 <MudItem xs="12" md="4"  lg="3" class="d-flex align-center justify-center" >
-            <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
-                    </MudItem>
-                 <MudItem xs="12" md="8" lg="9"  >
-
-            <MudPaper Outlined="true" Class="pa-3"  >
+        <MudItem xs="12" md="4" lg="3">
+            <MudStack Row Justify="Justify.Center" AlignItems="AlignItems.Center" Style="height:100%;">
+                <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+            </MudStack>
+        </MudItem>
+        <MudItem xs="12" md="8" lg="9">
+            <MudPaper Outlined="true" Class="pa-3">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
@@ -103,7 +112,7 @@ else
                 }
                 else if (isEditing)
                 {
-                    <MudSelect T="int?" Label="Leves kiválasztása" Value="selectedSoupItemId" ValueChanged="v => selectedSoupItemId = v" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+                    <MudSelect T="int?" Label="Leves kiválasztása" Value="selectedSoupItemId" ValueChanged="v => selectedSoupItemId = v" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Clearable="true">
                         @foreach (var soup in AvailableSoups)
                         {
                             <MudSelectItem T="int?" Value="@((int?)soup.Id)">@soup.Name (@soup.PriceHuf Ft)</MudSelectItem>
@@ -238,14 +247,28 @@ else
 
     private async Task RemoveOfferAsync(ALaCarteDailyOfferDto offer)
     {
+        var confirmParameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Biztosan visszavonod a mai leves-ajánlatot ({offer.ItemName})?" },
+            { x => x.ConfirmText, "Visszavonás" },
+        };
+        var confirmRef = await DialogService.ShowAsync<ConfirmDialog>("Leves visszavonása", confirmParameters, ConfirmDialogOptions);
+        var confirmResult = await confirmRef.Result;
+        if (confirmResult is null || confirmResult.Canceled)
+        {
+            return;
+        }
+
         errorMessage = null;
         var result = await Mediator.Send(new RemoveDailyOfferCommand(offer.OfferId));
         if (!result.IsSuccess)
         {
             errorMessage = result.ErrorMessage;
+            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült visszavonni a leves-ajánlatot.", Severity.Error);
             return;
         }
 
+        Snackbar.Add("Leves-ajánlat visszavonva.", Severity.Success);
         await LoadAsync();
     }
 
@@ -305,8 +328,20 @@ else
         {
             errorMessage = string.Join(" ", failures);
             isEditing = true; // maradjunk szerkesztő módban, hogy a hibás sor(oka)t javítani lehessen
+            Snackbar.Add(errorMessage, Severity.Error);
+        }
+        else
+        {
+            Snackbar.Add("Napi kínálat mentve.", Severity.Success);
         }
     }
+
+    private static readonly DialogOptions ConfirmDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
 
     private static string CategoryName(ALaCarteCategory category) => category switch
     {

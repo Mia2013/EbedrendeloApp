@@ -3,12 +3,12 @@ using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace EbedrendeloApp.Features.ALaCarte.DeactivateALaCarteItem;
+namespace EbedrendeloApp.Features.ALaCarte.SetALaCarteItemActive;
 
-public sealed class DeactivateALaCarteItemHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<DeactivateALaCarteItemCommand, Result>
+public sealed class SetALaCarteItemActiveHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
+    : IRequestHandler<SetALaCarteItemActiveCommand, Result>
 {
-    public async Task<Result> Handle(DeactivateALaCarteItemCommand request, CancellationToken cancellationToken)
+    public async Task<Result> Handle(SetALaCarteItemActiveCommand request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -18,7 +18,7 @@ public sealed class DeactivateALaCarteItemHandler(IDbContextFactory<EbedrendeloD
             return Result.Failure(ErrorCodes.NotFound, "A tétel nem található.");
         }
 
-        item.IsActive = false;
+        item.IsActive = request.IsActive;
         await db.SaveChangesAsync(cancellationToken);
 
         return Result.Success();

@@ -20,7 +20,7 @@
 
 <PageTitle>Rendelés</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 order-calendar__header-card">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0" Class="flex-grow-1">
@@ -33,7 +33,7 @@
                 @if (periods is { Count: > 0 })
                 {
                     <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                               Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
                                Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
                         @foreach (var period in periods)
                         {
@@ -41,7 +41,7 @@
                         }
                     </MudSelect>
                 }
-                <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined"
+                <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
                            Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
                     <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
                     @foreach (var colleague in colleagues)
@@ -92,7 +92,7 @@ else
 
     @if (pendingSelections.Count > 0)
     {
-        <MudPaper Elevation="0" Class="pa-3 mt-4 order-calendar__header-card order-calendar__submit-bar">
+        <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudTable Items="PendingSelectionSummary" Hover="true" Dense="true" Elevation="0" Class="mb-3">
                 <HeaderContent>
                     <MudTh>Menü</MudTh>
@@ -122,7 +122,7 @@ else
 
     @if (pendingCancellations.Count > 0)
     {
-        <MudPaper Elevation="0" Class="pa-3 mt-4 order-calendar__header-card order-calendar__submit-bar">
+        <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                 <MudText Typo="Typo.body1"><strong>@pendingCancellations.Count nap</strong> kiválasztva lemondásra</MudText>
                 <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.EventBusy"
@@ -400,6 +400,7 @@ else
         if (!result.IsSuccess)
         {
             errorMessage = result.ErrorMessage;
+            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült leadni a rendelést.", Severity.Error);
             return;
         }
 
@@ -413,7 +414,7 @@ else
         }
 
         var parameters = new DialogParameters<PlaceOrderResultDialog> { { x => x.Result, result.Value! } };
-        await DialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters);
+        await DialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters, DefaultDialogOptions);
     }
 
     private async Task SubmitCancellationsAsync()
@@ -427,6 +428,7 @@ else
         if (!result.IsSuccess)
         {
             errorMessage = result.ErrorMessage;
+            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült lemondani a rendelést.", Severity.Error);
             return;
         }
 
@@ -446,6 +448,13 @@ else
             { x => x.Icon, Icons.Material.Filled.EventBusy },
             { x => x.IconColor, Color.Error },
         };
-        await DialogService.ShowAsync<PlaceOrderResultDialog>("Lemondás eredménye", parameters);
+        await DialogService.ShowAsync<PlaceOrderResultDialog>("Lemondás eredménye", parameters, DefaultDialogOptions);
     }
+
+    private static readonly DialogOptions DefaultDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
 }

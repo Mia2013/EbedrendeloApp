@@ -10,20 +10,24 @@
     </TitleContent>
     <DialogContent>
         <MudStack Row Spacing="3" Class="mb-4">
-            <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3" Style="background:var(--mud-palette-success-hover);">
-                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.h5" Color="Color.Success">@Result.Succeeded.Count</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Success">Sikeres</MudText>
+            <MudPaper Class="flex-grow-1 pa-4" Style="background:var(--mud-palette-success-hover);">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h5" Color="Color.Success">@Result.Succeeded.Count</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Success">Sikeres</MudText>
+                    </MudStack>
                 </MudStack>
             </MudPaper>
             @if (Result.Skipped.Count > 0)
             {
-                <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3">
-                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.h5">@Result.Skipped.Count</MudText>
-                        <MudText Typo="Typo.caption">Kihagyva</MudText>
+                <MudPaper Class="flex-grow-1 pa-4">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h5">@Result.Skipped.Count</MudText>
+                            <MudText Typo="Typo.caption">Kihagyva</MudText>
+                        </MudStack>
                     </MudStack>
                 </MudPaper>
             }
@@ -42,7 +46,7 @@
         }
     </DialogContent>
     <DialogActions>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Check" OnClick="Close">Bezárás</MudButton>
+        <MudButton Color="Color.Default" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Close">Bezárás</MudButton>
     </DialogActions>
 </MudDialog>
 

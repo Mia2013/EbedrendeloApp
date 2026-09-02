@@ -14,6 +14,7 @@ using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using MudBlazor;
 using MudBlazor.Services;
 
 namespace EbedrendeloApp.Tests.Components.ALaCarte;
@@ -247,6 +248,39 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
         cut.Find("button[title='Következő']").Click();
 
         Assert.Equal([Today, Today.AddDays(1)], requestedDates);
+    }
+
+    [Fact]
+    public async Task Removing_the_soup_offer_asks_for_confirmation_before_sending_the_command()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => [Item(1, "Csontleves", ALaCarteCategory.Leves)]);
+        mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(
+            _ => [Offer(10, 1, "Csontleves", ALaCarteCategory.Leves, int.MaxValue, 0)]);
+        RegisterZeroSummary(mediator);
+        RemoveDailyOfferCommand? sentCommand = null;
+        mediator.Register<RemoveDailyOfferCommand, Result>(cmd =>
+        {
+            sentCommand = cmd;
+            return Result.Success();
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var provider = Render<MudDialogProvider>();
+        var cut = Render<AdminALaCarteDailyOffer>((ComponentParameterCollectionBuilder<AdminALaCarteDailyOffer> _) => { });
+        ClickButtonWithText(cut, "Szerkesztés");
+
+        var removeButton = cut.Find("button[title='Visszavonás']");
+        await cut.InvokeAsync(() => removeButton.Click());
+
+        Assert.Null(sentCommand); // nothing sent until the confirm dialog is accepted
+
+        var confirmButton = provider.FindAll("button").First(b => b.TextContent.Contains("Visszavonás"));
+        await provider.InvokeAsync(() => confirmButton.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.Equal(10, sentCommand!.OfferId);
     }
 
     [Fact]

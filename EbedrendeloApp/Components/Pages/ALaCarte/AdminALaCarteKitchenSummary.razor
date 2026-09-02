@@ -12,7 +12,7 @@
 
 <PageTitle>À la carte konyhai lista</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 page-header-card">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0" Class="flex-grow-1">
@@ -29,7 +29,8 @@
     <MudStack Row Spacing="2">
         @foreach (var option in ViewModeOptions)
         {
-            <MudChip T="string" Color="@(viewMode == option ? Color.Primary : Color.Default)"
+            <MudChip T="string" Icon="@(option == "Napi" ? Icons.Material.Filled.Today : Icons.Material.Filled.CalendarMonth)"
+                     Color="@(viewMode == option ? Color.Primary : Color.Default)"
                      Variant="@(viewMode == option ? Variant.Filled : Variant.Outlined)"
                      OnClick="() => SetViewModeAsync(option)">
                 @option
@@ -66,32 +67,40 @@ else
     }
     else
     {
-        @foreach (var category in NonSoupCategories)
-        {
-            var lines = currentLines.Where(l => l.Category == category).ToList();
-            if (lines.Count == 0)
+        <MudGrid Spacing="3">
+            @foreach (var category in NonSoupCategories)
             {
-                continue;
+                var lines = currentLines.Where(l => l.Category == category).ToList();
+                if (lines.Count == 0)
+                {
+                    continue;
+                }
+
+                <MudItem xs="12" md="6" lg="4">
+                    <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                            <MudIcon Icon="@CategoryIcon(category)" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">@CategoryName(category)</MudText>
+                        </MudStack>
+                        <MudTable Items="lines" Hover="true" Elevation="0" Dense="true">
+                            <HeaderContent>
+                                <MudTh>Tétel</MudTh>
+                                <MudTh Style="text-align:right;">Darab</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
+                                <MudTd DataLabel="Darab" Style="text-align:right;">@context.Count</MudTd>
+                            </RowTemplate>
+                            <FooterContent>
+                                <MudTd><b>Összesen</b></MudTd>
+                                <MudTd Style="text-align:right;"><b>@lines.Sum(l => l.Count)</b></MudTd>
+                            </FooterContent>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
             }
-
-            <MudText Typo="Typo.h6" Class="mt-4 mb-1">@CategoryName(category)</MudText>
-            <MudTable Items="lines" Hover="true" Elevation="1" Dense="true">
-                <HeaderContent>
-                    <MudTh>Tétel</MudTh>
-                    <MudTh>Darab</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
-                    <MudTd DataLabel="Darab">@context.Count</MudTd>
-                </RowTemplate>
-                <FooterContent>
-                    <MudTd>Összesen</MudTd>
-                    <MudTd>@lines.Sum(l => l.Count)</MudTd>
-                </FooterContent>
-            </MudTable>
-        }
-
-     }
+        </MudGrid>
+    }
 }
 
 @code {
@@ -164,5 +173,15 @@ else
         ALaCarteCategory.Desszert => "Desszert",
         ALaCarteCategory.Ontet => "Öntet",
         _ => category.ToString(),
+    };
+
+    private static string CategoryIcon(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
+        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
+        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
+        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
+        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
+        _ => Icons.Material.Filled.Fastfood,
     };
 }

@@ -2,17 +2,18 @@
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.ALaCarte
-@using EbedrendeloApp.Features.ALaCarte.DeactivateALaCarteItem
 @using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
+@using EbedrendeloApp.Features.ALaCarte.SetALaCarteItemActive
 @using MediatR
 @inject IMediator Mediator
 @inject IDialogService DialogService
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <PageTitle>À la carte ételek</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 page-header-card">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
         <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0" Class="flex-grow-1">
@@ -28,27 +29,26 @@
     </MudStack>
 </MudPaper>
 
-@if (items is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else
-{
-    <MudStack Row Spacing="4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mt-4 mb-3">
-        <MudStack Row Spacing="2">
+<MudStack Spacing="3" Class="mt-4 mb-3" Row Wrap="Wrap.Wrap" Justify="Justify.SpaceBetween">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Kategória</MudText>
+        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
             @foreach (var option in CategoryFilterOptions)
             {
-                <MudChip T="string" Color="@(categoryFilter == option ? Color.Primary : Color.Default)"
+                <MudChip T="string" Icon="@CategoryFilterIcon(option)" Color="@(categoryFilter == option ? Color.Primary : Color.Default)"
                          Variant="@(categoryFilter == option ? Variant.Filled : Variant.Outlined)"
                          OnClick="() => categoryFilter = option">
                     @option
                 </MudChip>
             }
         </MudStack>
-        <MudStack Row Spacing="2">
+    </MudStack>
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Állapot</MudText>
+        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
             @foreach (var option in StatusFilterOptions)
             {
-                <MudChip T="string" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
+                <MudChip T="string" Icon="@StatusFilterIcon(option)" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
                          Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
                          OnClick="() => statusFilter = option">
                     @option
@@ -56,36 +56,38 @@ else
             }
         </MudStack>
     </MudStack>
+</MudStack>
 
-    <MudTable Items="filteredItems" Hover="true" Elevation="1" Dense="true">
-        <HeaderContent>
-            <MudTh>Kategória</MudTh>
-            <MudTh>Név</MudTh>
-            <MudTh>Ár</MudTh>
-            <MudTh>Tápérték</MudTh>
-            <MudTh>Állapot</MudTh>
-            <MudTh>Műveletek</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Kategória">@CategoryName(context.Category)</MudTd>
-            <MudTd DataLabel="Név">@context.Name</MudTd>
-            <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
-            <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
-            <MudTd DataLabel="Állapot">
-                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+<MudTable Items="filteredItems" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
+    <HeaderContent>
+        <MudTh>Kategória</MudTh>
+        <MudTh>Név</MudTh>
+        <MudTh>Ár</MudTh>
+        <MudTh>Tápérték</MudTh>
+        <MudTh>Állapot</MudTh>
+        <MudTh>Műveletek</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Kategória">
+            <MudIcon Icon="@CategoryIcon(context.Category)" Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />@CategoryName(context.Category)
+        </MudTd>
+        <MudTd DataLabel="Név">@context.Name</MudTd>
+        <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
+        <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
+        <MudTd DataLabel="Állapot">
+            <MudTooltip Text="@(context.IsActive ? "Kattints a kivezetéshez" : "Kattints az aktiváláshoz")">
+                <MudChip T="string" Size="Size.Small" Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)"
+                         OnClick="() => ToggleActiveAsync(context)">
                     @(context.IsActive ? "Aktív" : "Inaktív")
                 </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Műveletek">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" title="Szerkesztés" OnClick="() => EditItemAsync(context)" />
-                @if (context.IsActive)
-                {
-                    <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Color="Color.Error" Size="Size.Small" title="Kivezetés" OnClick="() => DeactivateAsync(context)" />
-                }
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
-}
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Műveletek">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" title="Szerkesztés" OnClick="() => EditItemAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
 
 @code {
     private static readonly string[] CategoryFilterOptions = ["Mind", "Leves", "Főétel", "Köret", "Desszert", "Öntet"];
@@ -124,12 +126,42 @@ else
         _ => category.ToString(),
     };
 
+    private static string CategoryIcon(ALaCarteCategory category) => category switch
+    {
+        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
+        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
+        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
+        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
+        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
+        _ => Icons.Material.Filled.Fastfood,
+    };
+
+    /// <summary>Ugyanaz a leképezés, mint <see cref="CategoryIcon"/>, csak a szűrő-chipek magyar
+    /// feliratára illesztve — a "Mind" chipnek nincs kategóriája, azt egy semleges ikon jelzi.</summary>
+    private static string CategoryFilterIcon(string label) => label switch
+    {
+        "Leves" => Icons.Material.Filled.SoupKitchen,
+        "Főétel" => Icons.Material.Filled.DinnerDining,
+        "Köret" => Icons.Material.Filled.RiceBowl,
+        "Desszert" => Icons.Material.Filled.Icecream,
+        "Öntet" => Icons.Material.Filled.WaterDrop,
+        _ => Icons.Material.Filled.Apps,
+    };
+
+    private static string StatusFilterIcon(string label) => label switch
+    {
+        "Aktív" => Icons.Material.Filled.ToggleOn,
+        "Inaktív" => Icons.Material.Filled.ToggleOff,
+        _ => Icons.Material.Filled.Apps,
+    };
+
     private static bool HasNutrition(ALaCarteItemDto i) =>
         i.EnergyKcal is not null || i.FatGrams is not null || i.SaturatedFatGrams is not null ||
         i.CarbohydrateGrams is not null || i.SugarGrams is not null || i.ProteinGrams is not null || i.SaltGrams is not null;
 
     private static readonly DialogOptions ItemDialogOptions = new()
     {
+        CloseButton = true,
         MaxWidth = MaxWidth.Medium,
         FullWidth = true,
         CloseOnEscapeKey = true,
@@ -141,6 +173,7 @@ else
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Tétel mentve.", Severity.Success);
             await LoadAsync();
         }
     }
@@ -152,13 +185,15 @@ else
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Tétel mentve.", Severity.Success);
             await LoadAsync();
         }
     }
 
-    private async Task DeactivateAsync(ALaCarteItemDto item)
+    private async Task ToggleActiveAsync(ALaCarteItemDto item)
     {
-        await Mediator.Send(new DeactivateALaCarteItemCommand(item.Id));
+        await Mediator.Send(new SetALaCarteItemActiveCommand(item.Id, !item.IsActive));
+        Snackbar.Add(item.IsActive ? "Tétel kivezetve." : "Tétel aktiválva.", Severity.Success);
         await LoadAsync();
     }
 }

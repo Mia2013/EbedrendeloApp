@@ -361,11 +361,11 @@ Azért, hogy a napi kínálatot egy karbantartott törzsadatból tudjam összeá
 
 **Elfogadási Kritériumok:**
 * **AC 4.3.1 (Törzsadat mezők):** Egy tétel `Name`, `Category` (Leves / Főétel / Köret / Desszert / Öntet), `PriceHuf`, `IsActive`, valamint — a `MenuDish` mintáját követő — 7 opcionális tápérték-mező adható meg. Ez a katalógus **nem osztozik** a `MenuDish` katalóguson.
-* **AC 4.3.2 (Kivezetés, nem törlés):** A kivezetés az `IsActive = false` beállítása; az inaktív tétel új napi ajánlatba nem vehető fel.
+* **AC 4.3.2 (Kivezetés, nem törlés):** A kivezetés az `IsActive = false` beállítása; az inaktív tétel új napi ajánlatba nem vehető fel. Ugyanez a kapcsoló egy irányban vissza is állítható (visszaaktiválás).
 * **AC 4.3.3 (Múlt védelme):** A kivezetés és az árváltozás nem érinti a már leadott rendeléseket és a korábbi számlákat — a rendelési sorok a nevet, a kategóriát és az egységárat snapshotként tárolják.
 * **AC 4.3.4 (Listázás):** A törzsadat kategória szerint csoportosítva, aktív/inaktív szűrővel lekérdezhető.
 
-**Technikai hivatkozás:** `UpsertALaCarteItemCommand`, `DeactivateALaCarteItemCommand`, `GetALaCarteItemsQuery`, `ALaCarteItem`
+**Technikai hivatkozás:** `UpsertALaCarteItemCommand`, `SetALaCarteItemActiveCommand`, `GetALaCarteItemsQuery`, `ALaCarteItem`
 
 ---
 
@@ -751,7 +751,7 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyPeriodOrderQuery` | U | US-3.3 |
 | `GetUserOrdersQuery` | A | US-3.4 |
 | `UpsertALaCarteItemCommand` | A | US-4.3 |
-| `DeactivateALaCarteItemCommand` | A | US-4.3 |
+| `SetALaCarteItemActiveCommand` | A | US-4.3 |
 | `GetALaCarteItemsQuery` | A | US-4.3 |
 | `SetDailyOfferCommand` | A | US-4.1 |
 | `RemoveDailyOfferCommand` | A | US-4.4 |
