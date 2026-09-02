@@ -1,4 +1,5 @@
 @page "/alacarte-etelek"
+@using EbedrendeloApp.Common.ALaCarte
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.ALaCarte
@@ -60,18 +61,18 @@
 
 <MudTable Items="filteredItems" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
     <HeaderContent>
-        <MudTh>Kategória</MudTh>
         <MudTh>Név</MudTh>
+        <MudTh>Kategória</MudTh>
         <MudTh>Ár</MudTh>
         <MudTh>Tápérték</MudTh>
         <MudTh>Állapot</MudTh>
         <MudTh>Műveletek</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="Kategória">
-            <MudIcon Icon="@CategoryIcon(context.Category)" Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />@CategoryName(context.Category)
-        </MudTd>
         <MudTd DataLabel="Név">@context.Name</MudTd>
+        <MudTd DataLabel="Kategória">
+            <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(context.Category)" Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />@ALaCarteCategoryDisplay.Name(context.Category)
+        </MudTd>
         <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
         <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
         <MudTd DataLabel="Állapot">
@@ -99,7 +100,7 @@
 
     private IEnumerable<ALaCarteItemDto> filteredItems => items is null
         ? []
-        : items.Where(i => (categoryFilter == "Mind" || CategoryName(i.Category) == categoryFilter)
+        : items.Where(i => (categoryFilter == "Mind" || ALaCarteCategoryDisplay.Name(i.Category) == categoryFilter)
                             && (statusFilter == "Mind" || (statusFilter == "Aktív") == i.IsActive));
 
     protected override async Task OnInitializedAsync()
@@ -116,37 +117,12 @@
 
     private async Task LoadAsync() => items = (await Mediator.Send(new GetALaCarteItemsQuery())).ToList();
 
-    private static string CategoryName(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => "Leves",
-        ALaCarteCategory.Foetel => "Főétel",
-        ALaCarteCategory.Koret => "Köret",
-        ALaCarteCategory.Desszert => "Desszert",
-        ALaCarteCategory.Ontet => "Öntet",
-        _ => category.ToString(),
-    };
-
-    private static string CategoryIcon(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
-        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
-        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
-        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
-        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
-        _ => Icons.Material.Filled.Fastfood,
-    };
-
-    /// <summary>Ugyanaz a leképezés, mint <see cref="CategoryIcon"/>, csak a szűrő-chipek magyar
-    /// feliratára illesztve — a "Mind" chipnek nincs kategóriája, azt egy semleges ikon jelzi.</summary>
-    private static string CategoryFilterIcon(string label) => label switch
-    {
-        "Leves" => Icons.Material.Filled.SoupKitchen,
-        "Főétel" => Icons.Material.Filled.DinnerDining,
-        "Köret" => Icons.Material.Filled.RiceBowl,
-        "Desszert" => Icons.Material.Filled.Icecream,
-        "Öntet" => Icons.Material.Filled.WaterDrop,
-        _ => Icons.Material.Filled.Apps,
-    };
+    /// <summary>A szűrő-chipek magyar feliratából keresi vissza az <see cref="ALaCarteCategoryDisplay"/>
+    /// ikonját — a "Mind" chipnek nincs kategóriája, azt egy semleges ikon jelzi.</summary>
+    private static string CategoryFilterIcon(string label) =>
+        Enum.GetValues<ALaCarteCategory>().Cast<ALaCarteCategory?>().FirstOrDefault(c => ALaCarteCategoryDisplay.Name(c!.Value) == label) is { } category
+            ? ALaCarteCategoryDisplay.Icon(category)
+            : Icons.Material.Filled.Apps;
 
     private static string StatusFilterIcon(string label) => label switch
     {

@@ -30,7 +30,7 @@
             {
                 <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
                            Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                           Class="mt-4" Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
+                           Class="mt-4 panel-narrow-surface">
                     @foreach (var period in periods)
                     {
                         <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>

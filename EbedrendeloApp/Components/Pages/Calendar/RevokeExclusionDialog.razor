@@ -29,18 +29,22 @@
         else
         {
             <MudStack Row Spacing="3" Class="mb-4">
-                <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3" Style="background:var(--mud-palette-success-hover);">
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.h5" Color="Color.Success">@outcome.RestoredCount</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Success">Helyreállítva</MudText>
+                <MudPaper Class="flex-grow-1 pa-4" Style="background:var(--mud-palette-success-hover);">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h5" Color="Color.Success">@outcome.RestoredCount</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Success">Helyreállítva</MudText>
+                        </MudStack>
                     </MudStack>
                 </MudPaper>
-                <MudPaper Class="flex-grow-1 pa-4 d-flex align-center gap-3">
-                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.h5">@outcome.SkippedCount</MudText>
-                        <MudText Typo="Typo.caption">Kihagyva</MudText>
+                <MudPaper Class="flex-grow-1 pa-4">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Default" Size="Size.Large" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h5">@outcome.SkippedCount</MudText>
+                            <MudText Typo="Typo.caption">Kihagyva</MudText>
+                        </MudStack>
                     </MudStack>
                 </MudPaper>
             </MudStack>
@@ -57,10 +61,18 @@
     <DialogActions>
         @if (outcome is null)
         {
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Undo" OnClick="ConfirmAsync" Disabled="isSaving">
-                Visszavonás megerősítése
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Undo)" OnClick="ConfirmAsync" Disabled="isSaving">
+                @if (isSaving)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Visszavonás...</MudText>
+                }
+                else
+                {
+                    <MudText>Visszavonás megerősítése</MudText>
+                }
             </MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel">Mégse</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel" Disabled="isSaving">Mégse</MudButton>
         }
         else
         {

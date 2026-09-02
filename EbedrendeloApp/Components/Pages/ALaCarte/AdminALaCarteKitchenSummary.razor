@@ -1,4 +1,5 @@
 @page "/alacarte-konyhai-lista"
+@using EbedrendeloApp.Common.ALaCarte
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
@@ -48,59 +49,52 @@
     }
 </MudStack>
 
-@if (currentLines is null)
+<MudPaper Outlined="true" Class="pa-3 mb-4" Style="max-width:420px;">
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
+        <MudText Typo="Typo.body1"><b>@soupPortionCount</b> levesadag @(viewMode == "Napi" ? "erre a napra" : "erre a hónapra")</MudText>
+    </MudStack>
+</MudPaper>
+
+@if (currentLines is not null && currentLines.Count == 0)
 {
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">@NoOrdersMessage</MudText>
 }
 else
 {
-    <MudPaper Outlined="true" Class="pa-3 mb-4" Style="max-width:420px;">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
-            <MudText Typo="Typo.body1"><b>@soupPortionCount</b> levesadag @(viewMode == "Napi" ? "erre a napra" : "erre a hónapra")</MudText>
-        </MudStack>
-    </MudPaper>
-
-    @if (currentLines.Count == 0)
-    {
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">@NoOrdersMessage</MudText>
-    }
-    else
-    {
-        <MudGrid Spacing="3">
-            @foreach (var category in NonSoupCategories)
+    <MudGrid Spacing="3">
+        @foreach (var category in NonSoupCategories)
+        {
+            var lines = currentLines?.Where(l => l.Category == category).ToList() ?? [];
+            if (currentLines is not null && lines.Count == 0)
             {
-                var lines = currentLines.Where(l => l.Category == category).ToList();
-                if (lines.Count == 0)
-                {
-                    continue;
-                }
-
-                <MudItem xs="12" md="6" lg="4">
-                    <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-                            <MudIcon Icon="@CategoryIcon(category)" Color="Color.Primary" />
-                            <MudText Typo="Typo.h6">@CategoryName(category)</MudText>
-                        </MudStack>
-                        <MudTable Items="lines" Hover="true" Elevation="0" Dense="true">
-                            <HeaderContent>
-                                <MudTh>Tétel</MudTh>
-                                <MudTh Style="text-align:right;">Darab</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
-                                <MudTd DataLabel="Darab" Style="text-align:right;">@context.Count</MudTd>
-                            </RowTemplate>
-                            <FooterContent>
-                                <MudTd><b>Összesen</b></MudTd>
-                                <MudTd Style="text-align:right;"><b>@lines.Sum(l => l.Count)</b></MudTd>
-                            </FooterContent>
-                        </MudTable>
-                    </MudPaper>
-                </MudItem>
+                continue;
             }
-        </MudGrid>
-    }
+
+            <MudItem xs="12" md="6" lg="4">
+                <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                        <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(category)" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6">@ALaCarteCategoryDisplay.Name(category)</MudText>
+                    </MudStack>
+                    <MudTable Items="lines" Loading="@(currentLines is null)" Hover="true" Elevation="0" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Tétel</MudTh>
+                            <MudTh Style="text-align:right;">Darab</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
+                            <MudTd DataLabel="Darab" Style="text-align:right;">@context.Count</MudTd>
+                        </RowTemplate>
+                        <FooterContent>
+                            <MudTd><b>Összesen</b></MudTd>
+                            <MudTd Style="text-align:right;"><b>@lines.Sum(l => l.Count)</b></MudTd>
+                        </FooterContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
 }
 
 @code {
@@ -165,23 +159,4 @@ else
 
     private async Task PrintAsync() => await JsRuntime.InvokeVoidAsync("print");
 
-    private static string CategoryName(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => "Leves",
-        ALaCarteCategory.Foetel => "Főétel",
-        ALaCarteCategory.Koret => "Köret",
-        ALaCarteCategory.Desszert => "Desszert",
-        ALaCarteCategory.Ontet => "Öntet",
-        _ => category.ToString(),
-    };
-
-    private static string CategoryIcon(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
-        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
-        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
-        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
-        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
-        _ => Icons.Material.Filled.Fastfood,
-    };
 }

@@ -83,9 +83,17 @@
         }
     </DialogContent>
     <DialogActions>
-        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)"
                    OnClick="SaveAsync" Disabled="!CanSave">
-            Mentés
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Mentés...</MudText>
+            }
+            else
+            {
+                <MudText>Mentés</MudText>
+            }
         </MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => MudDialog.Cancel()" Disabled="isSaving">
             Mégse

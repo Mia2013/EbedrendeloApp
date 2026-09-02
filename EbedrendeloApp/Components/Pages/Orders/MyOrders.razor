@@ -1,4 +1,5 @@
 @page "/rendeleseim"
+@using EbedrendeloApp.Common.Orders
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
@@ -23,7 +24,7 @@
             {
                 <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
                            Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                           Class="mt-4" Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
+                           Class="mt-4 panel-narrow-surface">
                     @foreach (var period in periods)
                     {
                         <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
@@ -98,23 +99,13 @@ else
                     @if (order.Status == OrderStatus.Cancelled)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @Describe(order.CancellationReason) — @order.CancelledAtUtc?.ToString("yyyy.MM.dd. HH:mm")
+                            @CancellationReasonDisplay.UserText(order.CancellationReason) — @order.CancelledAtUtc?.ToString("yyyy.MM.dd. HH:mm")
                         </MudText>
                     }
                 </MudStack>
             }
         }
     </MudStack>;
-
-    private static readonly Dictionary<CancellationReason, string> ReasonText = new()
-    {
-        [CancellationReason.ByUser] = "Saját lemondás",
-        [CancellationReason.DayExcluded] = "Nap kizárása miatt",
-        [CancellationReason.MenuDeleted] = "A menü törölve lett",
-        [CancellationReason.VariantRemoved] = "A menüvariáns megszűnt",
-    };
-
-    private static string Describe(CancellationReason? reason) => reason is { } r ? ReasonText.GetValueOrDefault(r, r.ToString()) : string.Empty;
 
     private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
 

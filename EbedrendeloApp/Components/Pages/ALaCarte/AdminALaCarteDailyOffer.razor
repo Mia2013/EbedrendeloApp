@@ -1,4 +1,5 @@
 @page "/alacarte-napi-kinalat"
+@using EbedrendeloApp.Common.ALaCarte
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
@@ -55,7 +56,7 @@
                 }
                 else
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => isEditing = true">
+                    <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => isEditing = true">
                         Szerkesztés
                     </MudButton>
                 }
@@ -64,28 +65,25 @@
     </MudStack>
 </MudPaper>
 
-@if (isLoading)
+@if (!string.IsNullOrEmpty(errorMessage))
 {
-    <MudStack Row Justify="Justify.Center" Class="my-4">
-        <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
-    </MudStack>
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+    <MudAlert Severity="Severity.Error" Class="mt-4 mb-2">@errorMessage</MudAlert>
 }
-else
-{
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <MudAlert Severity="Severity.Error" Class="mt-4 mb-2">@errorMessage</MudAlert>
-    }
 
-    <MudGrid Spacing="3" class="mt-3">
-        <MudItem xs="12" md="4" lg="3">
-            <MudStack Row Justify="Justify.Center" AlignItems="AlignItems.Center" Style="height:100%;">
-                <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
-            </MudStack>
-        </MudItem>
-        <MudItem xs="12" md="8" lg="9">
-            <MudPaper Outlined="true" Class="pa-3">
+<MudGrid Spacing="3" class="mt-3">
+    <MudItem xs="12" md="4" lg="3">
+        <MudStack Row Justify="Justify.Center" AlignItems="AlignItems.Center" Style="height:100%;">
+            <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+        </MudStack>
+    </MudItem>
+    <MudItem xs="12" md="8" lg="9">
+        <MudPaper Outlined="true" Class="pa-3">
+            @if (isLoading)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+            }
+            else
+            {
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
@@ -123,46 +121,46 @@ else
                 {
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">Ma nincs leves beállítva.</MudText>
                 }
+            }
+        </MudPaper>
+    </MudItem>
+
+    @foreach (var category in NonSoupCategories)
+    {
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(category)" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6">@ALaCarteCategoryDisplay.Name(category)</MudText>
+                </MudStack>
+
+                <MudTable Items="rowsByCategory[category]" Loading="@isLoading" Hover="true" Elevation="0" Dense="true">
+                    <HeaderContent>
+                        <MudTh>Tétel</MudTh>
+                        <MudTh>Kapacitás</MudTh>
+                        <MudTh>Lefoglalva</MudTh>
+                        <MudTh>Szabad</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tétel">@context.Item.Name</MudTd>
+                        <MudTd DataLabel="Kapacitás">
+                            @if (isEditing)
+                            {
+                                <MudNumericField T="int" Value="context.CapacityInput" ValueChanged="v => context.CapacityInput = v" Min="0" Style="width:90px;" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            }
+                            else
+                            {
+                                @(context.Offer is null ? "—" : context.Offer.Capacity.ToString())
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Lefoglalva">@(context.Offer?.OrderedCount ?? 0)</MudTd>
+                        <MudTd DataLabel="Szabad">@(context.Offer is null ? "—" : context.Offer.FreeCount.ToString())</MudTd>
+                    </RowTemplate>
+                </MudTable>
             </MudPaper>
         </MudItem>
-
-        @foreach (var category in NonSoupCategories)
-        {
-            <MudItem xs="12" md="6">
-                <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
-                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-                        <MudIcon Icon="@CategoryIcon(category)" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6">@CategoryName(category)</MudText>
-                    </MudStack>
-
-                    <MudTable Items="rowsByCategory[category]" Hover="true" Elevation="0" Dense="true">
-                        <HeaderContent>
-                            <MudTh>Tétel</MudTh>
-                            <MudTh>Kapacitás</MudTh>
-                            <MudTh>Lefoglalva</MudTh>
-                            <MudTh>Szabad</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="Tétel">@context.Item.Name</MudTd>
-                            <MudTd DataLabel="Kapacitás">
-                                @if (isEditing)
-                                {
-                                    <MudNumericField T="int" Value="context.CapacityInput" ValueChanged="v => context.CapacityInput = v" Min="0" Style="width:90px;" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                }
-                                else
-                                {
-                                    @(context.Offer is null ? "—" : context.Offer.Capacity.ToString())
-                                }
-                            </MudTd>
-                            <MudTd DataLabel="Lefoglalva">@(context.Offer?.OrderedCount ?? 0)</MudTd>
-                            <MudTd DataLabel="Szabad">@(context.Offer is null ? "—" : context.Offer.FreeCount.ToString())</MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                </MudPaper>
-            </MudItem>
-        }
-    </MudGrid>
-}
+    }
+</MudGrid>
 
 @code {
     private sealed class ItemRow
@@ -195,7 +193,8 @@ else
     /// <summary>Kategóriánként előre legyártott, stabil <see cref="ItemRow"/> példányok — a <see cref="MudTable"/>
     /// ezekhez van kötve. Enélkül (pl. egy metódushívással minden renderkor újraszámolva) minden billentyűleütés
     /// után újra létrejönnének a sorok az eredeti (mentett) kapacitással, és a beírt érték azonnal eltűnne.</summary>
-    private Dictionary<ALaCarteCategory, List<ItemRow>> rowsByCategory = [];
+    private Dictionary<ALaCarteCategory, List<ItemRow>> rowsByCategory =
+        NonSoupCategories.ToDictionary(category => category, _ => new List<ItemRow>());
 
     private void RebuildRows() => rowsByCategory = NonSoupCategories.ToDictionary(
         category => category,
@@ -343,23 +342,4 @@ else
         CloseOnEscapeKey = true,
     };
 
-    private static string CategoryName(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => "Leves",
-        ALaCarteCategory.Foetel => "Főétel",
-        ALaCarteCategory.Koret => "Köret",
-        ALaCarteCategory.Desszert => "Desszert",
-        ALaCarteCategory.Ontet => "Öntet",
-        _ => category.ToString(),
-    };
-
-    private static string CategoryIcon(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => Icons.Material.Filled.SoupKitchen,
-        ALaCarteCategory.Foetel => Icons.Material.Filled.DinnerDining,
-        ALaCarteCategory.Koret => Icons.Material.Filled.RiceBowl,
-        ALaCarteCategory.Desszert => Icons.Material.Filled.Icecream,
-        ALaCarteCategory.Ontet => Icons.Material.Filled.WaterDrop,
-        _ => Icons.Material.Filled.Fastfood,
-    };
 }

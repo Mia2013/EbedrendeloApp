@@ -1,4 +1,5 @@
 @page "/mai-menu"
+@using EbedrendeloApp.Common.ALaCarte
 @using EbedrendeloApp.Common.Allergens
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
@@ -129,7 +130,7 @@ else
                     <MudTh>Művelet</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Kategória">@CategoryName(context.Category)</MudTd>
+                    <MudTd DataLabel="Kategória">@ALaCarteCategoryDisplay.Name(context.Category)</MudTd>
                     <MudTd DataLabel="Tétel">
                         @context.Name@(context.IncludesSoup ? " (levessel)" : "")
                         @if (FormatALaCarteNutrition(context) is { } nutrition)
@@ -157,7 +158,7 @@ else
                         else
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                       Disabled="!today.IsALaCarteOrderableNow || orderingItemIds.Contains(context.ALaCarteItemId)"
+                                       Disabled="@(!CanOrder(context))"
                                        OnClick="() => SelectAsync(context)">
                                 Kiválaszt
                             </MudButton>
@@ -177,7 +178,7 @@ else
             <MudStack Spacing="1" Class="mt-1">
                 @foreach (var line in today.MyALaCarteOrderLines)
                 {
-                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@CategoryName(line.Category)) — @line.UnitPriceHuf Ft</MudText>
+                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@ALaCarteCategoryDisplay.Name(line.Category)) — @line.UnitPriceHuf Ft</MudText>
                 }
             </MudStack>
         }
@@ -225,6 +226,8 @@ else
 
     private bool IsOrdered(ALaCarteOfferDto offer) => today!.MyALaCarteOrderLines.Any(l => l.ALaCarteItemId == offer.ALaCarteItemId);
 
+    private bool CanOrder(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !orderingItemIds.Contains(offer.ALaCarteItemId);
+
     private async Task SelectAsync(ALaCarteOfferDto offer)
     {
         orderingItemIds.Add(offer.ALaCarteItemId);
@@ -243,16 +246,6 @@ else
             orderErrorMessage = result.ErrorCode is { } code && ALaCarteOrderErrorText.TryGetValue(code, out var text) ? text : result.ErrorMessage;
         }
     }
-
-    private static string CategoryName(ALaCarteCategory category) => category switch
-    {
-        ALaCarteCategory.Leves => "Leves",
-        ALaCarteCategory.Foetel => "Főétel",
-        ALaCarteCategory.Koret => "Köret",
-        ALaCarteCategory.Desszert => "Desszert",
-        ALaCarteCategory.Ontet => "Öntet",
-        _ => category.ToString(),
-    };
 
     private static string? FormatALaCarteNutrition(ALaCarteOfferDto offer) => MenuVariantNutritionFormat.Format(
         offer.EnergyKcal, offer.FatGrams, offer.SaturatedFatGrams, offer.CarbohydrateGrams, offer.SugarGrams, offer.ProteinGrams, offer.SaltGrams);

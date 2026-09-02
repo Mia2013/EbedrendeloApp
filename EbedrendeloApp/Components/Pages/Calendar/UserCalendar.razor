@@ -34,7 +34,7 @@
                 {
                     <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
                                Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                               Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
+                               Class="panel-narrow-surface">
                         @foreach (var period in periods)
                         {
                             <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
@@ -42,7 +42,7 @@
                     </MudSelect>
                 }
                 <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
-                           Style="max-width:420px; background:var(--mud-palette-surface); border-radius:8px;">
+                           Class="panel-narrow-surface">
                     <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
                     @foreach (var colleague in colleagues)
                     {
@@ -112,9 +112,17 @@ else
             </MudTable>
 
             <MudStack Row Justify="Justify.FlexEnd">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CheckCircle"
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@(isSubmitting ? null : Icons.Material.Filled.CheckCircle)"
                            OnClick="SubmitOrdersAsync" Disabled="isSubmitting">
-                    Rendelés leadása (@pendingSelections.Count nap, @PendingTotalHuf Ft)
+                    @if (isSubmitting)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Leadás...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Rendelés leadása (@pendingSelections.Count nap, @PendingTotalHuf Ft)</MudText>
+                    }
                 </MudButton>
             </MudStack>
         </MudPaper>
@@ -125,9 +133,17 @@ else
         <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                 <MudText Typo="Typo.body1"><strong>@pendingCancellations.Count nap</strong> kiválasztva lemondásra</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.EventBusy"
+                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@(isSubmittingCancellations ? null : Icons.Material.Filled.EventBusy)"
                            OnClick="SubmitCancellationsAsync" Disabled="isSubmittingCancellations">
-                    Lemondás megerősítése (@pendingCancellations.Count nap)
+                    @if (isSubmittingCancellations)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Lemondás...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Lemondás megerősítése (@pendingCancellations.Count nap)</MudText>
+                    }
                 </MudButton>
             </MudStack>
         </MudPaper>

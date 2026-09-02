@@ -32,8 +32,10 @@
         </MudSelect>
     </MudItem>
 
-    <MudItem xs="12" Class="d-flex justify-center">
-        <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+    <MudItem xs="12">
+        <MudStack Row Justify="Justify.Center">
+            <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+        </MudStack>
     </MudItem>
 
     <MudItem xs="12">
@@ -60,11 +62,19 @@
 </MudGrid>
 
 <MudStack Row Spacing="2" Class="mt-3">
-    <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+    <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)"
                OnClick="SaveAsync" Disabled="!CanSave">
-        Mentés
+        @if (isSaving)
+        {
+            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+            <MudText Class="ms-2">Mentés...</MudText>
+        }
+        else
+        {
+            <MudText>Mentés</MudText>
+        }
     </MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => OnCancelled.InvokeAsync()">Mégse</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => OnCancelled.InvokeAsync()" Disabled="isSaving">Mégse</MudButton>
 </MudStack>
 
 @code {
