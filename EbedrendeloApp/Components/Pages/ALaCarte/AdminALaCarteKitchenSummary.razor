@@ -1,0 +1,335 @@
+@page "/alacarte-konyhai-lista"
+@using EbedrendeloApp.Common.ALaCarte
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteMonthlySummary
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+
+<PageTitle>À la carte konyhai lista</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">À la carte konyhai lista</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Az à la carte rendelések összesítője, ez alapján tudja a konyha, mennyit kell főznie — napi vagy havi bontásban.
+            </MudText>
+        </MudStack>
+        <MudIconButton Icon="@Icons.Material.Filled.Print" title="Nyomtatás" OnClick="PrintAsync" />
+    </MudStack>
+</MudPaper>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
+    <MudStack Row Spacing="2">
+        @foreach (var option in ViewModeOptions)
+        {
+            <MudChip T="string" Icon="@(option == "Napi" ? Icons.Material.Filled.Today : Icons.Material.Filled.CalendarMonth)"
+                     Color="@(viewMode == option ? Color.Primary : Color.Default)"
+                     Variant="@(viewMode == option ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => SetViewModeAsync(option)">
+                @option
+            </MudChip>
+        }
+    </MudStack>
+
+    @if (viewMode == "Napi")
+    {
+        <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd.")" OnStep="ChangeDayAsync" />
+    }
+    else
+    {
+        <DateNavigatorBar Label="@selectedMonth.ToString("yyyy. MMMM", HungarianCulture)" OnStep="ChangeMonthAsync" />
+    }
+</MudStack>
+
+@if (viewMode == "Napi")
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4" Style="max-width:420px;">
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
+            <MudText Typo="Typo.body1"><b>@soupPortionCount</b> levesadag erre a napra</MudText>
+        </MudStack>
+    </MudPaper>
+
+    @if (dailyLines is not null && dailyLines.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">@NoOrdersMessage</MudText>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            @foreach (var category in NonSoupCategories)
+            {
+                var lines = dailyLines?.Where(l => l.Category == category).ToList() ?? [];
+                if (dailyLines is not null && lines.Count == 0)
+                {
+                    continue;
+                }
+
+                <MudItem xs="12" md="6" lg="4">
+                    <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                            <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(category)" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">@ALaCarteCategoryDisplay.Name(category)</MudText>
+                        </MudStack>
+                        <MudTable Items="lines" Loading="@(dailyLines is null)" Hover="true" Elevation="0" Dense="true">
+                            <HeaderContent>
+                                <MudTh>Tétel</MudTh>
+                                <MudTh Style="text-align:right;">Darab</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
+                                <MudTd DataLabel="Darab" Style="text-align:right;">@context.Count</MudTd>
+                            </RowTemplate>
+                            <FooterContent>
+                                <MudTd><b>Összesen</b></MudTd>
+                                <MudTd Style="text-align:right;"><b>@lines.Sum(l => l.Count)</b></MudTd>
+                            </FooterContent>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+}
+else if (monthlyLines is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else
+{
+    <div class="kitchen-monthly-table__wrapper">
+        <table class="kitchen-monthly-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="kitchen-monthly-table__date-header">Dátum</th>
+                    @foreach (var group in MonthlyCategoryGroups)
+                    {
+                        <th colspan="@group.ColumnCount">
+                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="1">
+                                <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(group.Category)" Size="Size.Small" Color="Color.Primary" />
+                                <MudText Typo="Typo.body2">@ALaCarteCategoryDisplay.Name(group.Category)</MudText>
+                            </MudStack>
+                        </th>
+                    }
+                </tr>
+                <tr>
+                    @foreach (var column in MonthlyColumns)
+                    {
+                        <th class="kitchen-monthly-table__item-header"><span>@column.ItemName</span></th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (var weekIndex = 0; weekIndex < MonthlyWeeks.Count; weekIndex++)
+                {
+                    var week = MonthlyWeeks[weekIndex];
+                    var index = weekIndex;
+                    var collapsed = IsWeekCollapsed(index);
+
+                    <tr class="kitchen-monthly-table__week-row" @onclick="() => ToggleWeek(index)">
+                        <td class="kitchen-monthly-table__date-cell">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@(collapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)" Size="Size.Small" />
+                                <span><b>Heti összesen</b> (@week[0].ToString("MM.dd.")–@week[^1].ToString("MM.dd."))</span>
+                            </MudStack>
+                        </td>
+                        @foreach (var column in MonthlyColumns)
+                        {
+                            <td class="kitchen-monthly-table__count-cell"><b>@WeekColumnTotal(week, column)</b></td>
+                        }
+                    </tr>
+
+                    @if (!collapsed)
+                    {
+                        @foreach (var date in week)
+                        {
+                            <tr>
+                                <td class="kitchen-monthly-table__date-cell">@date.ToString("MM.dd. (ddd)", HungarianCulture)</td>
+                                @foreach (var column in MonthlyColumns)
+                                {
+                                    <td class="kitchen-monthly-table__count-cell">@CellDisplay(date, column)</td>
+                                }
+                            </tr>
+                        }
+                    }
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><b>Összesen</b></td>
+                    @foreach (var column in MonthlyColumns)
+                    {
+                        <td class="kitchen-monthly-table__count-cell"><b>@ColumnTotal(column)</b></td>
+                    }
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+    private static readonly string[] ViewModeOptions = ["Napi", "Havi"];
+    private static readonly ALaCarteCategory[] NonSoupCategories =
+        [ALaCarteCategory.Foetel, ALaCarteCategory.Koret, ALaCarteCategory.Desszert, ALaCarteCategory.Ontet];
+
+    /// <summary>A havi mátrix oszlop-csoportjainak sorrendje — a leves itt (a napi nézettel ellentétben,
+    /// ahol külön panelben van) a többi kategóriával azonos módon, a mátrix első oszlop-csoportjaként jelenik meg.</summary>
+    private static readonly ALaCarteCategory[] AllCategoriesInOrder =
+        [ALaCarteCategory.Leves, ALaCarteCategory.Foetel, ALaCarteCategory.Koret, ALaCarteCategory.Desszert, ALaCarteCategory.Ontet];
+
+    private string viewMode = "Napi";
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly selectedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private IReadOnlyList<ALaCarteSummaryLineDto>? dailyLines;
+    private IReadOnlyList<ALaCarteMonthlyLineDto>? monthlyLines;
+    private IReadOnlyList<ALaCarteMonthlyOfferedItemDto>? monthlyOfferedItems;
+    private readonly HashSet<int> collapsedWeeks = [];
+    private int soupPortionCount;
+
+    private string NoOrdersMessage => "Erre a napra még nincs à la carte rendelés.";
+
+    private readonly record struct ItemColumn(ALaCarteCategory Category, string ItemName);
+
+    /// <summary>A hónap munkanapjai (hétvége nélkül) — a mátrix mindig végigmegy az egész hónapon,
+    /// nem csak azokon a napokon, amikor ténylegesen volt rendelés.</summary>
+    private IReadOnlyList<DateOnly> MonthlyWeekdays
+    {
+        get
+        {
+            var days = new List<DateOnly>();
+            var date = new DateOnly(selectedMonth.Year, selectedMonth.Month, 1);
+            var lastDay = date.AddMonths(1).AddDays(-1);
+            for (; date <= lastDay; date = date.AddDays(1))
+            {
+                if (date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                {
+                    days.Add(date);
+                }
+            }
+            return days;
+        }
+    }
+
+    /// <summary>A munkanapok hétre bontva (mindig hétfővel kezdve egy új csoportot) — ez adja a heti
+    /// összesítő sorokat, amik egyben a péntek/hétfő közti vizuális elválasztást is jelentik.</summary>
+    private IReadOnlyList<IReadOnlyList<DateOnly>> MonthlyWeeks
+    {
+        get
+        {
+            var weeks = new List<List<DateOnly>>();
+            foreach (var date in MonthlyWeekdays)
+            {
+                if (weeks.Count == 0 || date.DayOfWeek == DayOfWeek.Monday)
+                {
+                    weeks.Add([]);
+                }
+                weeks[^1].Add(date);
+            }
+            return weeks;
+        }
+    }
+
+    /// <summary>Az oszlopok forrása a hónapban valaha (Capacity &gt; 0-val) kínált tételek listája, nem
+    /// a rendelési sorok — így egy hónapban végig kínált, de véletlenül senki által nem rendelt tétel is
+    /// megkapja a saját oszlopát, egy a hónapban egyszer sem kínált tétel viszont nem.</summary>
+    private IReadOnlyList<ItemColumn> MonthlyColumns => monthlyOfferedItems is null
+        ? []
+        : monthlyOfferedItems
+            .Select(o => new ItemColumn(o.Category, o.ItemName))
+            .Distinct()
+            .OrderBy(c => Array.IndexOf(AllCategoriesInOrder, c.Category))
+            .ThenBy(c => c.ItemName, StringComparer.Ordinal)
+            .ToList();
+
+    private IEnumerable<(ALaCarteCategory Category, int ColumnCount)> MonthlyCategoryGroups =>
+        MonthlyColumns.GroupBy(c => c.Category).Select(g => (g.Key, g.Count()));
+
+    private bool IsWeekCollapsed(int weekIndex) => collapsedWeeks.Contains(weekIndex);
+
+    private void ToggleWeek(int weekIndex)
+    {
+        if (!collapsedWeeks.Remove(weekIndex))
+        {
+            collapsedWeeks.Add(weekIndex);
+        }
+    }
+
+    /// <summary>Üres cella, ha nem volt rendelés aznap — a "0 vagy kötőjel" jelölés helyett, mert
+    /// üres cellákkal könnyebb olvasni a mátrixot.</summary>
+    private string CellDisplay(DateOnly date, ItemColumn column)
+    {
+        var count = monthlyLines?.FirstOrDefault(l => l.Date == date && l.Category == column.Category && l.ItemName == column.ItemName)?.Count;
+        return count is { } c ? c.ToString() : "";
+    }
+
+    private int WeekColumnTotal(IReadOnlyList<DateOnly> week, ItemColumn column) =>
+        monthlyLines?.Where(l => week.Contains(l.Date) && l.Category == column.Category && l.ItemName == column.ItemName).Sum(l => l.Count) ?? 0;
+
+    private int ColumnTotal(ItemColumn column) =>
+        monthlyLines?.Where(l => l.Category == column.Category && l.ItemName == column.ItemName).Sum(l => l.Count) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (viewMode == "Napi")
+        {
+            var summary = await Mediator.Send(new GetALaCarteDailySummaryQuery(selectedDate));
+            dailyLines = summary.Lines;
+            soupPortionCount = summary.SoupPortionCount;
+            monthlyLines = null;
+            monthlyOfferedItems = null;
+        }
+        else
+        {
+            monthlyLines = null;
+            collapsedWeeks.Clear();
+            StateHasChanged();
+            var summary = await Mediator.Send(new GetALaCarteMonthlySummaryQuery(selectedMonth.Year, selectedMonth.Month));
+            monthlyLines = summary.Lines;
+            monthlyOfferedItems = summary.OfferedItems;
+            soupPortionCount = summary.SoupPortionCount;
+            dailyLines = null;
+        }
+    }
+
+    private async Task SetViewModeAsync(string mode)
+    {
+        viewMode = mode;
+        await LoadAsync();
+    }
+
+    private async Task ChangeDayAsync(int deltaDays)
+    {
+        selectedDate = selectedDate.AddDays(deltaDays);
+        await LoadAsync();
+    }
+
+    private async Task ChangeMonthAsync(int deltaMonths)
+    {
+        selectedMonth = selectedMonth.AddMonths(deltaMonths);
+        await LoadAsync();
+    }
+
+    private async Task PrintAsync() => await JsRuntime.InvokeVoidAsync("print");
+
+}

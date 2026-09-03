@@ -14,3 +14,11 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Kis, kiemelt vezérlő (pl. időszak-választó select) egy admin oldal fejlécében — több oldalon
+   megismételve, ezért közös osztályban, nem inline style-ként. */
+.panel-narrow-surface {
+    max-width: 420px;
+    background: var(--mud-palette-surface);
+    border-radius: 8px;
+}

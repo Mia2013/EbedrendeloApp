@@ -1,0 +1,58 @@
+.kitchen-monthly-table__wrapper {
+    overflow-x: auto;
+}
+
+.kitchen-monthly-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+    .kitchen-monthly-table th,
+    .kitchen-monthly-table td {
+        border: 1px solid var(--mud-palette-table-lines);
+        padding: 6px 8px;
+    }
+
+    .kitchen-monthly-table thead th {
+        background: var(--mud-palette-background-grey);
+    }
+
+.kitchen-monthly-table__date-header,
+.kitchen-monthly-table__date-cell {
+    white-space: nowrap;
+    text-align: left;
+}
+
+.kitchen-monthly-table__count-cell {
+    text-align: right;
+}
+
+/* Az ételnevek oszlopa sok tételnél igen széles lenne vízszintesen — függőleges felirat
+   tartja kompaktnak a táblázatot nyomtatáskor is, anélkül hogy rövidíteni kellene a neveket. */
+.kitchen-monthly-table__item-header {
+    height: 130px;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+    .kitchen-monthly-table__item-header span {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        display: inline-block;
+    }
+
+.kitchen-monthly-table tfoot td {
+    background: var(--mud-palette-background-grey);
+}
+
+/* A heti összesítő sor egyben a hétvége-elválasztó is: a következő hét mindig egy önálló,
+   kattintható (le/kinyitható) sorral kezdődik, ezért nem kell külön szegély a péntek/hétfő
+   határra — ez a sor maga a "csík". */
+.kitchen-monthly-table__week-row {
+    cursor: pointer;
+    background: var(--mud-palette-action-default-hover);
+}
+
+    .kitchen-monthly-table__week-row:hover {
+        background: var(--mud-palette-table-hover);
+    }

@@ -1,4 +1,5 @@
 @page "/rendeleseim"
+@using EbedrendeloApp.Common.Orders
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
@@ -11,27 +12,26 @@
 
 <PageTitle>Rendeléseim</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 my-orders__header-card">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Primary" />
         <MudStack Spacing="0">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h4">Rendeléseim</MudText>
-            </MudStack>
+            <MudText Typo="Typo.h4">Rendeléseim</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
                 A kiválasztott időszakra leadott és lemondott rendeléseid, naptár nézetben.
             </MudText>
+            @if (periods is { Count: > 0 })
+            {
+                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                           Class="mt-4 panel-narrow-surface">
+                    @foreach (var period in periods)
+                    {
+                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                    }
+                </MudSelect>
+            }
         </MudStack>
-
-        @if (periods is { Count: > 0 })
-        {
-            <MudSelect T="int" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
-                @foreach (var period in periods)
-                {
-                    <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
-                }
-            </MudSelect>
-        }
     </MudStack>
 </MudPaper>
 
@@ -99,23 +99,13 @@ else
                     @if (order.Status == OrderStatus.Cancelled)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @Describe(order.CancellationReason) — @order.CancelledAtUtc?.ToString("yyyy.MM.dd. HH:mm")
+                            @CancellationReasonDisplay.UserText(order.CancellationReason) — @order.CancelledAtUtc?.ToString("yyyy.MM.dd. HH:mm")
                         </MudText>
                     }
                 </MudStack>
             }
         }
     </MudStack>;
-
-    private static readonly Dictionary<CancellationReason, string> ReasonText = new()
-    {
-        [CancellationReason.ByUser] = "Saját lemondás",
-        [CancellationReason.DayExcluded] = "Nap kizárása miatt",
-        [CancellationReason.MenuDeleted] = "A menü törölve lett",
-        [CancellationReason.VariantRemoved] = "A menüvariáns megszűnt",
-    };
-
-    private static string Describe(CancellationReason? reason) => reason is { } r ? ReasonText.GetValueOrDefault(r, r.ToString()) : string.Empty;
 
     private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
 

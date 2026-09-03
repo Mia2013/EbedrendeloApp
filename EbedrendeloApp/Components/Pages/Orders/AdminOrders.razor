@@ -1,4 +1,5 @@
 @page "/rendelesek"
+@using EbedrendeloApp.Common.Orders
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
@@ -13,36 +14,37 @@
 
 <PageTitle>Rendelések</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 admin-orders__header-card">
-    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-        <MudIcon Icon="@Icons.Material.Filled.ListAlt" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h4">Rendelések</MudText>
-    </MudStack>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-        Naponkénti, variánsonkénti összesítő — ez alapján tudja a konyha, hány adagot kell főznie. Reklamáció esetén
-        a lenti részletes listában kereshetsz konkrét rendelésre.
-    </MudText>
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.ListAlt" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Rendelések</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Naponkénti, variánsonkénti összesítő — ez alapján tudja a konyha, hány adagot kell főznie. Reklamáció esetén
+                a lenti részletes listában kereshetsz konkrét rendelésre.
+            </MudText>
 
-    @if (periods is { Count: > 0 })
-    {
-        <MudSelect T="int" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
-            @foreach (var period in periods)
+            @if (periods is { Count: > 0 })
             {
-                <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                           Class="mt-4 panel-narrow-surface">
+                    @foreach (var period in periods)
+                    {
+                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                    }
+                </MudSelect>
             }
-        </MudSelect>
-    }
+        </MudStack>
+    </MudStack>
 </MudPaper>
 
-@if (orders is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else if (!string.IsNullOrEmpty(errorMessage))
+@if (!string.IsNullOrEmpty(errorMessage))
 {
     <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
 }
-else
+
+@if (orders is not null)
 {
     <MudText Typo="Typo.h6" Class="mt-6 mb-1">
         <MudIcon Icon="@Icons.Material.Filled.GridView" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
@@ -70,34 +72,35 @@ else
             }
         }
     </div>
+}
 
-    <MudText Typo="Typo.h6" Class="mt-8 mb-1">
-        <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
-        Részletes lista
-    </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Egyedi rendelések szűrhetően — ki adta le, mikor, ki és miért mondta le.</MudText>
+<MudText Typo="Typo.h6" Class="mt-8 mb-1">
+    <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
+    Részletes lista
+</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Egyedi rendelések szűrhetően — ki adta le, mikor, ki és miért mondta le.</MudText>
 
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudSelect T="int?" Label="Dolgozó" Value="selectedUserId" ValueChanged="OnUserSelectedAsync" Variant="Variant.Outlined" Clearable="true" Style="min-width:240px;">
-            @foreach (var user in users)
-            {
-                <MudSelectItem Value="@((int?)user.UserId)">@user.DisplayName</MudSelectItem>
-            }
-        </MudSelect>
+<MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+    <MudSelect T="int?" Label="Dolgozó" Value="selectedUserId" ValueChanged="OnUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width:240px;">
+        @foreach (var user in users)
+        {
+            <MudSelectItem Value="@((int?)user.UserId)">@user.DisplayName</MudSelectItem>
+        }
+    </MudSelect>
 
-        <MudStack Row Spacing="2">
-            @foreach (var option in StatusFilterOptions)
-            {
-                <MudChip T="string" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
-                         Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
-                         OnClick="() => SetStatusFilter(option)">
-                    @option
-                </MudChip>
-            }
-        </MudStack>
+    <MudStack Row Spacing="2">
+        @foreach (var option in StatusFilterOptions)
+        {
+            <MudChip T="string" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
+                     Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => SetStatusFilter(option)">
+                @option
+            </MudChip>
+        }
     </MudStack>
+</MudStack>
 
-    <MudTable Items="filteredOrders" Hover="true" Elevation="1" Dense="true">
+<MudTable Items="filteredOrders" Loading="@(orders is null)" Hover="true" Elevation="1" Dense="true">
         <HeaderContent>
             <MudTh>Dátum</MudTh>
             <MudTh>Dolgozó</MudTh>
@@ -127,7 +130,7 @@ else
             <MudTd DataLabel="Lemondta / ok">
                 @if (context.Status == OrderStatus.Cancelled)
                 {
-                    @($"{context.CancelledByDisplayName} — {Describe(context.CancellationReason)}, {context.CancelledAtUtc:MM.dd. HH:mm}")
+                    @($"{context.CancelledByDisplayName} — {CancellationReasonDisplay.AdminText(context.CancellationReason)}, {context.CancelledAtUtc:MM.dd. HH:mm}")
                 }
                 else
                 {
@@ -136,7 +139,6 @@ else
             </MudTd>
         </RowTemplate>
     </MudTable>
-}
 
 @code {
     private RenderFragment<DateOnly> SummaryCell => date =>
@@ -162,16 +164,6 @@ else
             </MudStack>
         }
     </MudStack>;
-
-    private static readonly Dictionary<CancellationReason, string> ReasonText = new()
-    {
-        [CancellationReason.ByUser] = "saját lemondás",
-        [CancellationReason.DayExcluded] = "nap kizárása",
-        [CancellationReason.MenuDeleted] = "menü törölve",
-        [CancellationReason.VariantRemoved] = "menüvariáns megszűnt",
-    };
-
-    private static string Describe(CancellationReason? reason) => reason is { } r ? ReasonText.GetValueOrDefault(r, r.ToString()) : string.Empty;
 
     private readonly record struct VariantCount(string Code, string Name, int Count);
 

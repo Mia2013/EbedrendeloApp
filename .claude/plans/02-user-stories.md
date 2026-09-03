@@ -324,9 +324,10 @@ Akarok **aznapi a la carte ételeket és adagkeretet (`Capacity`) rögzíteni**,
 Azért, hogy a konyha kapacitásának megfelelően korlátozzam a rendelhető adagszámot.
 
 **Elfogadási Kritériumok:**
-* **AC 4.1.1:** Az admin kategóriánként (Leves, Főétel, Köret, Desszert) adhat meg napi keretet az aktív törzsadatokhoz.
-* **AC 4.1.2:** A `Capacity` nem csökkenthető a már lefoglalt (`OrderedCount`) darabszám alá.
+* **AC 4.1.1 (Kategóriánkénti napi keret):** Az admin kategóriánként (Leves, Főétel, Köret, Desszert, Öntet) adhat meg napi ajánlatot az aktív törzsadatokhoz.
+* **AC 4.1.2:** A `Capacity` nem csökkenthető a már lefoglalt (`OrderedCount`) alá — Leves ajánlatra ez nem értelmezett, mert az `OrderedCount` rá nézve sosem növekszik (AC 4.2.4).
 * **AC 4.1.3:** Kizárt napra a lekérdezések automatikusan üres kínálatot adnak vissza.
+* **AC 4.1.4 (Legfeljebb egy Leves ajánlat naponta):** Leves kategóriájú tételre egy napra legfeljebb egy aktív ajánlat rögzíthető; egy második felvétele ugyanarra a napra elutasításra kerül — ez teszi egyértelművé, melyik leves ára adódik hozzá az aznapi főétel-rendelésekhez.
 
 **Technikai hivatkozás:** `SetDailyOfferCommand`, `ALaCarteDailyOffer`
 
@@ -341,11 +342,12 @@ Azért, hogy a napi menü helyett vagy mellett egyéb ételeket fogyaszthassak.
 **Elfogadási Kritériumok:**
 * **AC 4.2.1 (Időkorlát):** Rendelés csak aznap (munkanapon), legkésőbb helyi idő szerint 10:30-ig adható le.
 * **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába (hogy legyen mihez számlázni).
-* **AC 4.2.3 (Darabszám limit):** Egy felhasználó tételenként maximum 1 darabot rendelhet aznapra.
-* **AC 4.2.4 (Atomi készletfoglalás):** A foglalás egyetlen atomi feltételes SQL UPDATE-tel történik (`OrderedCount < Capacity`). Párhuzamos rendelések esetén nem fordulhat elő túlfoglalás; ha bármely tétel elfogyott, a tranzakció visszaáll (nincs részleges a la carte rendelés).
+* **AC 4.2.3 (Darabszám limit — tételenként, nem kategóriánként):** Egy felhasználó **tételenként** legfeljebb 1 darabot rendelhet aznapra — ugyanazon a napon **több különböző Főétel** tétel is megrendelhető (mindegyikből legfeljebb 1 db), csak ugyanazon tétel duplikálása tilos.
+* **AC 4.2.4 (Atomi készletfoglalás — Leves kivételével):** A foglalás egyetlen atomi feltételes SQL UPDATE-tel történik (`OrderedCount < Capacity`), **minden nem Leves kategóriájú tételre**. Ha bármely nem Leves tétel elfogyott, a tranzakció visszaáll (nincs részleges a la carte rendelés). Leves kategóriájú ajánlatra nincs foglalás — az korlátlan (AC 4.2.8), és rá közvetlen rendelés nem is adható le.
 * **AC 4.2.5 (Lemondás tiltása):** A leadott a la carte rendelések nem mondhatók le.
 * **AC 4.2.6 (Az `IsOpen` és az `OrderDeadline` itt nem feltétel):** Ez aznapi vásárlás, nem előrendelés — a rendelési időszak csak a számlázási hovatartozás (`OrderingPeriodId`) miatt kell. Lezárt (`IsOpen = false`) vagy a leadási határidején túli időszak napján is leadható a la carte rendelés.
 * **AC 4.2.7 (Kizárt és lefedetlen nap):** Kizárt napra nem adható le rendelés (a kínálat is üres, AC 4.1.3); lefedetlen (rés-)napon a rendelés `OutsidePeriod` okkal elutasításra kerül.
+* **AC 4.2.8 (Leves a főétel árába rejtve, korlátlanul):** Leves kategóriájú ajánlatra közvetlen rendelés nem adható le — a felület nem is kínálja fel önálló, árazott sorként. Amikor a dolgozó egy Főétel-tételt rendel, a rendelési sor `UnitPriceHuf`-ja a főétel árának és az aznapi aktív Leves-ajánlat árának **összege**, egyetlen kombinált számként; a sor `IncludesSoup` mezője ekkor snapshotolódik, és a felület ebből (nem élő állapotból) jeleníti meg a „(levessel)" jelzést. Ha aznapra nincs Leves-ajánlat, a kombinált ár a puszta főétel ára (0 Ft leves-rész, nem hibaeset).
 
 **Technikai hivatkozás:** `PlaceALaCarteOrderCommand`, `ALaCarteOrder`, `ALaCarteOrderLine`
 
@@ -358,12 +360,12 @@ Akarok **a la carte ételeket felvinni, módosítani és kivezetni**,
 Azért, hogy a napi kínálatot egy karbantartott törzsadatból tudjam összeállítani.
 
 **Elfogadási Kritériumok:**
-* **AC 4.3.1 (Törzsadat mezők):** Egy tétel `Name`, `Category` (Leves / Főétel / Köret / Desszert), `PriceHuf` és `IsActive` mezőkkel rögzíthető és módosítható.
-* **AC 4.3.2 (Kivezetés, nem törlés):** A kivezetés az `IsActive = false` beállítása; az inaktív tétel új napi ajánlatba nem vehető fel.
+* **AC 4.3.1 (Törzsadat mezők):** Egy tétel `Name`, `Category` (Leves / Főétel / Köret / Desszert / Öntet), `PriceHuf`, `IsActive`, valamint — a `MenuDish` mintáját követő — 7 opcionális tápérték-mező adható meg. Ez a katalógus **nem osztozik** a `MenuDish` katalóguson.
+* **AC 4.3.2 (Kivezetés, nem törlés):** A kivezetés az `IsActive = false` beállítása; az inaktív tétel új napi ajánlatba nem vehető fel. Ugyanez a kapcsoló egy irányban vissza is állítható (visszaaktiválás).
 * **AC 4.3.3 (Múlt védelme):** A kivezetés és az árváltozás nem érinti a már leadott rendeléseket és a korábbi számlákat — a rendelési sorok a nevet, a kategóriát és az egységárat snapshotként tárolják.
 * **AC 4.3.4 (Listázás):** A törzsadat kategória szerint csoportosítva, aktív/inaktív szűrővel lekérdezhető.
 
-**Technikai hivatkozás:** `UpsertALaCarteItemCommand`, `DeactivateALaCarteItemCommand`, `GetALaCarteItemsQuery`, `ALaCarteItem`
+**Technikai hivatkozás:** `UpsertALaCarteItemCommand`, `SetALaCarteItemActiveCommand`, `GetALaCarteItemsQuery`, `ALaCarteItem`
 
 ---
 
@@ -388,7 +390,7 @@ Akarok **látni egy nap a la carte kínálatát a még elérhető darabszámmal*
 Azért, hogy tudjam, mit lehet még rendelni, mielőtt leadom a rendelést.
 
 **Elfogadási Kritériumok:**
-* **AC 4.5.1 (Szabad keret):** Minden tételnél megjelenik a szabad darabszám (`Capacity − OrderedCount`), kategória szerint csoportosítva.
+* **AC 4.5.1 (Szabad keret — Leves kivételével):** A **nem Leves** tételeknél megjelenik a szabad darabszám (`Capacity − OrderedCount`), kategória szerint csoportosítva. A Leves ajánlat ára a Főétel-sorok kombinált árában jelenik meg (AC 4.2.8), önálló sorként soha.
 * **AC 4.5.2 (Kizárt nap):** Kizárt napra a lekérdezés üres listát ad (AC 4.1.3); a kizárás visszavonása után az ajánlatok maguktól újra megjelennek — nincs külön aktiválási lépés.
 * **AC 4.5.3 (Nem garancia):** A szabad keret pillanatkép; a tényleges foglalást a rendelés atomi UPDATE-je dönti el (AC 4.2.4), ezért a felület nem kezelheti foglalásnak.
 
@@ -405,8 +407,10 @@ Azért, hogy a konyha pontosan tudja, miből hány adagot kell elkészítenie.
 **Elfogadási Kritériumok:**
 * **AC 4.6.1:** A lista tételenként adja a megrendelt darabszámot, kategória szerint csoportosítva.
 * **AC 4.6.2:** Az összesítés a rendeléskori snapshot neveket használja, így egy időközbeni átnevezés nem írja át a mai listát.
+* **AC 4.6.3 (Levesadag — levezetett érték):** A lista feltünteti az aznap elkészítendő levesadagok számát is; ez **nem tárolt sorból**, hanem az aznapi, `CategorySnapshot == Foetel` rendelési sorok darabszámából származik (minden rendelt főétel egy tányér levest jelent).
+* **AC 4.6.4 (Havi bontás):** Az admin felület napi nézet mellett havi összesítőt is tud mutatni ugyanazzal a tételenkénti/levesadag-logikával, egy adott hónap összes napjára összevonva — visszamenőleges rendelési igény kiszolgálására.
 
-**Technikai hivatkozás:** `GetALaCarteDailySummaryQuery`
+**Technikai hivatkozás:** `GetALaCarteDailySummaryQuery`, `GetALaCarteMonthlySummaryQuery`
 
 ---
 
@@ -747,13 +751,14 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyPeriodOrderQuery` | U | US-3.3 |
 | `GetUserOrdersQuery` | A | US-3.4 |
 | `UpsertALaCarteItemCommand` | A | US-4.3 |
-| `DeactivateALaCarteItemCommand` | A | US-4.3 |
+| `SetALaCarteItemActiveCommand` | A | US-4.3 |
 | `GetALaCarteItemsQuery` | A | US-4.3 |
 | `SetDailyOfferCommand` | A | US-4.1 |
 | `RemoveDailyOfferCommand` | A | US-4.4 |
 | `GetDailyOffersQuery` | A/U | US-4.5 |
 | `PlaceALaCarteOrderCommand` | U | US-4.2 |
 | `GetALaCarteDailySummaryQuery` | A | US-4.6 |
+| `GetALaCarteMonthlySummaryQuery` | A | US-4.6 |
 | `GetKitchenSummaryQuery` | A | US-6.1 |
 | `GetKitchenSummaryRangeQuery` | A | US-6.1 |
 | `CloseDayCommand` | A | US-6.2 |
@@ -770,5 +775,14 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-**Nincs lefedetlen use case**, és nincs olyan story, amely mögött ne állna use case. A kereszt-metsző
-követelmények (Epic 10) minden sorra vonatkoznak.
+Minden use case-hez tartozik story és fordítva. A kereszt-metsző követelmények (Epic 10) minden sorra
+vonatkoznak.
+
+**Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
+implementálva van. Az Epic 5–8 (Jóváírás, Konyha/napzárás, Számlázás, Értesítések — a fenti táblázat
+`GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig terjedő 15 sora) egyelőre csak
+tervezve van, a kód még nem készült el hozzá (ld. `01-szerver-architektura.md` "10. Végrehajtási
+sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se `NavMenu` link ezekhez. Emiatt a jóváírás/
+értesítés-írás (`ICreditService`/`INotificationService`, ami már ma is fut lemondás/kizárás/menütörlés
+esetén) jelenleg write-only: a dolgozó felé nincs még olvasó oldal az egyenlegéhez vagy az
+értesítéseihez.

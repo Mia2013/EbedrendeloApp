@@ -11,4 +11,5 @@ public sealed record OrderableDayDto(
     string? VariantCode,
     string? VariantName,
     string? Reason,
-    string? ReasonDetail);
+    string? ReasonDetail,
+    int MenuPortionHuf = 0);

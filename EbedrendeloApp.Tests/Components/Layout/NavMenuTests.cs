@@ -16,7 +16,7 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
     }
 
     [Fact]
-    public void Admin_sees_the_calendar_admin_links_but_not_the_worker_calendar_link()
+    public void Admin_sees_the_admin_links_plus_every_worker_ordering_link()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
 
@@ -25,8 +25,14 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.Contains("Rendelési időszakok", cut.Markup);
         Assert.Contains("Nem rendelhető napok", cut.Markup);
         Assert.Contains("Rendelések", cut.Markup);
-        Assert.DoesNotContain("Naptár", cut.Markup);
-        Assert.DoesNotContain("Rendeléseim", cut.Markup);
+        Assert.Contains("À la carte ételek", cut.Markup);
+        Assert.Contains("À la carte napi kínálat", cut.Markup);
+        Assert.Contains("À la carte konyhai lista", cut.Markup);
+
+        // The admin should be able to order for themselves too — every worker-facing link must also appear.
+        Assert.Contains("Naptár", cut.Markup);
+        Assert.Contains("Rendeléseim", cut.Markup);
+        Assert.Contains("Mai menü", cut.Markup);
     }
 
     [Fact]

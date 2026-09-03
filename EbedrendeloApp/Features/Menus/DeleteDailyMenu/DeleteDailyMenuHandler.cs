@@ -17,6 +17,11 @@ public sealed class DeleteDailyMenuHandler(
 {
     public async Task<Result> Handle(DeleteDailyMenuCommand request, CancellationToken cancellationToken)
     {
+        if (request.Date < clock.Today)
+        {
+            return Result.Failure(ErrorCodes.NotFutureDate, "Elmúlt napi menü már nem törölhető.");
+        }
+
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 

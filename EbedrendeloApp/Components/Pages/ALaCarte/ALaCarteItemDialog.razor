@@ -1,0 +1,242 @@
+@using EbedrendeloApp.Common.Allergens
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
+@using EbedrendeloApp.Features.ALaCarte.UpsertALaCarteItem
+@using MediatR
+@inject IMediator Mediator
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">@(IsEditMode ? "Tétel szerkesztése" : "Új tétel hozzáadása")</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@errorMessage</MudAlert>
+        }
+        @if (!IsEditMode && matchedExistingId is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Ez a tétel már szerepel a katalógusban — mentéskor a meglévőt frissíted.</MudAlert>
+        }
+
+        <MudGrid Spacing="2">
+            <MudItem xs="8" md="9">
+                @if (IsEditMode)
+                {
+                    <MudTextField T="string" Label="Név" 
+                    @bind-Value="name" 
+                    Variant="Variant.Outlined" MaxLength="128" Immediate="true" FullWidth="true" />
+                }
+                else
+                {
+                    <MudAutocomplete T="string" Label="Név" Value="name" ValueChanged="OnNameChanged" SearchFunc="SearchNamesAsync"
+                                     CoerceText="true" Immediate="true" Variant="Variant.Outlined"   MaxLength="128" FullWidth="true" />
+                }
+            </MudItem>
+            <MudItem xs="4" md="3">
+                <MudStack Row Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Style="height:100%;">
+                    <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Success" Label="Aktív" />
+                </MudStack>
+            </MudItem>
+
+            <MudItem xs="6">
+                <MudSelect T="ALaCarteCategory" 
+                    Label="Kategória"
+                    @bind-Value="category" 
+                    Disabled="IsCategoryLocked" Variant="Variant.Outlined" >
+                    <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Leves">Leves</MudSelectItem>
+                    <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Foetel">Főétel</MudSelectItem>
+                    <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Koret">Köret</MudSelectItem>
+                    <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Desszert">Desszert</MudSelectItem>
+                    <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Ontet">Öntet</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudNumericField T="int" Label="Ár" @bind-Value="priceHuf" Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentText="Ft" Min="0" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudSelect T="int" Label="Allergének" MultiSelection="true" 
+                SelectedValues="allergenIds" SelectedValuesChanged="v => allergenIds = v.ToHashSet()" 
+                Variant="Variant.Outlined">
+                    @foreach (var allergen in AllergenCatalog.All)
+                    {
+                        <MudSelectItem T="int" Value="allergen.Number">@allergen.Number – @allergen.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudStack Row Justify="Justify.Center">
+                    <MudText Typo="Typo.subtitle2">Tápérték (100 g-ra)</MudText>
+                </MudStack>
+            </MudItem>
+
+            <MudItem xs="12">
+                <DecimalStepperField Label="Energia (kcal)" @bind-Value="energyKcal" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Zsír" @bind-Value="fatGrams" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Telített zsír" @bind-Value="saturatedFatGrams" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Szénhidrát" @bind-Value="carbohydrateGrams" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Cukor" @bind-Value="sugarGrams" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Fehérje" @bind-Value="proteinGrams" />
+            </MudItem>
+            <MudItem xs="4">
+                <DecimalStepperField Label="Só" @bind-Value="saltGrams" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)"
+                   OnClick="SaveAsync" Disabled="!CanSubmit">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Mentés...</MudText>
+            }
+            else
+            {
+                <MudText>Mentés</MudText>
+            }
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => MudDialog.Cancel()" Disabled="isSaving">
+            Mégse
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Ha meg van adva, szerkesztő módba vált — a kategória zárolva marad (a snapshot-elv miatt
+    /// a múltat úgysem érintené, de admin-oldali zavart elkerülendő), mentéskor teljes felülírás megy a
+    /// már meglévő tételre.</summary>
+    [Parameter]
+    public ALaCarteItemDto? Existing { get; set; }
+
+    private bool IsEditMode => Existing is not null;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(name) && priceHuf >= 0;
+
+    private bool CanSubmit => CanSave && !isSaving;
+
+    private bool IsCategoryLocked => IsEditMode || matchedExistingId is not null;
+
+    private string name = string.Empty;
+    private ALaCarteCategory category = ALaCarteCategory.Foetel;
+    private int priceHuf;
+    private HashSet<int> allergenIds = [];
+    private decimal? energyKcal;
+    private decimal? fatGrams;
+    private decimal? saturatedFatGrams;
+    private decimal? carbohydrateGrams;
+    private decimal? sugarGrams;
+    private decimal? proteinGrams;
+    private decimal? saltGrams;
+    private bool isActive = true;
+    private bool isSaving;
+    private string? errorMessage;
+
+    /// <summary>Csak létrehozás módban töltjük fel — a Név mező itt kereshető autocomplete (lásd
+    /// <see cref="SearchNamesAsync"/>), hogy admin ne hozzon létre véletlenül duplikátumot egy már
+    /// létező (akár inaktív) tétel helyett.</summary>
+    private List<ALaCarteItemDto> allItems = [];
+
+    /// <summary>Nem null, ha a Név mezőben pontosan egy meglévő katalógustétel nevére gépeltek/kattintottak
+    /// — ilyenkor a mentés ezt a tételt frissíti (nem hoz létre új sort), lásd <see cref="OnNameChanged"/>.</summary>
+    private int? matchedExistingId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } item)
+        {
+            name = item.Name;
+            category = item.Category;
+            priceHuf = item.PriceHuf;
+            allergenIds = AllergenCatalog.Parse(item.Allergens);
+            energyKcal = item.EnergyKcal;
+            fatGrams = item.FatGrams;
+            saturatedFatGrams = item.SaturatedFatGrams;
+            carbohydrateGrams = item.CarbohydrateGrams;
+            sugarGrams = item.SugarGrams;
+            proteinGrams = item.ProteinGrams;
+            saltGrams = item.SaltGrams;
+            isActive = item.IsActive;
+        }
+        else
+        {
+            allItems = (await Mediator.Send(new GetALaCarteItemsQuery())).ToList();
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchNamesAsync(string value, CancellationToken cancellationToken)
+    {
+        IEnumerable<ALaCarteItemDto> source = string.IsNullOrWhiteSpace(value)
+            ? allItems
+            : allItems.Where(i => i.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+
+        IEnumerable<string> names = source.Select(i => i.Name).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+        return Task.FromResult(names);
+    }
+
+    /// <summary>Pontos névegyezés esetén a teljes űrlapot a meglévő tételből tölti fel — a kategóriát is,
+    /// amit ilyenkor zárolunk (lásd a Kategória mező Disabled feltételét), hogy a mentés valóban ugyanazt
+    /// a tételt frissítse, ne egy másik kategóriájú duplikátumot hozzon létre.</summary>
+    private void OnNameChanged(string? value)
+    {
+        name = value ?? string.Empty;
+        var match = allItems.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+        matchedExistingId = match?.Id;
+
+        if (match is not null)
+        {
+            category = match.Category;
+            priceHuf = match.PriceHuf;
+            allergenIds = AllergenCatalog.Parse(match.Allergens);
+            energyKcal = match.EnergyKcal;
+            fatGrams = match.FatGrams;
+            saturatedFatGrams = match.SaturatedFatGrams;
+            carbohydrateGrams = match.CarbohydrateGrams;
+            sugarGrams = match.SugarGrams;
+            proteinGrams = match.ProteinGrams;
+            saltGrams = match.SaltGrams;
+            isActive = match.IsActive;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new UpsertALaCarteItemCommand(
+            Existing?.Id ?? matchedExistingId, name.Trim(), category, priceHuf, isActive, allergenIds,
+            energyKcal, fatGrams, saturatedFatGrams, carbohydrateGrams, sugarGrams, proteinGrams, saltGrams));
+
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

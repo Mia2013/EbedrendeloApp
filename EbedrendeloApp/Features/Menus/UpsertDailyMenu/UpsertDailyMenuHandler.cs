@@ -18,6 +18,11 @@ public sealed class UpsertDailyMenuHandler(
 {
     public async Task<Result<int>> Handle(UpsertDailyMenuCommand request, CancellationToken cancellationToken)
     {
+        if (request.Date < clock.Today)
+        {
+            return Result.Failure<int>(ErrorCodes.NotFutureDate, "Elmúlt nap menüje már nem módosítható.");
+        }
+
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 

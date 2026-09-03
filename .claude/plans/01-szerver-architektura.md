@@ -88,8 +88,12 @@ Konvenciók: pénz `int` (Ft, nincs tört), naptári nap `DateOnly`, időpillana
 
 ### User (a property-lista kötött, a felhasználó adta meg)
 `int Id` (PK) · `int UserId` (céges azonosító, **unique index**) · `string UserName` (unique index, 64) ·
-`string? KeresztNev` (128) · `string? VezetekNev` (128) · `string? Rf` (32) · `string? SzervKod` (32) ·
-`int RoleId` (FK → Role)
+`string? KeresztNev` (128) · `string? VezetekNev` (128) · `string? Igazgatosag` (128) · `string? Osztaly` (128) ·
+`string? Rf` (32) · `string? SzervKod` (32) · `int RoleId` (FK → Role)
+
+`Igazgatosag` és `Osztaly` a felhasználó szöveges igazgatóság/osztály hovatartozását tárolja (pl. „Gyártás"
+/ „1. üzem") — a `SzervKod`-tól (rövid szervezeti kód, szemantikája ismeretlen, l. „Nyitott kérdések")
+függetlenül, arra logika nem épül, csak megjelenítési/szűrési adat.
 
 ### Role
 `int Id` (PK) · `string Name` (32, unique — `"Admin"` / `"User"`)
@@ -216,14 +220,36 @@ visszavonják, majd újra kizárják, a két kör lemondásai összekeverednéne
 mutató FK teszi egyértelművé, melyik kizárás melyik rendeléseket érintette.
 
 ### A la carte
-- **ALaCarteItem** — `Name`, `Category` (`Leves`/`Foetel`/`Koret`/`Desszert`), `PriceHuf`, `IsActive`
+- **ALaCarteItem** — `Name`, `Category` (`Leves`/`Foetel`/`Koret`/`Desszert`/`Ontet`), `PriceHuf`,
+  `IsActive`, `Allergens?`, valamint — a `MenuDish` mintáját követve (2. fejezet) — 7 tápérték-mező:
+  `EnergyKcal?`, `FatGrams?`, `SaturatedFatGrams?`, `CarbohydrateGrams?`, `SugarGrams?`, `ProteinGrams?`,
+  `SaltGrams?`. Ez a katalógus **nem osztozik** a `MenuDish`/`MenuDishKind` katalóguson — teljesen külön,
+  saját törzsadat.
 - **ALaCarteDailyOffer** — `Date` + `ALaCarteItemId` (unique együtt), `Capacity`, `OrderedCount`
-  → ez a napi keret; a `OrderedCount` atomikus növelése adja a készletfoglalást
+  → ez a napi keret; a `OrderedCount` atomikus növelése adja a készletfoglalást — **Leves kategóriájú
+  tételre ez a mechanizmus nem vonatkozik** (lásd lejjebb). Naponta **legfeljebb egy aktív Leves
+  ajánlat** állhat fenn — alkalmazásszintű szabály, nem DB-constraint (6. fejezet, `SetDailyOfferCommand`).
 - **ALaCarteOrder** — `UserId` (FK), `Date` (unique `UserId`+`Date`), **`OrderingPeriodId`** (FK,
   kötelező), `PlacedAtUtc`, `PlacedByUserId`, `TotalHuf`
 - **ALaCarteOrderLine** — `ALaCarteOrderId` (FK), `ALaCarteDailyOfferId` (FK),
   unique `(ALaCarteOrderId, ALaCarteDailyOfferId)` → tételenként 1 db;
-  `ItemNameSnapshot`, `CategorySnapshot`, `UnitPriceHuf`
+  `ItemNameSnapshot`, `CategorySnapshot`, `UnitPriceHuf`, **`IncludesSoup`** (bool, snapshot — igaz, ha
+  ez a sor Főétel és a rendelés pillanatában volt aznapra aktív Leves-ajánlat; a felület ebből, nem élő
+  állapotból dönti el a „(levessel)" jelzést, mert a Leves-ajánlat vagy a főétel ára utólag változhat —
+  NFR-7)
+
+**Leves — korlátlan és díjtalan alap, a főétel árába rejtve.** A leves önálló `ALaCarteItem` sor
+(`Category = Leves`), saját, a főételtől függetlenül szerkeszthető `PriceHuf`-fal — ha csak a levest
+akarják drágítani, azt külön lehet megtenni. A dolgozó felé viszont **soha nem jelenik meg önálló,
+árazott levessorként, és közvetlenül sem rendelhető**: `PlaceALaCarteOrderCommand` elutasít minden
+Leves-ajánlatra irányuló közvetlen rendelést, és `GetDailyOffersQuery`/`GetTodayMenuForUserQuery` a
+Leves-ajánlatot ki sem veszi fel a kínálati listába. Amikor egy Főétel-tételre rendelés érkezik, a
+rendelési sor `UnitPriceHuf`-ja a főétel `PriceHuf`-jának és **aznapi** Leves-ajánlat `PriceHuf`-jának
+összege — egyetlen kombinált szám a főétel neve alatt. Ha aznapra nincs Leves-ajánlat, a kombinált ár a
+puszta főétel ára (leves-rész 0 Ft, nem hibaeset). A leves **soha nem kap külön `ALaCarteOrderLine`-t és
+soha nem korlátozott készlettel** — akárhány (különböző) főételt rendel valaki aznapra, mindegyik sor
+önállóan tartalmazza a leves árát, mert a konyha szemszögéből minden rendelt főételhez egy tányér leves
+készül (US-4.6 AC 4.6.3).
 
 ### Pénzügy
 - **CreditEntry** (ledger, előjeles, append-only) — `UserId` (FK), `AmountHuf` (+keletkezés /
@@ -429,6 +455,13 @@ teljes rendelés hibával tér vissza (részleges rendelés nem keletkezik). Íg
 ugyanazt az utolsó adagot megkapni, és `rowversion` oszlopra sincs szükség — ami azért fontos, mert a
 tesztekben használt SQLite nem támogatja.
 
+**Leves kivétel.** A fenti atomi UPDATE csak Főétel/Köret/Desszert/Öntet kategóriájú
+`ALaCarteDailyOffer` sorra fut. Leves kategóriájú ajánlatra a rendelés-leadás **nem hajt végre
+foglalást és nem is fogad el közvetlen rendelést** — a `PlaceALaCarteOrderCommand` a leves
+`ALaCarteItem.PriceHuf`-ját csak a Főétel-sor kombinált árához olvassa ki (2. fejezet), `OrderedCount`-ot
+nem növeli. Emiatt egy dolgozó tetszőleges számú *különböző* főételt rendelhet ugyanarra a napra (AC
+4.2.3 — tételenként, nem kategóriánként 1 db) anélkül, hogy a leves valaha „elfogyna".
+
 ### 3.5 Határidő-ellenőrzések
 
 | Művelet | Feltételek |
@@ -436,7 +469,8 @@ tesztekben használt SQLite nem támogatja.
 | Menürendelés — **A fázis** (bulk) | az `OrderingPeriod` létezik, `IsOpen`, `now <= OrderDeadline`; minden rendelt nap a `[StartDate, EndDate]` tartományban van, munkanap, nincs kizárva, van publikált `DailyMenu`, nincs lezárva; az adott napra nincs már aktív rendelés. **Átfutási követelmény nincs** |
 | Menürendelés — **B fázis** (pótlólagos) | ugyanaz, plusz `CanChange(Date, now)` (3.1) minden napra. `now > OrderDeadline`, `Today <= EndDate`. Több nap egyszerre is |
 | Menürendelés lemondása | `CanChange(Date, now)` (3.1) → **aznapra sosem teljesül**; a rendelés `Active`. Több nap egyszerre is |
-| A la carte rendelés | `Date == ma`; **ma beleesik valamely `OrderingPeriod` `[StartDate, EndDate]` tartományába** (az `IsOpen` és az `OrderDeadline` itt **nem** feltétel — ez aznapi vásárlás, nem előrendelés); `now.TimeOfDay <= 10:30`; ma munkanap és nincs kizárva; minden tételre van napi ajánlat szabad kerettel; tételenként legfeljebb 1 db és még nem rendelte |
+| A la carte rendelés | `Date == ma`; **ma beleesik valamely `OrderingPeriod` `[StartDate, EndDate]` tartományába** (az `IsOpen` és az `OrderDeadline` itt **nem** feltétel — ez aznapi vásárlás, nem előrendelés); `now.TimeOfDay <= 10:30`; ma munkanap és nincs kizárva; minden **nem Leves** tételre van napi ajánlat szabad kerettel; tételenként legfeljebb 1 db és még nem rendelte; **Leves kategóriájú ajánlatra közvetlen rendelés elutasítva** |
+| Napi ajánlat rögzítése — Leves | naponta legfeljebb egy aktív Leves ajánlat lehet; egy második felvétele ugyanarra a napra elutasításra kerül |
 | A la carte lemondás | **nincs ilyen use case** — a döntés szerint nem törölhető |
 | Nap kizárása | `Date > ma` (3.6) — aznapi és múltbeli nap nem zárható ki |
 | Kizárás visszavonása | `Date > ma`; a napra nincs `KitchenClosure` (3.7) |
@@ -495,7 +529,9 @@ ExcludeDay(date, reason):
 
 **A la carte:** nincs teendő. A tételek csak aznapra rendelhetők, jövőbeli napra tehát nem létezhet
 a la carte rendelés, a `GetDailyOffersQuery` pedig a kizárt napokra üres listát ad — az ajánlatok
-maguktól láthatatlanná válnak, visszavonáskor pedig újra megjelennek.
+maguktól láthatatlanná válnak, visszavonáskor pedig újra megjelennek. Ugyanez vonatkozik a Leves
+ajánlatra is: kizárt napra sem főétel, sem leves nem rendelhető, hiszen a la carte rendelés csak
+aznapra létezhet.
 *(Az eredeti terv „az adott napi ajánlatok inaktiválódnak" mondata törölve: nincs ilyen mező az
 `ALaCarteDailyOffer`-en, és nincs is rá szükség.)*
 
@@ -664,14 +700,26 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetMyPeriodOrderQuery` **[U]**, `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
 
 ### ALaCarte
-- `UpsertALaCarteItemCommand` **[A]**, `DeactivateALaCarteItemCommand` **[A]**,
-  `GetALaCarteItemsQuery` **[A]**
-- `SetDailyOfferCommand` **[A]** — napi keret beállítása (`Capacity` nem csökkenthető a már lefoglalt alá)
+- `UpsertALaCarteItemCommand` **[A]**, `SetALaCarteItemActiveCommand` **[A]** (kétirányú — kivezetés
+  ÉS visszaaktiválás egyaránt ezt hívja), `GetALaCarteItemsQuery` **[A]** — az 5 kategória
+  (`Leves`/`Foetel`/`Koret`/`Desszert`/`Ontet`) egyikéhez tartozó törzsadat, a `MenuDish` mintáját
+  követő 7 tápérték-mezővel (2. fejezet)
+- `SetDailyOfferCommand` **[A]** — napi keret beállítása (`Capacity` nem csökkenthető a lefoglalt alá);
+  **Leves kategóriájú tételre naponta legfeljebb egy aktív ajánlat rögzíthető** — egy második felvétele
+  ugyanarra a napra elutasításra kerül
 - `RemoveDailyOfferCommand` **[A]** — csak ha még nincs rá rendelés
-- `GetDailyOffersQuery` **[A/U]** — szabad darabszámmal; kizárt napra üres lista
-- `PlaceALaCarteOrderCommand` **[U]** — 10:30 határidő + atomikus foglalás (3.4); a mai napot lefedő
-  időszakot feloldja, és `OrderingPeriodId`-ként rögzíti — lefedetlen napon a rendelés elutasítva
-- `GetALaCarteDailySummaryQuery` **[A]** — aznapi konyhai lista tételenként
+- `GetDailyOffersQuery` **[A/U]** — szabad darabszámmal; kizárt napra üres lista. **A Leves ajánlat nem
+  jelenik meg önálló, rendelhető sorként** — a „szabad" darabszám rá nézve nem értelmezett
+- `PlaceALaCarteOrderCommand` **[U]** — 10:30 határidő + atomikus foglalás (3.4) **a Leves kivételével**;
+  **Leves kategóriájú ajánlatra közvetlen rendelés elutasítva** (`Result.Failure`); Főétel-sor
+  `UnitPriceHuf`-ja a főétel árának és az aznapi Leves-ajánlat árának összege (0, ha nincs Leves-ajánlat),
+  és a sor `IncludesSoup` mezője ekkor snapshotolódik; a mai napot lefedő időszakot feloldja, és
+  `OrderingPeriodId`-ként rögzíti — lefedetlen napon a rendelés elutasítva
+- `GetALaCarteDailySummaryQuery` **[A]** — aznapi konyhai lista tételenként, kategóriánként
+  csoportosítva; a levesadag-szám **levezetett** érték: az aznapi `CategorySnapshot == Foetel` sorok
+  darabszáma
+- `GetALaCarteMonthlySummaryQuery` **[A]** — ugyanez a tételenkénti/levesadag-összesítés, egy teljes
+  hónap napjaira összevonva (visszamenőleges rendelési igény kiszolgálására)
 
 ### Kitchen
 - `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő)
@@ -732,15 +780,18 @@ Connection string (`appsettings.json`):
 feltöltés — minden blokk csak akkor fut, ha az adott tábla/nap még üres):
 
 - **6 felhasználó**: `admin` (Role=`Admin`) + 5 dolgozó (`kovacs.j`, `nagy.a`, `szabo.p`, `toth.e`,
-  `varga.b`), `UserId` 1001–1006, kitöltött `Nev` / `Rf` / `SzervKod`.
+  `varga.b`), `UserId` 1001–1006, kitöltött `Nev` / `Igazgatosag` / `Osztaly` / `Rf` / `SzervKod`.
 - **OrderingPeriod**: **két, egymáshoz csatlakozó, szándékosan nem naptári időszak** — az aktuális hónap
   5-étől a következő hónap 5-éig, majd onnan az azt követő hónap 5-éig. `OrderDeadline` =
   `StartDate − 10 nap` 10:00, `IsOpen = true`. Így a seed maga demonstrálja, hogy a „hónap" eltolható.
 - **ExcludedDay**: 1–2 minta jövőbeli napra (pl. „Karbantartás").
 - **DailyMenu + MenuVariant**: a két időszak által lefedett **minden munkanapra** A/B/C variáns,
   publikálva — kódból generálva egy ~15 elemű recept-katalógusból (`SeedCatalog`), nem kézi felsorolással.
-- **ALaCarteItem**: ~11 tétel — 2 leves, 4 főétel, 3 köret, 2 desszert, egyedi árakkal.
-- **ALaCarteDailyOffer**: a következő 5 munkanapra, tételenként 8–15 keret.
+- **ALaCarteItem**: 13 tétel — 1 leves (Csontleves), 5 főétel, 4 köret, 2 desszert, 1 öntet (Tartár
+  mártás), egyedi árakkal; a 7 tápérték-mező üresen marad (jövőbeli admin-feladat).
+- **ALaCarteDailyOffer**: a következő 5 munkanapra, tételenként napi keret — a Leves tételnek is jár
+  napi ajánlat (legfeljebb egy/nap), a `Capacity` rá nézve figyelmen kívül hagyott placeholder
+  (`int.MaxValue`), mert a leves korlátlan és sosem kerül ellenőrzésre.
 - **Minta forgalom**: néhány aktív `MenuOrder` az **első időszakhoz kötve**, 1 felhasználó által lemondott
   rendelés (`ByUser`) a hozzá tartozó `CreditEntry`-vel, 1 kizárás miatt lemondott rendelés
   (`DayExcluded`), 1–2 `UserNotification` — hogy a ledger, az egyenleg és az értesítés nézet ne legyen üres.
@@ -901,7 +952,10 @@ bUnit tesztek.
    handler-diszpécserre.
 2. **A la carte jóváírás** — jelenleg minden jóváírás menü-hatókörű, mert a la carte lemondás nincs.
    Ha valaha kell a la carte korrekció (elmaradt adag), a `CreditEntry`-re egy `Scope` mező kerül, és a
-   beszámítás hatóköre szerint válik szét — a `PeriodInvoice` bontása ezt már ma is elbírja.
+   beszámítás hatóköre szerint válik szét — a `PeriodInvoice` bontása ezt már ma is elbírja. Ezen felül:
+   mivel a Leves ára a Főétel-sor `UnitPriceHuf`-jába van beolvasztva, egy jövőbeli tételes korrekció
+   (pl. csak a főételt cserélik, a levest nem) nem vonhatja ki egyszerűen a katalógusárat a
+   snapshotból — a bontást a korrekció pillanatában, a két akkori katalógusárból kellene újraszámolni.
 3. **`Rf`, `SzervKod` szemantikája** ismeretlen — csak tárolt adat, logika nem épül rá.
 4. **Nincs valódi hitelesítés** — az app csak belső hálón futtatható, amíg a dev bejelentkezés él.
 5. **Időzóna**: minden határidő Europe/Budapest szerint; ha a szerver más zónában fut, az `IAppClock`
@@ -928,3 +982,12 @@ bUnit tesztek.
 12. **A `CloseDayCommand` bármely jövőbeli napra kiadható**, tehát az admin elvileg a 3 munkanapos ablak
     előtt is lezárhat egy napot, és ezzel korábban elvághatja a rendelést. Ez szándékos rugalmasság
     (pl. korán leadott konyhai összesítő), de nincs rá védőkorlát.
+13. **A „legfeljebb egy Leves ajánlat naponta" szabály csak handler-szinten él.** A Category az
+    `ALaCarteItem`-en van, nem az `ALaCarteDailyOffer`-en, ezért nincs rá EF-szinten kifejezhető szűrt
+    unique index (a `MenuOrderConfiguration` `WHERE [Status] = 0` mintája csak azonos táblán belüli
+    oszlopra működik). A `SetDailyOfferHandler` a `UpsertOrderingPeriodHandler` mintáját követve
+    `IsolationLevel.Serializable` tranzakcióban fut, tehát a handler-szintű védelem **ténylegesen
+    megbízható** két egyidejű admin-hívás ellen is — csak a DB-szintű kikényszerítés hiányzik továbbra
+    is (tudatos döntés, ld. fent). A `DatabaseSeeder` közvetlen EF-insertje ettől függetlenül megkerüli
+    ezt az ellenőrzést — ha a Leves katalógus valaha egynél több tételt kap, a seed-logika óvatlanul két
+    Leves ajánlatot is beszúrhat ugyanarra a napra.

@@ -1,8 +1,10 @@
 @page "/mai-menu"
+@using EbedrendeloApp.Common.ALaCarte
 @using EbedrendeloApp.Common.Allergens
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte.PlaceALaCarteOrder
 @using EbedrendeloApp.Features.Menus
 @using EbedrendeloApp.Features.Menus.GetTodayMenuForUser
 @using MediatR
@@ -20,71 +22,97 @@
 {
     <MudProgressCircular Indeterminate="true" />
 }
-else if (!today.IsOrderableToday)
+else if (IsFullyClosedToday)
 {
     <MudAlert Severity="Severity.Info">@Describe(today.NotOrderableReason)</MudAlert>
 }
 else
 {
-    <MudPaper Class="pa-3 mb-3" Outlined="true">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-            <MudIcon Icon="@Icons.Material.Filled.Restaurant" Color="Color.Primary" />
-            <MudText Typo="Typo.h6">Mai menüválaszték</MudText>
-        </MudStack>
-        <MudGrid Spacing="2">
-            @foreach (var variant in today.Variants)
-            {
-                <MudItem xs="12" md="4">
-                    <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
-                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
-                            <MudText Typo="Typo.subtitle1">@variant.Code menü</MudText>
-                            @if (today.MySelection?.VariantCode == variant.Code)
-                            {
-                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Ezt választottad</MudChip>
-                            }
-                        </MudStack>
-                        <MudText Typo="Typo.body2">
-                            Leves: @variant.SoupName
-                            @if (AllergenCatalog.Format(variant.SoupAllergens) is { } soupAllergens)
-                            {
-                                <span class="mud-text-secondary"> (allergén: @soupAllergens)</span>
-                            }
-                        </MudText>
-                        @if (variant.FormatSoup() is { } soupNutrition)
-                        {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutrition</MudText>
-                        }
-                        @if (!string.IsNullOrEmpty(variant.MainCourseName))
-                        {
-                            <MudText Typo="Typo.body2">
-                                Főétel: @variant.MainCourseName
-                                @if (AllergenCatalog.Format(variant.MainCourseAllergens) is { } mainCourseAllergens)
+    @if (today.IsOrderableToday)
+    {
+        <MudPaper Class="pa-3 mb-3" Outlined="true">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Restaurant" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Mai menüválaszték</MudText>
+            </MudStack>
+            <MudGrid Spacing="2">
+                @foreach (var variant in today.Variants)
+                {
+                    <MudItem xs="12" md="4">
+                        <MudPaper Outlined="true" Class="pa-3" Style="height:100%;">
+                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
+                                <MudText Typo="Typo.subtitle1">@variant.Code menü</MudText>
+                                @if (today.MySelection?.VariantCode == variant.Code)
                                 {
-                                    <span class="mud-text-secondary"> (allergén: @mainCourseAllergens)</span>
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Ezt választottad</MudChip>
+                                }
+                            </MudStack>
+                            <MudText Typo="Typo.body2">
+                                Leves: @variant.SoupName
+                                @if (AllergenCatalog.Format(variant.SoupAllergens) is { } soupAllergens)
+                                {
+                                    <span class="mud-text-secondary"> (allergén: @soupAllergens)</span>
                                 }
                             </MudText>
-                            @if (variant.FormatMainCourse() is { } mainCourseNutrition)
+                            @if (variant.FormatSoup() is { } soupNutrition)
                             {
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@mainCourseNutrition</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@soupNutrition</MudText>
                             }
-                        }
-                    </MudPaper>
-                </MudItem>
-            }
-        </MudGrid>
-    </MudPaper>
+                            @if (!string.IsNullOrEmpty(variant.MainCourseName))
+                            {
+                                <MudText Typo="Typo.body2">
+                                    Főétel: @variant.MainCourseName
+                                    @if (AllergenCatalog.Format(variant.MainCourseAllergens) is { } mainCourseAllergens)
+                                    {
+                                        <span class="mud-text-secondary"> (allergén: @mainCourseAllergens)</span>
+                                    }
+                                </MudText>
+                                @if (variant.FormatMainCourse() is { } mainCourseNutrition)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@mainCourseNutrition</MudText>
+                                }
+                            }
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
 
-    <MudAlert Severity="@(today.MySelection is null ? Severity.Warning : Severity.Success)" Class="mb-3" Dense="true">
-        @(today.MySelection is { } selection
-            ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {selection.PriceHuf} Ft értékben."
-            : "Ma még nem rendeltél menüt.")
-    </MudAlert>
+        <MudAlert Severity="@(today.MySelection is null ? Severity.Warning : Severity.Success)" Class="mb-3" Dense="true">
+            @(today.MySelection is { } selection
+                ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {selection.PriceHuf} Ft értékben."
+                : "Ma még nem rendeltél menüt.")
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">@Describe(today.NotOrderableReason)</MudAlert>
+    }
 
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-            <MudIcon Icon="@Icons.Material.Filled.Fastfood" Color="Color.Primary" />
-            <MudText Typo="Typo.h6">Mai à la carte kínálat</MudText>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Fastfood" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Mai à la carte kínálat</MudText>
+            </MudStack>
+            @if (today.IsALaCarteOrderableNow)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Schedule">
+                    @today.ALaCarteOrderDeadlineLocalTime.ToString("HH:mm")-ig rendelhető
+                </MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Icon="@Icons.Material.Filled.Schedule">
+                    A mai rendelési határidő lejárt
+                </MudChip>
+            }
         </MudStack>
+
+        @if (!string.IsNullOrEmpty(orderErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@orderErrorMessage</MudAlert>
+        }
 
         @if (today.ALaCarteOffers.Count == 0)
         {
@@ -99,10 +127,17 @@ else
                     <MudTh>Allergén</MudTh>
                     <MudTh>Ár</MudTh>
                     <MudTh>Szabad</MudTh>
+                    <MudTh>Művelet</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Kategória">@CategoryName(context.Category)</MudTd>
-                    <MudTd DataLabel="Tétel">@context.Name</MudTd>
+                    <MudTd DataLabel="Kategória">@ALaCarteCategoryDisplay.Name(context.Category)</MudTd>
+                    <MudTd DataLabel="Tétel">
+                        @context.Name@(context.IncludesSoup ? " (levessel)" : "")
+                        @if (FormatALaCarteNutrition(context) is { } nutrition)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">@nutrition</MudText>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="Allergén">
                         @if (AllergenCatalog.Format(context.Allergens) is { } allergens)
                         {
@@ -111,6 +146,24 @@ else
                     </MudTd>
                     <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
                     <MudTd DataLabel="Szabad">@context.FreeCount</MudTd>
+                    <MudTd DataLabel="Művelet">
+                        @if (IsOrdered(context))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">Megrendelve</MudChip>
+                        }
+                        else if (context.FreeCount == 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       Disabled="@(!CanOrder(context))"
+                                       OnClick="() => SelectAsync(context)">
+                                Kiválaszt
+                            </MudButton>
+                        }
+                    </MudTd>
                 </RowTemplate>
             </MudTable>
         }
@@ -125,7 +178,7 @@ else
             <MudStack Spacing="1" Class="mt-1">
                 @foreach (var line in today.MyALaCarteOrderLines)
                 {
-                    <MudText Typo="Typo.body2">@line.ItemName (@CategoryName(line.Category)) — @line.UnitPriceHuf Ft</MudText>
+                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@ALaCarteCategoryDisplay.Name(line.Category)) — @line.UnitPriceHuf Ft</MudText>
                 }
             </MudStack>
         }
@@ -140,7 +193,21 @@ else
         [ErrorCodes.MenuNotPublished] = "Mára még nincs publikált menü.",
     };
 
+    private static readonly Dictionary<string, string> ALaCarteOrderErrorText = new()
+    {
+        [ErrorCodes.OutOfStock] = "Ez a tétel időközben elfogyott.",
+        [ErrorCodes.AlreadyOrdered] = "Ezt a tételt már megrendelted ma.",
+        [ErrorCodes.DeadlinePassed] = "A mai à la carte rendelési határidő már lejárt.",
+        [ErrorCodes.NotDirectlyOrderable] = "A leves önállóan nem rendelhető.",
+        [ErrorCodes.OfferNotFound] = "A tétel ma már nem elérhető.",
+        [ErrorCodes.NotWorkingDay] = "Ma nem munkanap.",
+        [ErrorCodes.DayExcluded] = "A mai nap ki van zárva.",
+        [ErrorCodes.OutsidePeriod] = "Ma nincs érvényes rendelési időszak.",
+    };
+
     private TodayMenuDto? today;
+    private readonly HashSet<int> orderingItemIds = [];
+    private string? orderErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -150,12 +217,36 @@ else
 
     private static string Describe(string? reason) => reason is null ? string.Empty : ReasonText.GetValueOrDefault(reason, reason);
 
-    private static string CategoryName(ALaCarteCategory category) => category switch
+    /// <summary>Csak hétvégén/kizárt napon nincs semmilyen kiszolgálás — ilyenkor az à la carte rész is
+    /// üres (AC 4.1.3/4.2.7), a teljes oldalt egyetlen jelzés helyettesíti. "Nincs publikált menü" ennél
+    /// gyengébb: az à la carte a napi menütől függetlenül rendelhető (AC 4.2.6), ezért az nem zárja be a
+    /// teljes oldalt, csak a menüválaszték-szekciót.</summary>
+    private bool IsFullyClosedToday => today is not null && !today.IsOrderableToday
+        && today.NotOrderableReason is ErrorCodes.NotWorkingDay or ErrorCodes.DayExcluded;
+
+    private bool IsOrdered(ALaCarteOfferDto offer) => today!.MyALaCarteOrderLines.Any(l => l.ALaCarteItemId == offer.ALaCarteItemId);
+
+    private bool CanOrder(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !orderingItemIds.Contains(offer.ALaCarteItemId);
+
+    private async Task SelectAsync(ALaCarteOfferDto offer)
     {
-        ALaCarteCategory.Leves => "Leves",
-        ALaCarteCategory.Foetel => "Főétel",
-        ALaCarteCategory.Koret => "Köret",
-        ALaCarteCategory.Desszert => "Desszert",
-        _ => category.ToString(),
-    };
+        orderingItemIds.Add(offer.ALaCarteItemId);
+        orderErrorMessage = null;
+
+        var result = await Mediator.Send(new PlaceALaCarteOrderCommand(CurrentUser.UserId, [offer.ALaCarteItemId]));
+
+        orderingItemIds.Remove(offer.ALaCarteItemId);
+
+        if (result.IsSuccess)
+        {
+            today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
+        }
+        else
+        {
+            orderErrorMessage = result.ErrorCode is { } code && ALaCarteOrderErrorText.TryGetValue(code, out var text) ? text : result.ErrorMessage;
+        }
+    }
+
+    private static string? FormatALaCarteNutrition(ALaCarteOfferDto offer) => MenuVariantNutritionFormat.Format(
+        offer.EnergyKcal, offer.FatGrams, offer.SaturatedFatGrams, offer.CarbohydrateGrams, offer.SugarGrams, offer.ProteinGrams, offer.SaltGrams);
 }

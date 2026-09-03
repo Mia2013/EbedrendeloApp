@@ -64,8 +64,20 @@ namespace EbedrendeloApp.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<decimal?>("CarbohydrateGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<int>("Category")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("EnergyKcal")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal?>("FatGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -78,7 +90,26 @@ namespace EbedrendeloApp.Data.Migrations
                     b.Property<int>("PriceHuf")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("ProteinGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal?>("SaltGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal?>("SaturatedFatGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal?>("SugarGrams")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Category", "Name")
+                        .IsUnique();
 
                     b.ToTable("ALaCarteItems");
                 });
@@ -137,6 +168,9 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.Property<int>("CategorySnapshot")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IncludesSoup")
+                        .HasColumnType("bit");
 
                     b.Property<string>("ItemNameSnapshot")
                         .IsRequired()
@@ -539,7 +573,10 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("DailyMenuId", "Code")
                         .IsUnique();
 
-                    b.ToTable("MenuVariants");
+                    b.ToTable("MenuVariants", t =>
+                        {
+                            t.HasCheckConstraint("CK_MenuVariant_Code", "[Code] IN ('A', 'B', 'C')");
+                        });
                 });
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.OrderingPeriod", b =>
@@ -671,7 +708,15 @@ namespace EbedrendeloApp.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Igazgatosag")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("KeresztNev")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Osztaly")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
@@ -790,7 +835,7 @@ namespace EbedrendeloApp.Data.Migrations
 
             modelBuilder.Entity("EbedrendeloApp.Domain.Entities.ALaCarteOrderLine", b =>
                 {
-                    b.HasOne("EbedrendeloApp.Domain.Entities.ALaCarteDailyOffer", null)
+                    b.HasOne("EbedrendeloApp.Domain.Entities.ALaCarteDailyOffer", "ALaCarteDailyOffer")
                         .WithMany()
                         .HasForeignKey("ALaCarteDailyOfferId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -801,6 +846,8 @@ namespace EbedrendeloApp.Data.Migrations
                         .HasForeignKey("ALaCarteOrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ALaCarteDailyOffer");
 
                     b.Navigation("ALaCarteOrder");
                 });

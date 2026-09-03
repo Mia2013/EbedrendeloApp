@@ -39,7 +39,15 @@ public sealed class CreateMenuDishHandler(IDbContextFactory<EbedrendeloDbContext
             SaltGrams = request.SaltGrams,
         };
         db.MenuDishes.Add(dish);
-        await db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<MenuDishDto>(ErrorCodes.DuplicateName, "Már létezik ilyen nevű étel.");
+        }
 
         return Result.Success(new MenuDishDto(
             dish.Name,

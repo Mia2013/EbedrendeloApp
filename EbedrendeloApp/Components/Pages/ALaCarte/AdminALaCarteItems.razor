@@ -1,0 +1,179 @@
+@page "/alacarte-etelek"
+@using EbedrendeloApp.Common.ALaCarte
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte
+@using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>À la carte ételek</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">À la carte ételek</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Az à la carte törzsadat — itt vehetsz fel új tételt, vagy szerkesztheted/vezetheted ki a meglévőket. A
+                napi kínálatot a "Napi kínálat" oldalon állíthatod be.
+            </MudText>
+        </MudStack>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddItemAsync">
+            Új tétel
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudStack Spacing="3" Class="mt-4 mb-3" Row Wrap="Wrap.Wrap" Justify="Justify.SpaceBetween">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Kategória</MudText>
+        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
+            @foreach (var option in CategoryFilterOptions)
+            {
+                <MudChip T="string" Icon="@CategoryFilterIcon(option)" Color="@(categoryFilter == option ? Color.Primary : Color.Default)"
+                         Variant="@(categoryFilter == option ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => categoryFilter = option">
+                    @option
+                </MudChip>
+            }
+        </MudStack>
+    </MudStack>
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Állapot</MudText>
+        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
+            @foreach (var option in StatusFilterOptions)
+            {
+                <MudChip T="string" Icon="@StatusFilterIcon(option)" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
+                         Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => statusFilter = option">
+                    @option
+                </MudChip>
+            }
+        </MudStack>
+    </MudStack>
+</MudStack>
+
+<MudTable Items="filteredItems" GroupBy="groupDefinition" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
+    <HeaderContent>
+        <MudTh>Név</MudTh>
+        <MudTh>Ár</MudTh>
+        <MudTh>Tápérték</MudTh>
+        <MudTh>Állapot</MudTh>
+        <MudTh>Műveletek</MudTh>
+    </HeaderContent>
+    <GroupHeaderTemplate>
+        <MudTh Class="mud-table-cell-custom-group" colspan="5">
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@ALaCarteCategoryDisplay.Icon((ALaCarteCategory)context.Key!)" Size="Size.Small" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle2">@ALaCarteCategoryDisplay.Name((ALaCarteCategory)context.Key!)</MudText>
+            </MudStack>
+        </MudTh>
+    </GroupHeaderTemplate>
+    <RowTemplate>
+        <MudTd DataLabel="Név">@context.Name</MudTd>
+        <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
+        <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
+        <MudTd DataLabel="Állapot">
+            <MudChip T="string" Size="Size.Small" Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"
+                     Color="@(context.IsActive ? Color.Success : Color.Default)">
+                @(context.IsActive ? "Aktív" : "Inaktív")
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Műveletek">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" title="Szerkesztés" OnClick="() => EditItemAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private static readonly string[] CategoryFilterOptions = ["Mind", "Leves", "Főétel", "Köret", "Desszert", "Öntet"];
+    private static readonly string[] StatusFilterOptions = ["Mind", "Aktív", "Inaktív"];
+
+    private List<ALaCarteItemDto>? items;
+    private string categoryFilter = "Mind";
+    private string statusFilter = "Mind";
+
+    private IEnumerable<ALaCarteItemDto> filteredItems => items is null
+        ? []
+        : items.Where(i => (categoryFilter == "Mind" || ALaCarteCategoryDisplay.Name(i.Category) == categoryFilter)
+                            && (statusFilter == "Mind" || (statusFilter == "Aktív") == i.IsActive))
+               .OrderBy(i => i.Category).ThenBy(i => i.Name, StringComparer.Ordinal);
+
+    /// <summary>AC 4.3.4: a törzsadat kategória szerint csoportosítva jelenik meg — a csoport a
+    /// kategória (nem tétel-szintű), ezért a táblázat sortest nem is mutat külön Kategória oszlopot.</summary>
+    private static readonly TableGroupDefinition<ALaCarteItemDto> groupDefinition = new()
+    {
+        GroupName = "Kategória",
+        Indentation = false,
+        Expandable = false,
+        Selector = i => i.Category,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => items = (await Mediator.Send(new GetALaCarteItemsQuery())).ToList();
+
+    /// <summary>A szűrő-chipek magyar feliratából keresi vissza az <see cref="ALaCarteCategoryDisplay"/>
+    /// ikonját — a "Mind" chipnek nincs kategóriája, azt egy semleges ikon jelzi.</summary>
+    private static string CategoryFilterIcon(string label) =>
+        Enum.GetValues<ALaCarteCategory>().Cast<ALaCarteCategory?>().FirstOrDefault(c => ALaCarteCategoryDisplay.Name(c!.Value) == label) is { } category
+            ? ALaCarteCategoryDisplay.Icon(category)
+            : Icons.Material.Filled.Apps;
+
+    private static string StatusFilterIcon(string label) => label switch
+    {
+        "Aktív" => Icons.Material.Filled.ToggleOn,
+        "Inaktív" => Icons.Material.Filled.ToggleOff,
+        _ => Icons.Material.Filled.Apps,
+    };
+
+    private static bool HasNutrition(ALaCarteItemDto i) =>
+        i.EnergyKcal is not null || i.FatGrams is not null || i.SaturatedFatGrams is not null ||
+        i.CarbohydrateGrams is not null || i.SugarGrams is not null || i.ProteinGrams is not null || i.SaltGrams is not null;
+
+    private static readonly DialogOptions ItemDialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task AddItemAsync()
+    {
+        var dialogRef = await DialogService.ShowAsync<ALaCarteItemDialog>("Új tétel hozzáadása", ItemDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Tétel mentve.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task EditItemAsync(ALaCarteItemDto item)
+    {
+        var parameters = new DialogParameters<ALaCarteItemDialog> { { x => x.Existing, item } };
+        var dialogRef = await DialogService.ShowAsync<ALaCarteItemDialog>("Tétel szerkesztése", parameters, ItemDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Tétel mentve.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+}

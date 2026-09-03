@@ -11,7 +11,7 @@ public sealed class ALaCarteOrderLineConfiguration : IEntityTypeConfiguration<AL
         builder.HasIndex(l => new { l.ALaCarteOrderId, l.ALaCarteDailyOfferId }).IsUnique();
         builder.Property(l => l.ItemNameSnapshot).HasMaxLength(128);
 
-        builder.HasOne<ALaCarteDailyOffer>().WithMany().HasForeignKey(l => l.ALaCarteDailyOfferId)
+        builder.HasOne(l => l.ALaCarteDailyOffer).WithMany().HasForeignKey(l => l.ALaCarteDailyOfferId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

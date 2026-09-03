@@ -27,6 +27,15 @@ public class DeleteDailyMenuHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     [Fact]
+    public async Task Rejects_a_past_date()
+    {
+        var result = await sut.Handle(new DeleteDailyMenuCommand(new DateOnly(2026, 8, 16), adminId), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCodes.NotFutureDate, result.ErrorCode);
+    }
+
+    [Fact]
     public async Task Rejects_when_the_day_is_already_closed()
     {
         var date = new DateOnly(2026, 8, 20);

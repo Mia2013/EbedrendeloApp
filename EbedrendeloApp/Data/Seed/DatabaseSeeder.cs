@@ -77,12 +77,12 @@ public static class DatabaseSeeder
 
         var users = new List<User>
         {
-            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
-            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
+            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Igazgatosag = "Központ", Osztaly = "Informatika", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
+            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
+            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
+            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
+            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
+            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Igazgatosag = "Logisztika", Osztaly = "Raktár", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
         };
 
         db.Users.AddRange(users);
@@ -100,7 +100,10 @@ public static class DatabaseSeeder
         var today = DateOnly.FromDateTime(DateTime.Now);
         var period1Start = new DateOnly(today.Year, today.Month, 5);
         var period1End = period1Start.AddMonths(1);
-        var period2Start = period1End;
+        // Egy nap rés a két időszak közt — a StartDate/EndDate a kódbázisban mindenhol inkluzív
+        // (StartDate <= today && today <= EndDate), tehát period2Start = period1End átfedést jelentene:
+        // a határnap egyszerre két időszakhoz tartozna.
+        var period2Start = period1End.AddDays(1);
         var period2End = period2Start.AddMonths(1);
 
         var periods = new List<OrderingPeriod>
@@ -232,19 +235,24 @@ public static class DatabaseSeeder
             return await db.ALaCarteItems.ToListAsync(ct);
         }
 
+        // A Leves kategóriából szándékosan csak 1 tétel van (AC 4.1.4 — naponta legfeljebb egy aktív
+        // Leves ajánlat lehet). Az ára a Főétel-rendelések sorába olvad bele, önállóan sosem rendelhető
+        // és sosem kerül készlet-ellenőrzésre (lásd SeedALaCarteDailyOffersAsync lent).
         var items = new List<ALaCarteItem>
         {
-            new() { Name = "Húsleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true, Allergens = "1,9" },
-            new() { Name = "Zöldségkrémleves", Category = ALaCarteCategory.Leves, PriceHuf = 600, IsActive = true, Allergens = "7,9" },
-            new() { Name = "Cordon bleu", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true, Allergens = "1,3,7" },
-            new() { Name = "Rántott hal", Category = ALaCarteCategory.Foetel, PriceHuf = 1750, IsActive = true, Allergens = "1,3,4" },
-            new() { Name = "Bakonyi szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1850, IsActive = true, Allergens = "1,3,7" },
-            new() { Name = "Zöldségfasírt", Category = ALaCarteCategory.Foetel, PriceHuf = 1500, IsActive = true, Allergens = "1,3" },
+            new() { Name = "Csontleves", Category = ALaCarteCategory.Leves, PriceHuf = 650, IsActive = true, Allergens = "9" },
+            new() { Name = "Rántott sertés szelet", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true, Allergens = "1,3" },
+            new() { Name = "Rántott csirke(mell)", Category = ALaCarteCategory.Foetel, PriceHuf = 1850, IsActive = true, Allergens = "1,3" },
+            new() { Name = "Csirke roston", Category = ALaCarteCategory.Foetel, PriceHuf = 1900, IsActive = true },
+            new() { Name = "Rántott trappista sajt", Category = ALaCarteCategory.Foetel, PriceHuf = 1750, IsActive = true, Allergens = "1,3,7" },
+            new() { Name = "Rántott camembert", Category = ALaCarteCategory.Foetel, PriceHuf = 1800, IsActive = true, Allergens = "1,3,7" },
             new() { Name = "Hasábburgonya", Category = ALaCarteCategory.Koret, PriceHuf = 550, IsActive = true },
-            new() { Name = "Jázmin rizs", Category = ALaCarteCategory.Koret, PriceHuf = 500, IsActive = true },
-            new() { Name = "Vegyes saláta", Category = ALaCarteCategory.Koret, PriceHuf = 500, IsActive = true },
-            new() { Name = "Somlói galuska", Category = ALaCarteCategory.Desszert, PriceHuf = 750, IsActive = true, Allergens = "1,3,7,8" },
-            new() { Name = "Gesztenyepüré", Category = ALaCarteCategory.Desszert, PriceHuf = 700, IsActive = true, Allergens = "7" },
+            new() { Name = "Steak burgonya", Category = ALaCarteCategory.Koret, PriceHuf = 600, IsActive = true },
+            new() { Name = "Mexikói zöldségkeverék", Category = ALaCarteCategory.Koret, PriceHuf = 550, IsActive = true },
+            new() { Name = "Párolt zöldség", Category = ALaCarteCategory.Koret, PriceHuf = 500, IsActive = true },
+            new() { Name = "Lekváros derelye", Category = ALaCarteCategory.Desszert, PriceHuf = 700, IsActive = true, Allergens = "1,3" },
+            new() { Name = "Túrós derelye", Category = ALaCarteCategory.Desszert, PriceHuf = 750, IsActive = true, Allergens = "1,3,7" },
+            new() { Name = "Tartár mártás", Category = ALaCarteCategory.Ontet, PriceHuf = 350, IsActive = true, Allergens = "3,10" },
         };
 
         db.ALaCarteItems.AddRange(items);
@@ -267,6 +275,10 @@ public static class DatabaseSeeder
             .Take(5)
             .ToList();
 
+        // A Leves ajánlat Capacity-je figyelmen kívül hagyott placeholder — a leves sosem kerül
+        // készlet-ellenőrzésre (AC 4.1.4 / AC 4.2.4). Ez a seeder közvetlen EF-insertje, nem megy át a
+        // jövőbeli SetDailyOfferCommand validátorán, ezért ma biztonságos (egyetlen Leves tétel van),
+        // de kockázatos lenne, ha valaha második Leves-tétel kerülne a katalógusba.
         var capacities = new[] { 8, 10, 12, 15 };
         var offers = new List<ALaCarteDailyOffer>();
         for (var d = 0; d < offerDates.Count; d++)
@@ -277,7 +289,9 @@ public static class DatabaseSeeder
                 {
                     Date = offerDates[d],
                     ALaCarteItemId = item.Id,
-                    Capacity = capacities[(d + item.Id) % capacities.Length],
+                    Capacity = item.Category == ALaCarteCategory.Leves
+                        ? int.MaxValue
+                        : capacities[(d + item.Id) % capacities.Length],
                     OrderedCount = 0,
                 });
             }

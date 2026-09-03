@@ -6,4 +6,5 @@ public enum ALaCarteCategory
     Foetel = 1,
     Koret = 2,
     Desszert = 3,
+    Ontet = 4,
 }

@@ -9,6 +9,7 @@ public sealed class MenuVariantConfiguration : IEntityTypeConfiguration<MenuVari
     public void Configure(EntityTypeBuilder<MenuVariant> builder)
     {
         builder.HasIndex(v => new { v.DailyMenuId, v.Code }).IsUnique();
+        builder.ToTable(t => t.HasCheckConstraint("CK_MenuVariant_Code", "[Code] IN ('A', 'B', 'C')"));
 
         builder.Property(v => v.Code).HasMaxLength(8);
         builder.Property(v => v.SoupName).HasMaxLength(128);

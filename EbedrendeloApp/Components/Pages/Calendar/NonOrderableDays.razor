@@ -7,30 +7,31 @@
 @inject IDialogService DialogService
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <PageTitle>Nem rendelhető napok</PageTitle>
 
-<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
-    <MudStack Spacing="0" Style="max-width: 680px;">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Primary" Size="Size.Large" />
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Nem rendelhető napok</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
+                <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
+                Mindkettőt itt látod egy helyen.
+            </MudText>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Két oka lehet, hogy egy munkanapra nem lehet menüt rendelni: az admin kifejezetten
-            <b>kizárta</b> a napot, vagy a nap egyszerűen <b>nem esik bele</b> egyik rendelési időszakba sem.
-            Mindkettőt itt látod egy helyen.
-        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenExcludeDialogAsync">
+            Nap kizárása
+        </MudButton>
     </MudStack>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenExcludeDialogAsync">
-        Nap kizárása
-    </MudButton>
-</MudStack>
+</MudPaper>
 
 <MudPaper Class="pa-4 mt-4" Elevation="1">
     <MudStack Row Spacing="4" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
-        <MudDatePicker Label="Mettől" @bind-Date="fromDate" Variant="Variant.Outlined" Style="width:200px;" />
-        <MudDatePicker Label="Meddig" @bind-Date="toDate" Variant="Variant.Outlined" Style="width:200px;" />
+        <MudDatePicker Label="Mettől" @bind-Date="fromDate" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="width:200px;" />
+        <MudDatePicker Label="Meddig" @bind-Date="toDate" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="width:200px;" />
         <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync">Szűrés</MudButton>
         <MudSpacer />
         @if (rows is not null)
@@ -44,13 +45,7 @@
     </MudStack>
 </MudPaper>
 
-@if (rows is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else
-{
-    <MudTable Items="FilteredRows" Hover="true" Elevation="1" Class="mt-4">
+<MudTable Items="FilteredRows" Loading="@(rows is null)" Hover="true" Elevation="1" Class="mt-4">
         <HeaderContent>
             <MudTh>Dátum</MudTh>
             <MudTh>Nap</MudTh>
@@ -85,10 +80,9 @@ else
         </RowTemplate>
     </MudTable>
 
-    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
-        A hétvégék nem jelennek meg — ott amúgy sincs kiszolgálás.
-    </MudText>
-}
+<MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+    A hétvégék nem jelennek meg — ott amúgy sincs kiszolgálás.
+</MudText>
 
 @code {
     private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
@@ -143,12 +137,20 @@ else
             .ToList();
     }
 
+    private static readonly DialogOptions DefaultDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
     private async Task OpenExcludeDialogAsync()
     {
-        var dialogRef = await DialogService.ShowAsync<ExcludeDayDialog>("Nap kizárása");
+        var dialogRef = await DialogService.ShowAsync<ExcludeDayDialog>("Nap kizárása", DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Nap kizárva.", Severity.Success);
             await LoadAsync();
         }
     }
@@ -156,10 +158,11 @@ else
     private async Task OpenRevokeDialogAsync(DateOnly date)
     {
         var parameters = new DialogParameters<RevokeExclusionDialog> { { x => x.Date, date } };
-        var dialogRef = await DialogService.ShowAsync<RevokeExclusionDialog>("Kizárás visszavonása", parameters);
+        var dialogRef = await DialogService.ShowAsync<RevokeExclusionDialog>("Kizárás visszavonása", parameters, DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Kizárás visszavonva.", Severity.Success);
             await LoadAsync();
         }
     }

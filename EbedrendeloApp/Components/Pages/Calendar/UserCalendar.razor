@@ -7,6 +7,7 @@
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
 @using EbedrendeloApp.Features.Menus
 @using EbedrendeloApp.Features.Menus.GetPeriodMenu
+@using EbedrendeloApp.Features.Orders
 @using EbedrendeloApp.Features.Orders.PlacePeriodOrder
 @using EbedrendeloApp.Features.Orders.CancelMenuOrders
 @using EbedrendeloApp.Components.Pages.Orders
@@ -15,47 +16,49 @@
 @inject ICurrentUser CurrentUser
 @inject IDialogService DialogService
 @inject IDevUserSwitcher DevUserSwitcher
+@inject ISnackbar Snackbar
 
 <PageTitle>Rendelés</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-4 order-calendar__header-card">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
-        <MudStack Spacing="0">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h4">Rendelés</MudText>
-            </MudStack>
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Rendelés</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
                 Pipáld ki, melyik napra melyik menüt kéred — így egy pillantással átlátod, mit rendeltél már és mi még hiányzik.
             </MudText>
-        </MudStack>
 
-        <MudStack Spacing="2">
-            @if (periods is { Count: > 0 })
-            {
-                <MudSelect T="int" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
-                    @foreach (var period in periods)
+            <MudStack Row Spacing="3" Wrap="Wrap.Wrap" Class="mt-4">
+                @if (periods is { Count: > 0 })
+                {
+                    <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
+                               Class="panel-narrow-surface">
+                        @foreach (var period in periods)
+                        {
+                            <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Class="panel-narrow-surface">
+                    <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
+                    @foreach (var colleague in colleagues)
                     {
-                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
+                        <MudSelectItem Value="@((int?)colleague.UserId)">@colleague.DisplayName</MudSelectItem>
                     }
                 </MudSelect>
+            </MudStack>
+
+            @if (targetUserId is not null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                    @colleagues.First(c => c.UserId == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
+                </MudAlert>
             }
-            <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Style="min-width:320px;">
-                <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
-                @foreach (var colleague in colleagues)
-                {
-                    <MudSelectItem Value="@((int?)colleague.UserId)">@colleague.DisplayName</MudSelectItem>
-                }
-            </MudSelect>
         </MudStack>
     </MudStack>
-
-    @if (targetUserId is not null)
-    {
-        <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
-            @colleagues.First(c => c.UserId == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
-        </MudAlert>
-    }
 </MudPaper>
 
 @if (days is null)
@@ -82,13 +85,14 @@ else
             <MudText Typo="Typo.caption">Rendelhető, még nincs kiválasztva</MudText>
         </MudStack>
         <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-            <MudCheckBox T="bool" Value="true" Disabled="true" Color="Color.Error" Dense="true" ReadOnly="true" />
+            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Size="Size.Small" />
             <MudText Typo="Typo.caption">Lemondásra jelölve, még nincs elküldve</MudText>
         </MudStack>
     </MudStack>
 
-    <WeekdayHeaderRow />
-
+    <div class="mt-4">
+        <WeekdayHeaderRow />
+    </div>
     <div class="order-calendar mt-3">
         @foreach (var week in BuildWeeks())
         {
@@ -108,14 +112,28 @@ else
         }
     </div>
 
+    @* A két összesítő sáv szándékosan a rács UTÁN, nem előtte jelenik meg — így egy pipálás nem tolja
+       lejjebb a rácsot (ahol épp kattintott a felhasználó), csak a rács alatti terület nő. *@
     @if (pendingSelections.Count > 0)
     {
-        <MudPaper Elevation="0" Class="pa-3 mt-4 order-calendar__header-card order-calendar__submit-bar">
-            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                <MudText Typo="Typo.body1"><strong>@pendingSelections.Count nap</strong> kiválasztva a rendeléshez</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CheckCircle"
+        <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
+                <MudStack Row Spacing="6" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.body2">Egységár: <strong>@menuPortionHuf Ft</strong></MudText>
+                    <MudText Typo="Typo.body2">Darabszám: <strong>@pendingSelections.Count</strong></MudText>
+                    <MudText Typo="Typo.body2">Összesen: <strong>@PendingTotalHuf Ft</strong></MudText>
+                </MudStack>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@(isSubmitting ? null : Icons.Material.Filled.CheckCircle)"
                            OnClick="SubmitOrdersAsync" Disabled="isSubmitting">
-                    Rendelés leadása (@pendingSelections.Count nap)
+                    @if (isSubmitting)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Leadás...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Rendelés leadása (@pendingSelections.Count nap, @PendingTotalHuf Ft)</MudText>
+                    }
                 </MudButton>
             </MudStack>
         </MudPaper>
@@ -123,12 +141,20 @@ else
 
     @if (pendingCancellations.Count > 0)
     {
-        <MudPaper Elevation="0" Class="pa-3 mt-4 order-calendar__header-card order-calendar__submit-bar">
+        <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                 <MudText Typo="Typo.body1"><strong>@pendingCancellations.Count nap</strong> kiválasztva lemondásra</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.EventBusy"
+                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@(isSubmittingCancellations ? null : Icons.Material.Filled.EventBusy)"
                            OnClick="SubmitCancellationsAsync" Disabled="isSubmittingCancellations">
-                    Lemondás megerősítése (@pendingCancellations.Count nap)
+                    @if (isSubmittingCancellations)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Lemondás...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Lemondás megerősítése (@pendingCancellations.Count nap)</MudText>
+                    }
                 </MudButton>
             </MudStack>
         </MudPaper>
@@ -142,10 +168,21 @@ else
     private RenderFragment<OrderDayCell> DayCell => cell =>
     @<MudStack Spacing="1" Style="height:100%;">
         <div class="order-calendar__cell-header">
-            <MudText Typo="Typo.subtitle2" Color="@(cell.Date < today ? Color.Default : Color.Primary)" Style="font-weight:700;">@cell.Date.ToString("MM.dd.")</MudText>
-            @if (cell.Date == today)
+            <div class="order-calendar__cell-header-left">
+                <MudText Typo="Typo.subtitle2" Color="@(cell.Date < today ? Color.Default : Color.Primary)" Style="font-weight:700;">@cell.Date.ToString("MM.dd.")</MudText>
+                @if (cell.Date == today)
+                {
+                    <MudBadge Content="@("Ma")" Color="Color.Primary" />
+                }
+            </div>
+
+            @if (cell.ActiveVariantCode is not null && cell.Cancellable)
             {
-                <MudBadge Content="@("Ma")" Color="Color.Primary" />
+                var marked = pendingCancellations.Contains(cell.Date);
+                <MudIconButton Icon="@(marked ? Icons.Material.Filled.RestoreFromTrash : Icons.Material.Filled.DeleteForever)"
+                               Color="@(marked ? Color.Error : Color.Default)" Variant="Variant.Text" Size="Size.Small"
+                               title="@(marked ? "Lemondás visszavonása" : "Lemondásra jelölés")"
+                               OnClick="() => ToggleCancellation(cell.Date)" />
             }
         </div>
 
@@ -163,15 +200,7 @@ else
                 </MudStack>
             </MudStack>
 
-            @if (cell.Cancellable)
-            {
-                <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-                    <MudCheckBox T="bool" Value="pendingCancellations.Contains(cell.Date)" Color="Color.Error" Dense="true"
-                                 ValueChanged="@(_ => ToggleCancellation(cell.Date))" />
-                    <MudText Typo="Typo.body2">Lemondás</MudText>
-                </MudStack>
-            }
-            else
+            @if (!cell.Cancellable)
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@Describe(cell.Reason)</MudText>
             }
@@ -182,7 +211,7 @@ else
             {
                 var isPending = pendingSelections.TryGetValue(cell.Date, out var picked) && picked == variant.Code;
                 <MudStack Row Spacing="1" AlignItems="AlignItems.Start">
-                    <MudCheckBox T="bool" Value="isPending" Color="Color.Primary" Dense="true"
+                    <MudCheckBox T="bool" Value="isPending" Color="Color.Warning" UncheckedColor="Color.Default" Dense="true"
                                  ValueChanged="@(_ => TogglePending(cell, variant.Code))" />
                     <MudStack Spacing="0">
                         <MudText Typo="Typo.body2">@variant.Code menü — @variant.SoupName</MudText>
@@ -200,16 +229,7 @@ else
         }
     </MudStack>;
 
-    private static readonly Dictionary<string, string> ReasonText = new()
-    {
-        [ErrorCodes.DayExcluded] = "Kizárt nap",
-        [ErrorCodes.DayClosed] = "A nap már le van zárva",
-        [ErrorCodes.MenuNotPublished] = "Erre a napra még nincs publikált menü",
-        [ErrorCodes.DeadlinePassed] = "A módosítási határidő lejárt",
-        [ErrorCodes.PeriodClosed] = "Az időszak le van zárva",
-    };
-
-    private static string Describe(string? reason) => reason is null ? string.Empty : ReasonText.GetValueOrDefault(reason, reason);
+    private static string Describe(string? reason) => DayUnavailableReasonText.Describe(reason);
 
     public sealed class OrderDayCell
     {
@@ -234,8 +254,11 @@ else
     private string? errorMessage;
     private bool isSubmitting;
     private bool isSubmittingCancellations;
+    private int menuPortionHuf;
 
     private int EffectiveTargetUserId => targetUserId ?? CurrentUser.UserId;
+
+    private int PendingTotalHuf => pendingSelections.Count * menuPortionHuf;
 
     protected override async Task OnInitializedAsync()
     {
@@ -294,6 +317,7 @@ else
             : [];
 
         errorMessage = null;
+        menuPortionHuf = orderableResult.Value!.FirstOrDefault()?.MenuPortionHuf ?? 0;
         days = orderableResult.Value!
             .Select(d => new OrderDayCell
             {
@@ -376,14 +400,21 @@ else
         if (!result.IsSuccess)
         {
             errorMessage = result.ErrorMessage;
+            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült leadni a rendelést.", Severity.Error);
             return;
         }
 
         pendingSelections.Clear();
         await LoadDaysAsync();
 
+        if (result.Value!.Skipped.Count == 0)
+        {
+            Snackbar.Add($"{result.Value.Succeeded.Count} nap sikeresen megrendelve.", Severity.Success);
+            return;
+        }
+
         var parameters = new DialogParameters<PlaceOrderResultDialog> { { x => x.Result, result.Value! } };
-        await DialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters);
+        await DialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters, DefaultDialogOptions);
     }
 
     private async Task SubmitCancellationsAsync()
@@ -397,11 +428,18 @@ else
         if (!result.IsSuccess)
         {
             errorMessage = result.ErrorMessage;
+            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült lemondani a rendelést.", Severity.Error);
             return;
         }
 
         pendingCancellations.Clear();
         await LoadDaysAsync();
+
+        if (result.Value!.Skipped.Count == 0)
+        {
+            Snackbar.Add($"{result.Value.Succeeded.Count} nap sikeresen lemondva.", Severity.Success);
+            return;
+        }
 
         var parameters = new DialogParameters<PlaceOrderResultDialog>
         {
@@ -410,6 +448,13 @@ else
             { x => x.Icon, Icons.Material.Filled.EventBusy },
             { x => x.IconColor, Color.Error },
         };
-        await DialogService.ShowAsync<PlaceOrderResultDialog>("Lemondás eredménye", parameters);
+        await DialogService.ShowAsync<PlaceOrderResultDialog>("Lemondás eredménye", parameters, DefaultDialogOptions);
     }
+
+    private static readonly DialogOptions DefaultDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
 }

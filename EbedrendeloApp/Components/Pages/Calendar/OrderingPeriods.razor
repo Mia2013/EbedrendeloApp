@@ -7,36 +7,31 @@
 @inject IDialogService DialogService
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <PageTitle>Rendelési időszakok</PageTitle>
 
-<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
-    <MudStack Spacing="0">
-        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-            <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="Color.Primary" Size="Size.Large" />
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
+            </MudText>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
-        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
+            Új időszak
+        </MudButton>
     </MudStack>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
-        Új időszak
-    </MudButton>
-</MudStack>
+</MudPaper>
 
 <MudAlert Severity="Severity.Info" Class="my-4">
     Ha egy időszakhoz már tartozik rendelés, a kezdő-, záró- és leadási határidő nem módosítható — csak a
     a nyitva tartás. Egy dátum kizárásához a „Nem rendelhető napok" funkciót használd.
 </MudAlert>
 
-@if (periods is null)
-{
-    <MudProgressCircular Indeterminate="true" />
-}
-else
-{
-    <MudTable Items="periods" Hover="true" Elevation="1">
+<MudTable Items="@(periods ?? [])" Loading="@(periods is null)" Hover="true" Elevation="1">
         <HeaderContent>
             <MudTh>Név</MudTh>
             <MudTh>Kezdés</MudTh>
@@ -60,7 +55,6 @@ else
             </MudTd>
         </RowTemplate>
     </MudTable>
-}
 
 @code {
     private IReadOnlyList<OrderingPeriodDto>? periods;
@@ -82,12 +76,20 @@ else
         periods = await Mediator.Send(new GetOrderingPeriodsQuery());
     }
 
+    private static readonly DialogOptions DefaultDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
     private async Task OpenCreateDialogAsync()
     {
-        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak");
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Új rendelési időszak", DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Rendelési időszak létrehozva.", Severity.Success);
             await LoadAsync();
         }
     }
@@ -98,10 +100,11 @@ else
         {
             { x => x.Existing, period },
         };
-        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Rendelési időszak szerkesztése", parameters);
+        var dialogRef = await DialogService.ShowAsync<OrderingPeriodDialog>("Rendelési időszak szerkesztése", parameters, DefaultDialogOptions);
         var result = await dialogRef.Result;
         if (result is { Canceled: false })
         {
+            Snackbar.Add("Rendelési időszak mentve.", Severity.Success);
             await LoadAsync();
         }
     }

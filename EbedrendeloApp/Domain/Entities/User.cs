@@ -7,6 +7,8 @@ public sealed class User
     public required string UserName { get; set; }
     public string? KeresztNev { get; set; }
     public string? VezetekNev { get; set; }
+    public string? Igazgatosag { get; set; }
+    public string? Osztaly { get; set; }
     public string? Rf { get; set; }
     public string? SzervKod { get; set; }
     public required int RoleId { get; set; }
