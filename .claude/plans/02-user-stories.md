@@ -771,18 +771,25 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyBalanceQuery` | U | US-5.1 |
 | `GetMyCreditLedgerQuery` | U | US-5.3 |
 | `AddManualCreditCommand` | A | US-5.2 |
+| `GetBalancesQuery` | A | *(nincs önálló story — AC 5.2.1-et támogató implementációs részlet)* |
 | `GetMyNotificationsQuery` | U | US-8.1 |
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-Minden use case-hez tartozik story és fordítva. A kereszt-metsző követelmények (Epic 10) minden sorra
-vonatkoznak.
+Minden use case-hez tartozik story és fordítva — a `GetBalancesQuery` az egyetlen kivétel, ez tisztán
+implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A kereszt-metsző követelmények
+(Epic 10) minden sorra vonatkoznak.
 
 **Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
-implementálva van. Az Epic 5–8 (Jóváírás, Konyha/napzárás, Számlázás, Értesítések — a fenti táblázat
-`GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig terjedő 15 sora) egyelőre csak
-tervezve van, a kód még nem készült el hozzá (ld. `01-szerver-architektura.md` "10. Végrehajtási
-sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se `NavMenu` link ezekhez. Emiatt a jóváírás/
-értesítés-írás (`ICreditService`/`INotificationService`, ami már ma is fut lemondás/kizárás/menütörlés
-esetén) jelenleg write-only: a dolgozó felé nincs még olvasó oldal az egyenlegéhez vagy az
-értesítéseihez.
+implementálva van. Az Epic 5 (Jóváírás-könyvelés és Egyenlegkezelés) UI-val együtt elkészült:
+`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `AddManualCreditCommand` és `GetBalancesQuery`
+(`Features/Billing/`), valamint `GetUsersQuery` (`Features/Users/`, US-9.4 előrehozott implementációja
+a kézi jóváírás autocomplete-jéhez) — a UI oldalon `MyBalance.razor` (`/egyenlegem`), `AdminBalances.razor`
+(`/egyenlegek`) és `ManualCreditDialog.razor`, `NavMenu` linkekkel mindkét ághoz, plusz egy egyenleg-
+figyelmeztető sáv a `Naptár` (`UserCalendar.razor`) oldalon, mivel a lemondott rendelés jóváírása nem
+térül vissza készpénzben, hanem a következő rendelésnél íródik jóvá. Az Epic 6–8 (Konyha/napzárás,
+Számlázás, Értesítések — a fenti táblázat `GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig
+terjedő 16 sorából a 12, amelyik nem az Epic 5 Billing use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
+`01-szerver-architektura.md` "10. Végrehajtási sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se
+`NavMenu` link ezekhez. Az `INotificationService` továbbra is write-only marad (Epic 8 olvasó oldala még
+nem készült el).

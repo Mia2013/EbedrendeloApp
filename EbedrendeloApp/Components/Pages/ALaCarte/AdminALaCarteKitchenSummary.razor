@@ -54,7 +54,7 @@
     <MudPaper Outlined="true" Class="pa-3 mb-4" Style="max-width:420px;">
         <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
             <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
-            <MudText Typo="Typo.body1"><b>@soupPortionCount</b> levesadag erre a napra</MudText>
+            <MudText Typo="Typo.body1"><b>@HungarianNumberFormat.Number(soupPortionCount)</b> levesadag erre a napra</MudText>
         </MudStack>
     </MudPaper>
 
@@ -86,11 +86,11 @@
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd DataLabel="Tétel">@context.ItemName</MudTd>
-                                <MudTd DataLabel="Darab" Style="text-align:right;">@context.Count</MudTd>
+                                <MudTd DataLabel="Darab" Style="text-align:right;">@HungarianNumberFormat.Number(context.Count)</MudTd>
                             </RowTemplate>
                             <FooterContent>
                                 <MudTd><b>Összesen</b></MudTd>
-                                <MudTd Style="text-align:right;"><b>@lines.Sum(l => l.Count)</b></MudTd>
+                                <MudTd Style="text-align:right;"><b>@HungarianNumberFormat.Number(lines.Sum(l => l.Count))</b></MudTd>
                             </FooterContent>
                         </MudTable>
                     </MudPaper>
@@ -143,7 +143,7 @@ else
                         </td>
                         @foreach (var column in MonthlyColumns)
                         {
-                            <td class="kitchen-monthly-table__count-cell"><b>@WeekColumnTotal(week, column)</b></td>
+                            <td class="kitchen-monthly-table__count-cell"><b>@HungarianNumberFormat.Number(WeekColumnTotal(week, column))</b></td>
                         }
                     </tr>
 
@@ -167,7 +167,7 @@ else
                     <td><b>Összesen</b></td>
                     @foreach (var column in MonthlyColumns)
                     {
-                        <td class="kitchen-monthly-table__count-cell"><b>@ColumnTotal(column)</b></td>
+                        <td class="kitchen-monthly-table__count-cell"><b>@HungarianNumberFormat.Number(ColumnTotal(column))</b></td>
                     }
                 </tr>
             </tfoot>
@@ -268,7 +268,7 @@ else
     private string CellDisplay(DateOnly date, ItemColumn column)
     {
         var count = monthlyLines?.FirstOrDefault(l => l.Date == date && l.Category == column.Category && l.ItemName == column.ItemName)?.Count;
-        return count is { } c ? c.ToString() : "";
+        return count is { } c ? HungarianNumberFormat.Number(c) : "";
     }
 
     private int WeekColumnTotal(IReadOnlyList<DateOnly> week, ItemColumn column) =>

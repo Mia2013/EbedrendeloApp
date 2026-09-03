@@ -105,7 +105,7 @@ public class TodayMenuTests : MudBunitContext
 
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
-        Assert.Contains("Ma a(z) B menüt (Gulyás) rendelted, 1400 Ft értékben.", cut.Markup);
+        Assert.Contains("Ma a(z) B menüt (Gulyás) rendelted, 1\u00A0400 Ft értékben.", cut.Markup);
         Assert.Contains("Ezt választottad", cut.Markup);
     }
 
@@ -125,7 +125,7 @@ public class TodayMenuTests : MudBunitContext
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
         Assert.Contains("Rántott sertés szelet", cut.Markup);
-        Assert.Contains("2550 Ft", cut.Markup);
+        Assert.Contains("2\u00A0550 Ft", cut.Markup);
         Assert.Contains("Főétel", cut.Markup);
         Assert.Contains("Somlói galuska", cut.Markup);
         Assert.Contains("Desszert", cut.Markup);

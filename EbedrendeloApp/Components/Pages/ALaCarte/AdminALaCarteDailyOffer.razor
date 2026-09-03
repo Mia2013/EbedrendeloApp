@@ -100,7 +100,7 @@
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                         <MudStack Spacing="0">
                             <MudText Typo="Typo.body1">@soupOffer.ItemName</MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@soupOffer.ItemPriceHuf Ft — korlátlan, nincs keret</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@HungarianNumberFormat.Huf(soupOffer.ItemPriceHuf) — korlátlan, nincs keret</MudText>
                         </MudStack>
                         @if (isEditing)
                         {
@@ -113,7 +113,7 @@
                     <MudSelect T="int?" Label="Leves kiválasztása" Value="selectedSoupItemId" ValueChanged="v => selectedSoupItemId = v" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Clearable="true">
                         @foreach (var soup in AvailableSoups)
                         {
-                            <MudSelectItem T="int?" Value="@((int?)soup.Id)">@soup.Name (@soup.PriceHuf Ft)</MudSelectItem>
+                            <MudSelectItem T="int?" Value="@((int?)soup.Id)">@soup.Name (@HungarianNumberFormat.Huf(soup.PriceHuf))</MudSelectItem>
                         }
                     </MudSelect>
                 }
@@ -137,24 +137,24 @@
                 <MudTable Items="rowsByCategory[category]" Loading="@isLoading" Hover="true" Elevation="0" Dense="true">
                     <HeaderContent>
                         <MudTh>Tétel</MudTh>
-                        <MudTh>Kapacitás</MudTh>
-                        <MudTh>Lefoglalva</MudTh>
-                        <MudTh>Szabad</MudTh>
+                        <MudTh Style="text-align:right">Kapacitás</MudTh>
+                        <MudTh Style="text-align:right">Lefoglalva</MudTh>
+                        <MudTh Style="text-align:right">Szabad</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Tétel">@context.Item.Name</MudTd>
-                        <MudTd DataLabel="Kapacitás">
+                        <MudTd DataLabel="Kapacitás" Style="text-align:right">
                             @if (isEditing)
                             {
                                 <MudNumericField T="int" Value="context.CapacityInput" ValueChanged="v => context.CapacityInput = v" Min="0" Style="width:90px;" Variant="Variant.Outlined" Margin="Margin.Dense" />
                             }
                             else
                             {
-                                @(context.Offer is null ? "—" : context.Offer.Capacity.ToString())
+                                @(context.Offer is null ? "—" : HungarianNumberFormat.Number(context.Offer.Capacity))
                             }
                         </MudTd>
-                        <MudTd DataLabel="Lefoglalva">@(context.Offer?.OrderedCount ?? 0)</MudTd>
-                        <MudTd DataLabel="Szabad">@(context.Offer is null ? "—" : context.Offer.FreeCount.ToString())</MudTd>
+                        <MudTd DataLabel="Lefoglalva" Style="text-align:right">@HungarianNumberFormat.Number(context.Offer?.OrderedCount ?? 0)</MudTd>
+                        <MudTd DataLabel="Szabad" Style="text-align:right">@(context.Offer is null ? "—" : HungarianNumberFormat.Number(context.Offer.FreeCount))</MudTd>
                     </RowTemplate>
                 </MudTable>
             </MudPaper>

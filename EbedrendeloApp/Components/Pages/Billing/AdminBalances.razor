@@ -1,0 +1,103 @@
+@page "/egyenlegek"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.GetBalances
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Egyenlegek</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Egyenlegek</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A dolgozók aktuális jóváírás-egyenlege. A 0 Ft-os egyenlegű dolgozók itt nem jelennek meg —
+                bármelyik dolgozónak az "Új jóváírás" gombbal rögzíthetsz jóváírást.
+            </MudText>
+        </MudStack>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddCreditAsync()">
+            Új jóváírás
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudTextField T="string" Value="searchText" ValueChanged="@(v => searchText = v)" Immediate="true"
+              Label="Keresés név vagy szervezet szerint" Variant="Variant.Outlined"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mt-4 mb-3" />
+
+<MudTable Items="filteredBalances" Loading="@(balances is null)" Hover="true" Elevation="1" Dense="true">
+    <HeaderContent>
+        <MudTh>Név</MudTh>
+        <MudTh>Igazgatóság / Osztály</MudTh>
+        <MudTh Style="text-align:right">Egyenleg</MudTh>
+        <MudTh>Műveletek</MudTh>
+    </HeaderContent>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nincs megjeleníthető (nem nulla) egyenleg.</MudText>
+    </NoRecordsContent>
+    <RowTemplate>
+        <MudTd DataLabel="Név">@context.DisplayName</MudTd>
+        <MudTd DataLabel="Igazgatóság / Osztály">@DepartmentText(context)</MudTd>
+        <MudTd DataLabel="Egyenleg" Style="text-align:right">
+            <MudText Color="@(context.BalanceHuf > 0 ? Color.Success : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+        </MudTd>
+        <MudTd DataLabel="Műveletek">
+            <MudIconButton Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Small"
+                           title="Jóváírás hozzáadása" OnClick="() => AddCreditAsync(context.UserId)" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<UserBalanceDto>? balances;
+    private string searchText = string.Empty;
+
+    private IEnumerable<UserBalanceDto> filteredBalances => balances is null
+        ? []
+        : balances.Where(b => string.IsNullOrWhiteSpace(searchText)
+            || b.DisplayName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || (b.Igazgatosag ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || (b.Osztaly ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+    private static string DepartmentText(UserBalanceDto b) =>
+        string.Join(" — ", new[] { b.Igazgatosag, b.Osztaly }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).Value!.ToList();
+
+    private static readonly DialogOptions CreditDialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task AddCreditAsync(int? preselectedUserId = null)
+    {
+        var parameters = new DialogParameters<ManualCreditDialog> { { x => x.PreselectedUserId, preselectedUserId } };
+        var dialogRef = await DialogService.ShowAsync<ManualCreditDialog>("Új jóváírás", parameters, CreditDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Jóváírás rögzítve.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+}

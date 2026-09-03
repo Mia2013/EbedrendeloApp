@@ -2,6 +2,7 @@ using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Calendar;
+using EbedrendeloApp.Features.Billing.GetMyBalance;
 using EbedrendeloApp.Features.Calendar;
 using EbedrendeloApp.Features.Calendar.GetOrderableDays;
 using EbedrendeloApp.Features.Calendar.GetOrderingPeriods;
@@ -35,6 +36,7 @@ public class UserCalendarTests : MudBunitContext
 
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
         mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>([]));
+        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
         Services.AddSingleton<IMediator>(mediator);
     }
 
@@ -93,8 +95,8 @@ public class UserCalendarTests : MudBunitContext
         var checkbox = cut.Find("input[type=checkbox]:not([disabled])");
         checkbox.Change(true);
 
-        Assert.Contains("1400 Ft", cut.Markup);
-        Assert.Contains("Rendelés leadása (1 nap, 1400 Ft)", cut.Markup);
+        Assert.Contains("1\u00A0400 Ft", cut.Markup);
+        Assert.Contains("Rendelés leadása (1 nap, 1\u00A0400 Ft)", cut.Markup);
     }
 
     [Fact]
@@ -368,5 +370,27 @@ public class UserCalendarTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(2, sentCommand!.TargetUserId);
         Assert.Equal(1, sentCommand.CancelledByUserId);
+    }
+
+    [Fact]
+    public void Shows_a_balance_notice_when_the_user_has_a_positive_balance()
+    {
+        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(1400));
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+
+        Assert.Contains("1\u00A0400 Ft", cut.Markup);
+        Assert.Contains("nem térül vissza készpénzben", cut.Markup);
+    }
+
+    [Fact]
+    public void Does_not_show_a_balance_notice_when_the_balance_is_zero()
+    {
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+
+        Assert.DoesNotContain("nem térül vissza készpénzben", cut.Markup);
     }
 }

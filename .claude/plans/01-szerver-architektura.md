@@ -637,7 +637,11 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 > Ha ez a lista változik, a mátrixot is frissíteni kell.
 
 ### Users
-- `GetUsersQuery` **[A/U]** — felhasználólista (admin nézet és a dev váltó)
+- `GetUsersQuery` **[A/U]** — felhasználólista (admin nézet és a dev váltó); a valós implementáció
+  (`Features/Users/GetUsers/`) a Billing kézi jóváírás autocomplete-jéhez készült el elsőként, két extra
+  mezővel (`Igazgatosag`, `Osztaly`) a névsor-egyértelműsítéshez — a dev váltó (`StubCurrentUser`) és a
+  "más nevében rendelek" választó (`UserCalendar.razor`, `colleagues`) egyelőre saját, korábbi
+  implementációt használ, nincs átvezetve erre.
 - `GetUserByIdQuery`, `GetUserByUserNameQuery` **[A/U]**
 
 ### Calendar
@@ -739,6 +743,9 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetMyBalanceQuery` **[U]** — az aktuális egyenleg (`Σ RemainingHuf`) a fejlécbe/dashboardra
 - `GetMyCreditLedgerQuery` **[U]** — az átlátható jóváírás-kimutatás, a `CreditRevoked` tételekkel együtt
 - `AddManualCreditCommand` **[A]** — kézi korrekció indoklással (szintén menü-hatókörű)
+- `GetBalancesQuery` **[A]** — minden dolgozó aktuális, nem-nulla egyenlege (`Σ RemainingHuf`
+  felhasználónként), az admin "Egyenlegek" áttekintő oldalához; nincs önálló user story, AC 5.2.1-et
+  támogató implementációs részlet
 
 ### Notifications
 - `GetMyNotificationsQuery` **[U]**, `MarkNotificationReadCommand` **[U]**,

@@ -80,7 +80,7 @@ else
 
         <MudAlert Severity="@(today.MySelection is null ? Severity.Warning : Severity.Success)" Class="mb-3" Dense="true">
             @(today.MySelection is { } selection
-                ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {selection.PriceHuf} Ft értékben."
+                ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {HungarianNumberFormat.Huf(selection.PriceHuf)} értékben."
                 : "Ma még nem rendeltél menüt.")
         </MudAlert>
     }
@@ -125,8 +125,8 @@ else
                     <MudTh>Kategória</MudTh>
                     <MudTh>Tétel</MudTh>
                     <MudTh>Allergén</MudTh>
-                    <MudTh>Ár</MudTh>
-                    <MudTh>Szabad</MudTh>
+                    <MudTh Style="text-align:right">Ár</MudTh>
+                    <MudTh Style="text-align:right">Szabad</MudTh>
                     <MudTh>Művelet</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -144,8 +144,8 @@ else
                             <span class="mud-text-secondary">@allergens</span>
                         }
                     </MudTd>
-                    <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
-                    <MudTd DataLabel="Szabad">@context.FreeCount</MudTd>
+                    <MudTd DataLabel="Ár" Style="text-align:right">@HungarianNumberFormat.Huf(context.PriceHuf)</MudTd>
+                    <MudTd DataLabel="Szabad" Style="text-align:right">@HungarianNumberFormat.Number(context.FreeCount)</MudTd>
                     <MudTd DataLabel="Művelet">
                         @if (IsOrdered(context))
                         {
@@ -178,7 +178,7 @@ else
             <MudStack Spacing="1" Class="mt-1">
                 @foreach (var line in today.MyALaCarteOrderLines)
                 {
-                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@ALaCarteCategoryDisplay.Name(line.Category)) — @line.UnitPriceHuf Ft</MudText>
+                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@ALaCarteCategoryDisplay.Name(line.Category)) — @HungarianNumberFormat.Huf(line.UnitPriceHuf)</MudText>
                 }
             </MudStack>
         }
