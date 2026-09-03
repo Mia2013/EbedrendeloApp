@@ -10,6 +10,7 @@
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
+@inject IDialogService DialogService
 
 <PageTitle>Mai menü</PageTitle>
 
@@ -120,52 +121,82 @@ else
         }
         else
         {
-            <MudTable Items="today.ALaCarteOffers" Hover="true" Dense="true">
-                <HeaderContent>
-                    <MudTh>Kategória</MudTh>
-                    <MudTh>Tétel</MudTh>
-                    <MudTh>Allergén</MudTh>
-                    <MudTh Style="text-align:right">Ár</MudTh>
-                    <MudTh Style="text-align:right">Szabad</MudTh>
-                    <MudTh>Művelet</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Kategória">@ALaCarteCategoryDisplay.Name(context.Category)</MudTd>
-                    <MudTd DataLabel="Tétel">
-                        @context.Name@(context.IncludesSoup ? " (levessel)" : "")
-                        @if (FormatALaCarteNutrition(context) is { } nutrition)
-                        {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">@nutrition</MudText>
-                        }
-                    </MudTd>
-                    <MudTd DataLabel="Allergén">
-                        @if (AllergenCatalog.Format(context.Allergens) is { } allergens)
-                        {
-                            <span class="mud-text-secondary">@allergens</span>
-                        }
-                    </MudTd>
-                    <MudTd DataLabel="Ár" Style="text-align:right">@HungarianNumberFormat.Huf(context.PriceHuf)</MudTd>
-                    <MudTd DataLabel="Szabad" Style="text-align:right">@HungarianNumberFormat.Number(context.FreeCount)</MudTd>
-                    <MudTd DataLabel="Művelet">
-                        @if (IsOrdered(context))
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">Megrendelve</MudChip>
-                        }
-                        else if (context.FreeCount == 0)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
-                        }
-                        else
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                       Disabled="@(!CanOrder(context))"
-                                       OnClick="() => SelectAsync(context)">
-                                Kiválaszt
-                            </MudButton>
-                        }
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
+            @foreach (var group in today.ALaCarteOffers.GroupBy(o => o.Category))
+            {
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-3 mb-2">
+                    <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(group.Key)" Size="Size.Small" Color="Color.Primary" />
+                    <MudText Typo="Typo.subtitle1">@ALaCarteCategoryDisplay.Name(group.Key)</MudText>
+                </MudStack>
+                <MudGrid Spacing="2">
+                    @foreach (var offer in group)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Outlined="true" Class="pa-3" Style="@CardStyle(offer)" Elevation="0"
+                                      @onclick="@(() => OnCardClick(offer))">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
+                                    <MudText Typo="Typo.subtitle2">@offer.Name@(offer.IncludesSoup ? " (levessel)" : "")</MudText>
+                                    @* Fix méretű (szélesség ÉS magasság) hely a jelölő chipnek: a "Kiválasztva" chip
+                                       DOM-elem mindig ott van, kiválasztatlanul csak visibility:hidden — így a hely
+                                       mindig foglalt, kattintásra sem a névsor tördelése, sem a kártya magassága
+                                       nem ugrik meg. *@
+                                    <div style="min-width:112px; text-align:right;">
+                                        @if (IsOrdered(offer))
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">Megrendelve</MudChip>
+                                        }
+                                        else if (offer.FreeCount == 0)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.Check"
+                                                     Style="@(IsSelected(offer) ? "" : "visibility:hidden;")">Kiválasztva</MudChip>
+                                        }
+                                    </div>
+                                </MudStack>
+                                @if (AllergenCatalog.FormatNumbersOnly(offer.Allergens) is { } allergensShort)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">
+                                        Allergén: @allergensShort
+                                        <MudTooltip Text="@AllergenCatalog.Format(offer.Allergens)" Inline="true">
+                                            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                        </MudTooltip>
+                                    </MudText>
+                                }
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-2">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">@HungarianNumberFormat.Huf(offer.PriceHuf)</MudText>
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        @if (!IsOrdered(offer) && offer.FreeCount > 0)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Szabad: @HungarianNumberFormat.Number(offer.FreeCount)</MudText>
+                                        }
+                                        @if (FormatALaCarteNutrition(offer) is { } nutrition)
+                                        {
+                                            <MudTooltip Text="@nutrition" Inline="true">
+                                                <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Size="Size.Small" Color="Color.Secondary" />
+                                            </MudTooltip>
+                                        }
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @(selectedItemIds.Count == 0
+                        ? "Nincs kiválasztott tétel."
+                        : $"{selectedItemIds.Count} tétel kiválasztva, összesen {HungarianNumberFormat.Huf(SelectedTotalHuf)}.")
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ShoppingCart"
+                           Disabled="@(!CanOpenOrderDialog)"
+                           OnClick="OpenOrderConfirmDialogAsync">
+                    Megrendelés
+                </MudButton>
+            </MudStack>
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-2">Saját à la carte rendelésed</MudText>
@@ -205,8 +236,16 @@ else
         [ErrorCodes.OutsidePeriod] = "Ma nincs érvényes rendelési időszak.",
     };
 
+    private static readonly DialogOptions ConfirmDialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
     private TodayMenuDto? today;
-    private readonly HashSet<int> orderingItemIds = [];
+    private readonly HashSet<int> selectedItemIds = [];
+    private bool isPlacingOrder;
     private string? orderErrorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -226,19 +265,78 @@ else
 
     private bool IsOrdered(ALaCarteOfferDto offer) => today!.MyALaCarteOrderLines.Any(l => l.ALaCarteItemId == offer.ALaCarteItemId);
 
-    private bool CanOrder(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !orderingItemIds.Contains(offer.ALaCarteItemId);
+    private bool IsSelected(ALaCarteOfferDto offer) => selectedItemIds.Contains(offer.ALaCarteItemId);
 
-    private async Task SelectAsync(ALaCarteOfferDto offer)
+    private bool CanSelect(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !isPlacingOrder;
+
+    private bool CanClickCard(ALaCarteOfferDto offer) => !IsOrdered(offer) && offer.FreeCount > 0 && CanSelect(offer);
+
+    private List<ALaCarteOfferDto> SelectedOffers => today!.ALaCarteOffers.Where(o => selectedItemIds.Contains(o.ALaCarteItemId)).ToList();
+
+    private int SelectedTotalHuf => SelectedOffers.Sum(o => o.PriceHuf);
+
+    private bool CanOpenOrderDialog => selectedItemIds.Count > 0 && today!.IsALaCarteOrderableNow && !isPlacingOrder;
+
+    private string CardStyle(ALaCarteOfferDto offer)
     {
-        orderingItemIds.Add(offer.ALaCarteItemId);
+        if (IsSelected(offer))
+        {
+            return "cursor:pointer; background:var(--mud-palette-primary-hover);";
+        }
+
+        return CanClickCard(offer) ? "cursor:pointer;" : "opacity:0.7;";
+    }
+
+    /// <summary>Kategóriánként legfeljebb egy tétel választható (rádiógomb-viselkedés — pl. 1 főétel,
+    /// 1 köret) — kijelöléskor előbb töröljük az adott kategóriában esetleg már kiválasztott tételt.
+    /// Már megrendelt vagy elfogyott tételre kattintva nem történik semmi.</summary>
+    private void OnCardClick(ALaCarteOfferDto offer)
+    {
+        if (!CanClickCard(offer))
+        {
+            return;
+        }
+
+        if (IsSelected(offer))
+        {
+            selectedItemIds.Remove(offer.ALaCarteItemId);
+        }
+        else
+        {
+            selectedItemIds.RemoveWhere(id => today!.ALaCarteOffers.Any(o => o.ALaCarteItemId == id && o.Category == offer.Category));
+            selectedItemIds.Add(offer.ALaCarteItemId);
+        }
+    }
+
+    /// <summary>A leves sosem szerepel önálló sorként a kínálatban (lásd <c>GetTodayMenuForUserHandler</c>) —
+    /// az ára automatikusan beleolvad minden Főétel árába, amit a sor "(levessel)" jelzése már mutat, ezért
+    /// itt nincs (és nem is lehet) külön leves-kijelölés, amit a Főétel kijelölésekor automatikusan be kéne
+    /// pipálni.</summary>
+    private async Task OpenOrderConfirmDialogAsync()
+    {
+        var parameters = new DialogParameters<ALaCarteOrderConfirmDialog> { { x => x.Offers, SelectedOffers } };
+        var dialogRef = await DialogService.ShowAsync<ALaCarteOrderConfirmDialog>("Rendelés megerősítése", parameters, ConfirmDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is null || result.Canceled)
+        {
+            return;
+        }
+
+        await PlaceSelectedOrderAsync();
+    }
+
+    private async Task PlaceSelectedOrderAsync()
+    {
+        isPlacingOrder = true;
         orderErrorMessage = null;
 
-        var result = await Mediator.Send(new PlaceALaCarteOrderCommand(CurrentUser.UserId, [offer.ALaCarteItemId]));
+        var result = await Mediator.Send(new PlaceALaCarteOrderCommand(CurrentUser.UserId, selectedItemIds.ToList()));
 
-        orderingItemIds.Remove(offer.ALaCarteItemId);
+        isPlacingOrder = false;
 
         if (result.IsSuccess)
         {
+            selectedItemIds.Clear();
             today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
         }
         else

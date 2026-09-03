@@ -10,6 +10,7 @@ using EbedrendeloApp.Features.Menus.GetTodayMenuForUser;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using MudBlazor;
 using MudBlazor.Services;
 
 namespace EbedrendeloApp.Tests.Components.Menus;
@@ -146,8 +147,13 @@ public class TodayMenuTests : MudBunitContext
 
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
-        Assert.Contains("1 – Glutén", cut.Markup);
-        Assert.Contains("9 – Zeller", cut.Markup);
+        // A kártyán statikusan csak a tömör szám-forma látszik; a teljes "szám – név" pár egy
+        // info-ikonra tett MudTooltip-ben utazik, ami csak hoverre rendereli a szövegét a DOM-ba
+        // (MudPopover-portál) — ezért ezt a komponensnek átadott Text paraméterből ellenőrizzük.
+        Assert.Contains("Allergén: 1, 9", cut.Markup);
+
+        var tooltipTexts = cut.FindComponents<MudTooltip>().Select(t => t.Instance.Text).ToList();
+        Assert.Contains("1 – Glutén, 9 – Zeller", tooltipTexts);
     }
 
     [Fact]
@@ -188,7 +194,7 @@ public class TodayMenuTests : MudBunitContext
     }
 
     [Fact]
-    public void Clicking_kivalaszt_places_the_order_and_refreshes_the_offers()
+    public async Task Clicking_a_card_and_confirming_the_dialog_places_the_order_and_refreshes_the_offers()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
         var mediator = new FakeMediator();
@@ -214,9 +220,19 @@ public class TodayMenuTests : MudBunitContext
         });
         Services.AddSingleton<IMediator>(mediator);
 
+        var provider = Render<MudDialogProvider>();
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
-        var selectButton = cut.FindAll("button").First(b => b.TextContent.Contains("Kiválaszt"));
-        cut.InvokeAsync(() => selectButton.Click());
+
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Rántott sertés szelet").Click());
+
+        var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
+        await cut.InvokeAsync(() => orderButton.Click());
+
+        Assert.Null(sentCommand); // nothing sent until the confirm dialog is accepted
+        Assert.Contains("Rántott sertés szelet", provider.Markup);
+
+        var confirmButton = provider.FindAll("button").First(b => b.TextContent.Contains("Igen, megrendelem"));
+        await provider.InvokeAsync(() => confirmButton.Click());
 
         Assert.NotNull(sentCommand);
         Assert.Equal(1, sentCommand!.UserId);
@@ -225,7 +241,90 @@ public class TodayMenuTests : MudBunitContext
     }
 
     [Fact]
-    public void Shows_an_elfogyott_chip_instead_of_the_button_when_free_count_is_zero()
+    public async Task Clicking_two_cards_in_different_categories_sends_both_ids_in_a_single_order()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers:
+            [
+                new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7),
+                new ALaCarteOfferDto(2, "Tartár mártás", ALaCarteCategory.Ontet, 350, 7),
+            ],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        PlaceALaCarteOrderCommand? sentCommand = null;
+        mediator.Register<PlaceALaCarteOrderCommand, Result<PlacedALaCarteOrderLinesDto>>(cmd =>
+        {
+            sentCommand = cmd;
+            return Result.Success(new PlacedALaCarteOrderLinesDto([], 0));
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var provider = Render<MudDialogProvider>();
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Rántott sertés szelet").Click());
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Tartár mártás").Click());
+
+        var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
+        await cut.InvokeAsync(() => orderButton.Click());
+
+        var confirmButton = provider.FindAll("button").First(b => b.TextContent.Contains("Igen, megrendelem"));
+        await provider.InvokeAsync(() => confirmButton.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.Equal([1, 2], sentCommand!.ALaCarteItemIds.OrderBy(id => id));
+    }
+
+    [Fact]
+    public async Task Clicking_a_second_card_in_the_same_category_deselects_the_first_one()
+    {
+        // Rádiógomb-viselkedés: kategóriánként legfeljebb egy tétel választható (pl. 1 főétel).
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers:
+            [
+                new ALaCarteOfferDto(1, "Csirkemell", ALaCarteCategory.Foetel, 2200, 7),
+                new ALaCarteOfferDto(2, "Marhapörkölt", ALaCarteCategory.Foetel, 2600, 7),
+            ],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        PlaceALaCarteOrderCommand? sentCommand = null;
+        mediator.Register<PlaceALaCarteOrderCommand, Result<PlacedALaCarteOrderLinesDto>>(cmd =>
+        {
+            sentCommand = cmd;
+            return Result.Success(new PlacedALaCarteOrderLinesDto([], 0));
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var provider = Render<MudDialogProvider>();
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Csirkemell").Click());
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Marhapörkölt").Click()); // should replace Csirkemell
+
+        var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
+        await cut.InvokeAsync(() => orderButton.Click());
+
+        var confirmButton = provider.FindAll("button").First(b => b.TextContent.Contains("Igen, megrendelem"));
+        await provider.InvokeAsync(() => confirmButton.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.Equal([2], sentCommand!.ALaCarteItemIds);
+    }
+
+    [Fact]
+    public void Shows_an_elfogyott_chip_and_does_not_render_a_dialog_command_when_free_count_is_zero()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
         var mediator = new FakeMediator();
@@ -242,11 +341,10 @@ public class TodayMenuTests : MudBunitContext
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
         Assert.Contains("Elfogyott", cut.Markup);
-        Assert.DoesNotContain("Kiválaszt", cut.Markup);
     }
 
     [Fact]
-    public void Disables_kivalaszt_and_shows_a_deadline_passed_badge_when_the_daily_deadline_has_passed()
+    public async Task Clicking_a_card_and_the_order_button_does_nothing_when_the_daily_deadline_has_passed()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
         var mediator = new FakeMediator();
@@ -263,7 +361,56 @@ public class TodayMenuTests : MudBunitContext
         var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
 
         Assert.Contains("A mai rendelési határidő lejárt", cut.Markup);
-        var selectButton = cut.FindAll("button").First(b => b.TextContent.Contains("Kiválaszt"));
-        Assert.True(selectButton.HasAttribute("disabled"));
+
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Rántott sertés szelet").Click());
+
+        var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
+        Assert.True(orderButton.HasAttribute("disabled"));
+        Assert.False(IsKivalasztvaChipVisible(cut, "Rántott sertés szelet"));
+    }
+
+    [Fact]
+    public void Nutrition_is_shown_as_a_hover_tooltip_on_a_calorie_icon()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7, EnergyKcal: 500)],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        // A tápérték nem jelenik meg statikus szövegként a kártyán, csak a kalória-ikon hoverjén — a
+        // MudTooltip a szövegét csak hoverre rendereli a DOM-ba (MudPopover-portál), ezért ezt a
+        // komponensnek átadott Text paraméterből ellenőrizzük, nem a markupból.
+        Assert.DoesNotContain("En: 500", cut.Markup);
+
+        var tooltipTexts = cut.FindComponents<MudTooltip>().Select(t => t.Instance.Text).ToList();
+        Assert.Contains("En: 500", tooltipTexts);
+    }
+
+    /// <summary>A legkisebb szöveget tartalmazó `mud-paper` a keresett tétel saját kártyája — a
+    /// befoglaló szekció-paperek is tartalmazzák a nevet (minden leszármazott szövegét öröklik),
+    /// de azoknak jóval hosszabb a TextContent-je.</summary>
+    private static AngleSharp.Dom.IElement FindOfferCard(IRenderedComponent<TodayMenu> cut, string offerName) =>
+        cut.FindAll("div.mud-paper")
+            .Where(el => el.TextContent.Contains(offerName))
+            .OrderBy(el => el.TextContent.Length)
+            .First();
+
+    /// <summary>A "Kiválasztva" chip DOM-eleme mindig ott van a kártyán (fix magasság/szélesség
+    /// miatt, lásd TodayMenu.razor) — kiválasztatlanul csak `visibility:hidden`-nel van elrejtve,
+    /// ezért a "látszik-e" kérdést a style attribútum dönti el, nem a markupban való jelenlét.</summary>
+    private static bool IsKivalasztvaChipVisible(IRenderedComponent<TodayMenu> cut, string offerName)
+    {
+        var chip = FindOfferCard(cut, offerName).QuerySelectorAll(".mud-chip")
+            .FirstOrDefault(e => e.TextContent.Contains("Kiválasztva"));
+        return chip is not null && !(chip.GetAttribute("style") ?? string.Empty).Contains("hidden");
     }
 }
