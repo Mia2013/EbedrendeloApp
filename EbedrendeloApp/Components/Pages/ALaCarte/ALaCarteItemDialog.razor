@@ -25,25 +25,30 @@
         }
 
         <MudGrid Spacing="2">
-            <MudItem xs="8">
+            <MudItem xs="8" md="9">
                 @if (IsEditMode)
                 {
-                    <MudTextField T="string" Label="Név" @bind-Value="name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="128" Immediate="true" FullWidth="true" />
+                    <MudTextField T="string" Label="Név" 
+                    @bind-Value="name" 
+                    Variant="Variant.Outlined" MaxLength="128" Immediate="true" FullWidth="true" />
                 }
                 else
                 {
                     <MudAutocomplete T="string" Label="Név" Value="name" ValueChanged="OnNameChanged" SearchFunc="SearchNamesAsync"
-                                     CoerceText="true" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="128" FullWidth="true" />
+                                     CoerceText="true" Immediate="true" Variant="Variant.Outlined"   MaxLength="128" FullWidth="true" />
                 }
             </MudItem>
-            <MudItem xs="4">
+            <MudItem xs="4" md="3">
                 <MudStack Row Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Style="height:100%;">
                     <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Success" Label="Aktív" />
                 </MudStack>
             </MudItem>
 
             <MudItem xs="6">
-                <MudSelect T="ALaCarteCategory" Label="Kategória" @bind-Value="category" Disabled="IsCategoryLocked" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelect T="ALaCarteCategory" 
+                    Label="Kategória"
+                    @bind-Value="category" 
+                    Disabled="IsCategoryLocked" Variant="Variant.Outlined" >
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Leves">Leves</MudSelectItem>
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Foetel">Főétel</MudSelectItem>
                     <MudSelectItem T="ALaCarteCategory" Value="ALaCarteCategory.Koret">Köret</MudSelectItem>
@@ -52,11 +57,13 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="6">
-                <MudNumericField T="int" Label="Ár" @bind-Value="priceHuf" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentText="Ft" Min="0" />
+                <MudNumericField T="int" Label="Ár" @bind-Value="priceHuf" Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentText="Ft" Min="0" />
             </MudItem>
 
             <MudItem xs="12">
-                <MudSelect T="int" Label="Allergének" MultiSelection="true" SelectedValues="allergenIds" SelectedValuesChanged="v => allergenIds = v.ToHashSet()" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelect T="int" Label="Allergének" MultiSelection="true" 
+                SelectedValues="allergenIds" SelectedValuesChanged="v => allergenIds = v.ToHashSet()" 
+                Variant="Variant.Outlined">
                     @foreach (var allergen in AllergenCatalog.All)
                     {
                         <MudSelectItem T="int" Value="allergen.Number">@allergen.Number – @allergen.Name</MudSelectItem>
