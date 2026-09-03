@@ -17,6 +17,21 @@ public class AdminALaCarteKitchenSummaryTests : MudBunitContext
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.Today);
 
+    /// <summary>A havi mátrix hétvégét kihagyva sorolja fel a hónapot — a hétvégi tesztfutás miatt nem
+    /// szabad simán <see cref="Today"/>-t használni egy havi-nézeti sor dátumaként, mert az véletlenül
+    /// hétvégére eshet, és akkor sosem jelenne meg sorként.</summary>
+    private static readonly DateOnly AWeekdayThisMonth = FirstWeekdayOfCurrentMonth();
+
+    private static DateOnly FirstWeekdayOfCurrentMonth()
+    {
+        var date = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1);
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+        return date;
+    }
+
     public AdminALaCarteKitchenSummaryTests()
     {
         Services.AddMudServices();
@@ -80,7 +95,9 @@ public class AdminALaCarteKitchenSummaryTests : MudBunitContext
         mediator.Register<GetALaCarteMonthlySummaryQuery, ALaCarteMonthlySummaryDto>(q =>
         {
             sentQuery = q;
-            return new ALaCarteMonthlySummaryDto(q.Year, q.Month, 42, [new ALaCarteSummaryLineDto(ALaCarteCategory.Foetel, "Havi rántott szelet", 42)]);
+            var lines = new[] { new ALaCarteMonthlyLineDto(AWeekdayThisMonth, ALaCarteCategory.Foetel, "Havi rántott szelet", 42) };
+            var offeredItems = new[] { new ALaCarteMonthlyOfferedItemDto(ALaCarteCategory.Foetel, "Havi rántott szelet") };
+            return new ALaCarteMonthlySummaryDto(q.Year, q.Month, 42, lines, offeredItems);
         });
         Services.AddSingleton<IMediator>(mediator);
 
@@ -95,6 +112,83 @@ public class AdminALaCarteKitchenSummaryTests : MudBunitContext
         Assert.Equal(Today.Month, sentQuery.Month);
         Assert.Contains("Havi rántott szelet", cut.Markup);
         Assert.DoesNotContain("Csak ma", cut.Markup);
+    }
+
+    [Fact]
+    public void Havi_view_shows_an_empty_cell_for_an_item_offered_that_month_but_not_ordered_that_day()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(Today, 0, []));
+        mediator.Register<GetALaCarteMonthlySummaryQuery, ALaCarteMonthlySummaryDto>(q =>
+        {
+            // "Sosem rendelt köret" tételt soha senki nem rendelte, bár egész hónapban kínálva volt —
+            // ennek ellenére saját oszlopot kap, üres napi cellákkal (nem "0"-val, könnyebb olvasni).
+            var lines = new[] { new ALaCarteMonthlyLineDto(AWeekdayThisMonth, ALaCarteCategory.Foetel, "Rántott szelet", 3) };
+            var offeredItems = new[]
+            {
+                new ALaCarteMonthlyOfferedItemDto(ALaCarteCategory.Foetel, "Rántott szelet"),
+                new ALaCarteMonthlyOfferedItemDto(ALaCarteCategory.Koret, "Sosem rendelt köret"),
+            };
+            return new ALaCarteMonthlySummaryDto(q.Year, q.Month, 3, lines, offeredItems);
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminALaCarteKitchenSummary>((ComponentParameterCollectionBuilder<AdminALaCarteKitchenSummary> _) => { });
+        var haviChip = cut.FindAll(".mud-chip").First(c => c.TextContent.Trim() == "Havi");
+        cut.InvokeAsync(() => haviChip.Click());
+
+        Assert.Contains("Sosem rendelt köret", cut.Markup);
+
+        var dayRowLabel = AWeekdayThisMonth.ToString("MM.dd. (ddd)", new System.Globalization.CultureInfo("hu-HU"));
+        var dateCell = cut.FindAll("td.kitchen-monthly-table__date-cell").First(td => td.TextContent.Trim() == dayRowLabel);
+        var cells = dateCell.ParentElement!.QuerySelectorAll("td");
+
+        // cells[0] = dátum, cells[1] = Rántott szelet (Foetel, ábécé szerint elsőnek), cells[2] = Sosem
+        // rendelt köret (Koret) — a mátrix oszlopsorrendje kategória, majd névsor szerinti.
+        Assert.Equal("3", cells[1].TextContent.Trim());
+        Assert.Equal(string.Empty, cells[2].TextContent.Trim());
+    }
+
+    [Fact]
+    public void Havi_view_does_not_show_the_soup_portion_panel()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(Today, 0, []));
+        mediator.Register<GetALaCarteMonthlySummaryQuery, ALaCarteMonthlySummaryDto>(q => new ALaCarteMonthlySummaryDto(q.Year, q.Month, 5, [], []));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminALaCarteKitchenSummary>((ComponentParameterCollectionBuilder<AdminALaCarteKitchenSummary> _) => { });
+        var haviChip = cut.FindAll(".mud-chip").First(c => c.TextContent.Trim() == "Havi");
+        cut.InvokeAsync(() => haviChip.Click());
+
+        Assert.DoesNotContain("levesadag", cut.Markup);
+    }
+
+    [Fact]
+    public void Clicking_a_week_row_collapses_its_daily_rows()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteDailySummaryQuery, ALaCarteDailySummaryDto>(_ => new ALaCarteDailySummaryDto(Today, 0, []));
+        var lines = new[] { new ALaCarteMonthlyLineDto(AWeekdayThisMonth, ALaCarteCategory.Foetel, "Rántott szelet", 3) };
+        var offeredItems = new[] { new ALaCarteMonthlyOfferedItemDto(ALaCarteCategory.Foetel, "Rántott szelet") };
+        mediator.Register<GetALaCarteMonthlySummaryQuery, ALaCarteMonthlySummaryDto>(q => new ALaCarteMonthlySummaryDto(q.Year, q.Month, 3, lines, offeredItems));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminALaCarteKitchenSummary>((ComponentParameterCollectionBuilder<AdminALaCarteKitchenSummary> _) => { });
+        var haviChip = cut.FindAll(".mud-chip").First(c => c.TextContent.Trim() == "Havi");
+        cut.InvokeAsync(() => haviChip.Click());
+
+        var dayRowLabel = AWeekdayThisMonth.ToString("MM.dd. (ddd)", new System.Globalization.CultureInfo("hu-HU"));
+        Assert.Contains(dayRowLabel, cut.Markup);
+
+        // AWeekdayThisMonth a hónap első munkanapja, tehát mindig az első heti sorhoz tartozik.
+        var firstWeekRow = cut.FindAll("tr.kitchen-monthly-table__week-row").First();
+        cut.InvokeAsync(() => firstWeekRow.Click());
+
+        Assert.DoesNotContain(dayRowLabel, cut.Markup);
     }
 
     [Fact]

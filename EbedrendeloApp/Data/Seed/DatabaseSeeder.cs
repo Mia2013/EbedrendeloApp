@@ -77,12 +77,12 @@ public static class DatabaseSeeder
 
         var users = new List<User>
         {
-            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
-            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
+            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Igazgatosag = "Központ", Osztaly = "Informatika", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
+            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
+            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
+            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
+            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
+            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Igazgatosag = "Logisztika", Osztaly = "Raktár", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
         };
 
         db.Users.AddRange(users);

@@ -14,6 +14,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.UserName).HasMaxLength(64);
         builder.Property(u => u.KeresztNev).HasMaxLength(128);
         builder.Property(u => u.VezetekNev).HasMaxLength(128);
+        builder.Property(u => u.Igazgatosag).HasMaxLength(128);
+        builder.Property(u => u.Osztaly).HasMaxLength(128);
         builder.Property(u => u.Rf).HasMaxLength(32);
         builder.Property(u => u.SzervKod).HasMaxLength(32);
 

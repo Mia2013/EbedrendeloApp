@@ -90,28 +90,39 @@ else
         </MudStack>
     </MudStack>
 
+    <div class="mt-4">
+        <WeekdayHeaderRow />
+    </div>
+    <div class="order-calendar mt-3">
+        @foreach (var week in BuildWeeks())
+        {
+            @foreach (var cell in week)
+            {
+                @if (cell is null)
+                {
+                    <div class="order-calendar__cell order-calendar__cell--empty"></div>
+                }
+                else
+                {
+                    <div class="order-calendar__cell @(cell.Date == today ? "order-calendar__cell--today" : null)">
+                        @DayCell(cell)
+                    </div>
+                }
+            }
+        }
+    </div>
+
+    @* A két összesítő sáv szándékosan a rács UTÁN, nem előtte jelenik meg — így egy pipálás nem tolja
+       lejjebb a rácsot (ahol épp kattintott a felhasználó), csak a rács alatti terület nő. *@
     @if (pendingSelections.Count > 0)
     {
         <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
-            <MudTable Items="PendingSelectionSummary" Hover="true" Dense="true" Elevation="0" Class="mb-3">
-                <HeaderContent>
-                    <MudTh>Menü</MudTh>
-                    <MudTh>Darab</MudTh>
-                    <MudTh>Ár</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Menü">@context.VariantCode menü</MudTd>
-                    <MudTd DataLabel="Darab">@context.Count</MudTd>
-                    <MudTd DataLabel="Ár">@context.TotalHuf Ft</MudTd>
-                </RowTemplate>
-                <FooterContent>
-                    <MudTd>Összesen</MudTd>
-                    <MudTd>@pendingSelections.Count</MudTd>
-                    <MudTd>@PendingTotalHuf Ft</MudTd>
-                </FooterContent>
-            </MudTable>
-
-            <MudStack Row Justify="Justify.FlexEnd">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
+                <MudStack Row Spacing="6" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.body2">Egységár: <strong>@menuPortionHuf Ft</strong></MudText>
+                    <MudText Typo="Typo.body2">Darabszám: <strong>@pendingSelections.Count</strong></MudText>
+                    <MudText Typo="Typo.body2">Összesen: <strong>@PendingTotalHuf Ft</strong></MudText>
+                </MudStack>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@(isSubmitting ? null : Icons.Material.Filled.CheckCircle)"
                            OnClick="SubmitOrdersAsync" Disabled="isSubmitting">
                     @if (isSubmitting)
@@ -148,30 +159,6 @@ else
             </MudStack>
         </MudPaper>
     }
-
-    <div class="mt-4">
-        <WeekdayHeaderRow />
-    </div>
-    <div class="order-calendar mt-3">
-        @foreach (var week in BuildWeeks())
-        {
-            @foreach (var cell in week)
-            {
-                @if (cell is null)
-                {
-                    <div class="order-calendar__cell order-calendar__cell--empty"></div>
-                }
-                else
-                {
-                    <div class="order-calendar__cell @(cell.Date == today ? "order-calendar__cell--today" : null)">
-                        @DayCell(cell)
-                    </div>
-                }
-            }
-        }
-    </div>
-
- 
 }
 
 @code {
@@ -270,9 +257,6 @@ else
     private int menuPortionHuf;
 
     private int EffectiveTargetUserId => targetUserId ?? CurrentUser.UserId;
-
-    private IReadOnlyList<PendingVariantSummary> PendingSelectionSummary =>
-        PendingOrderSummary.Summarize(pendingSelections.Values, menuPortionHuf);
 
     private int PendingTotalHuf => pendingSelections.Count * menuPortionHuf;
 
