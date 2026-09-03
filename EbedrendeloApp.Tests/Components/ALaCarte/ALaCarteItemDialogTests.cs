@@ -110,6 +110,30 @@ public class ALaCarteItemDialogTests : MudBunitContext
         Assert.Equal(750, sentCommand.PriceHuf);
     }
 
+    /// <summary>A lista Állapot oszlopa nem kattintható (lásd AdminALaCarteItemsTests), ezért az Aktív
+    /// kapcsoló itt, a dialóguson keresztül kell hogy elérhető legyen.</summary>
+    [Fact]
+    public async Task Toggling_the_active_switch_off_deactivates_the_item_on_save()
+    {
+        var existing = new ALaCarteItemDto(5, "Somlói galuska", ALaCarteCategory.Desszert, 750, true, null, null, null, null, null, null, null, null);
+        var mediator = new FakeMediator();
+        UpsertALaCarteItemCommand? sentCommand = null;
+        mediator.Register<UpsertALaCarteItemCommand, Result<ALaCarteItemDto>>(cmd =>
+        {
+            sentCommand = cmd;
+            return Result.Success(existing);
+        });
+        var provider = await OpenAsync(mediator, existing);
+
+        var activeSwitch = provider.FindComponent<MudSwitch<bool>>();
+        await provider.InvokeAsync(() => activeSwitch.Instance.ValueChanged.InvokeAsync(false));
+        var saveButton = provider.FindAll("button").First(b => b.TextContent.Contains("Mentés"));
+        await provider.InvokeAsync(() => saveButton.Click());
+
+        Assert.NotNull(sentCommand);
+        Assert.False(sentCommand!.IsActive);
+    }
+
     [Fact]
     public async Task Shows_the_error_message_returned_by_a_failed_save()
     {

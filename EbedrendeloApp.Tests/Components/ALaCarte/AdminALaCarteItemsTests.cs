@@ -5,7 +5,6 @@ using EbedrendeloApp.Components.Pages.ALaCarte;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.ALaCarte;
 using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems;
-using EbedrendeloApp.Features.ALaCarte.SetALaCarteItemActive;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -53,8 +52,11 @@ public class AdminALaCarteItemsTests : MudBunitContext
         Assert.Contains("Inaktív", cut.Markup);
     }
 
+    /// <summary>Az állapot oszlop csak megjelenít, nem kattintható — a Aktív/Inaktív váltás kizárólag a
+    /// szerkesztő dialóguson (a MudSwitch-en) keresztül történhet, hogy admin ne tudja véletlen kattintással
+    /// kivezetni/visszaaktiválni egy tételt a lista áttekintése közben. Lásd <see cref="ALaCarteItemDialog"/>.</summary>
     [Fact]
-    public void Toggling_an_active_item_deactivates_it_and_reloads_the_list()
+    public void Clicking_the_status_chip_does_not_change_the_items_state()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
@@ -62,13 +64,7 @@ public class AdminALaCarteItemsTests : MudBunitContext
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ =>
         {
             loadCount++;
-            return loadCount == 1 ? [Item(1, "Rántott sertés szelet", ALaCarteCategory.Foetel)] : [Item(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, isActive: false)];
-        });
-        SetALaCarteItemActiveCommand? sentCommand = null;
-        mediator.Register<SetALaCarteItemActiveCommand, EbedrendeloApp.Common.Results.Result>(cmd =>
-        {
-            sentCommand = cmd;
-            return EbedrendeloApp.Common.Results.Result.Success();
+            return [Item(1, "Rántott sertés szelet", ALaCarteCategory.Foetel)];
         });
         Services.AddSingleton<IMediator>(mediator);
 
@@ -76,33 +72,29 @@ public class AdminALaCarteItemsTests : MudBunitContext
         var statusChip = cut.FindAll("td .mud-chip").First(c => c.TextContent.Trim() == "Aktív");
         cut.InvokeAsync(() => statusChip.Click());
 
-        Assert.NotNull(sentCommand);
-        Assert.Equal(1, sentCommand!.Id);
-        Assert.False(sentCommand.IsActive);
-        Assert.Equal(2, loadCount);
+        Assert.Equal(1, loadCount);
+        Assert.Contains("Aktív", cut.Markup);
     }
 
     [Fact]
-    public void Toggling_an_inactive_item_reactivates_it()
+    public void Groups_the_rows_by_category_with_a_group_header_per_category()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
         mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(
-            _ => [Item(1, "Somlói galuska", ALaCarteCategory.Desszert, isActive: false)]);
-        SetALaCarteItemActiveCommand? sentCommand = null;
-        mediator.Register<SetALaCarteItemActiveCommand, EbedrendeloApp.Common.Results.Result>(cmd =>
-        {
-            sentCommand = cmd;
-            return EbedrendeloApp.Common.Results.Result.Success();
-        });
+            _ => [Item(1, "Somlói galuska", ALaCarteCategory.Desszert), Item(2, "Rántott sertés szelet", ALaCarteCategory.Foetel)]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminALaCarteItems>((ComponentParameterCollectionBuilder<AdminALaCarteItems> _) => { });
-        var statusChip = cut.FindAll("td .mud-chip").First(c => c.TextContent.Trim() == "Inaktív");
-        cut.InvokeAsync(() => statusChip.Click());
+        var tableMarkup = cut.Find("table").InnerHtml;
 
-        Assert.NotNull(sentCommand);
-        Assert.Equal(1, sentCommand!.Id);
-        Assert.True(sentCommand.IsActive);
+        var foetelHeaderIndex = tableMarkup.IndexOf("Főétel", StringComparison.Ordinal);
+        var desszertHeaderIndex = tableMarkup.IndexOf("Desszert", StringComparison.Ordinal);
+        var szeletRowIndex = tableMarkup.IndexOf("Rántott sertés szelet", StringComparison.Ordinal);
+        var galuskaRowIndex = tableMarkup.IndexOf("Somlói galuska", StringComparison.Ordinal);
+
+        Assert.True(foetelHeaderIndex >= 0 && foetelHeaderIndex < szeletRowIndex, "A Főétel csoportfejlécnek a Főétel sorai előtt kell állnia.");
+        Assert.True(desszertHeaderIndex >= 0 && desszertHeaderIndex < galuskaRowIndex, "A Desszert csoportfejlécnek a Desszert sorai előtt kell állnia.");
+        Assert.True(szeletRowIndex < desszertHeaderIndex, "A Főétel kategóriának (enum sorrend szerint) a Desszert előtt kell állnia.");
     }
 }

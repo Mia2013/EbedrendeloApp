@@ -4,7 +4,6 @@
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.ALaCarte
 @using EbedrendeloApp.Features.ALaCarte.GetALaCarteItems
-@using EbedrendeloApp.Features.ALaCarte.SetALaCarteItemActive
 @using MediatR
 @inject IMediator Mediator
 @inject IDialogService DialogService
@@ -59,30 +58,31 @@
     </MudStack>
 </MudStack>
 
-<MudTable Items="filteredItems" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
+<MudTable Items="filteredItems" GroupBy="groupDefinition" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
     <HeaderContent>
         <MudTh>Név</MudTh>
-        <MudTh>Kategória</MudTh>
         <MudTh>Ár</MudTh>
         <MudTh>Tápérték</MudTh>
         <MudTh>Állapot</MudTh>
         <MudTh>Műveletek</MudTh>
     </HeaderContent>
+    <GroupHeaderTemplate>
+        <MudTh Class="mud-table-cell-custom-group" colspan="5">
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@ALaCarteCategoryDisplay.Icon((ALaCarteCategory)context.Key!)" Size="Size.Small" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle2">@ALaCarteCategoryDisplay.Name((ALaCarteCategory)context.Key!)</MudText>
+            </MudStack>
+        </MudTh>
+    </GroupHeaderTemplate>
     <RowTemplate>
         <MudTd DataLabel="Név">@context.Name</MudTd>
-        <MudTd DataLabel="Kategória">
-            <MudIcon Icon="@ALaCarteCategoryDisplay.Icon(context.Category)" Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />@ALaCarteCategoryDisplay.Name(context.Category)
-        </MudTd>
         <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
         <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
         <MudTd DataLabel="Állapot">
-            <MudTooltip Text="@(context.IsActive ? "Kattints a kivezetéshez" : "Kattints az aktiváláshoz")">
-                <MudChip T="string" Size="Size.Small" Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"
-                         Color="@(context.IsActive ? Color.Success : Color.Default)"
-                         OnClick="() => ToggleActiveAsync(context)">
-                    @(context.IsActive ? "Aktív" : "Inaktív")
-                </MudChip>
-            </MudTooltip>
+            <MudChip T="string" Size="Size.Small" Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"
+                     Color="@(context.IsActive ? Color.Success : Color.Default)">
+                @(context.IsActive ? "Aktív" : "Inaktív")
+            </MudChip>
         </MudTd>
         <MudTd DataLabel="Műveletek">
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" title="Szerkesztés" OnClick="() => EditItemAsync(context)" />
@@ -101,7 +101,18 @@
     private IEnumerable<ALaCarteItemDto> filteredItems => items is null
         ? []
         : items.Where(i => (categoryFilter == "Mind" || ALaCarteCategoryDisplay.Name(i.Category) == categoryFilter)
-                            && (statusFilter == "Mind" || (statusFilter == "Aktív") == i.IsActive));
+                            && (statusFilter == "Mind" || (statusFilter == "Aktív") == i.IsActive))
+               .OrderBy(i => i.Category).ThenBy(i => i.Name, StringComparer.Ordinal);
+
+    /// <summary>AC 4.3.4: a törzsadat kategória szerint csoportosítva jelenik meg — a csoport a
+    /// kategória (nem tétel-szintű), ezért a táblázat sortest nem is mutat külön Kategória oszlopot.</summary>
+    private static readonly TableGroupDefinition<ALaCarteItemDto> groupDefinition = new()
+    {
+        GroupName = "Kategória",
+        Indentation = false,
+        Expandable = false,
+        Selector = i => i.Category,
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,12 +175,5 @@
             Snackbar.Add("Tétel mentve.", Severity.Success);
             await LoadAsync();
         }
-    }
-
-    private async Task ToggleActiveAsync(ALaCarteItemDto item)
-    {
-        await Mediator.Send(new SetALaCarteItemActiveCommand(item.Id, !item.IsActive));
-        Snackbar.Add(item.IsActive ? "Tétel kivezetve." : "Tétel aktiválva.", Severity.Success);
-        await LoadAsync();
     }
 }
