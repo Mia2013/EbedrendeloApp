@@ -366,7 +366,7 @@ public class TodayMenuTests : MudBunitContext
 
         var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
         Assert.True(orderButton.HasAttribute("disabled"));
-        Assert.False(IsKivalasztvaChipVisible(cut, "Rántott sertés szelet"));
+        Assert.False(IsCardSelected(cut, "Rántott sertés szelet"));
     }
 
     [Fact]
@@ -395,6 +395,109 @@ public class TodayMenuTests : MudBunitContext
         Assert.Contains("En: 500", tooltipTexts);
     }
 
+    // Az allergén info-ikon és a kalória-ikon @onclick:stopPropagation="true"-t kap (lásd TodayMenu.razor),
+    // pont azzal a mintával, amit a lenti "Nutrition_is_hidden..." teszt korábbi (accordionos) változata
+    // már bizonyítottan lefedett — de itt nincs mit bUnit-tal külön leklikkelni: a wrapper span-nak (és
+    // az ikonnak) nincs saját onclick-kezelője, ezért bUnit `MissingEventHandlerException`-t dob, ha
+    // megpróbáljuk .Click()-elni ("a kattintás nem jut el sehova" ugyanis pontosan a várt viselkedés,
+    // nem egy tesztelhető mellékhatás). A stopPropagation tényleges hatását a valódi böngészőben kell
+    // ellenőrizni; itt a kártya a11y-attribútumait és a billentyűzetes kezelést teszteljük lejjebb.
+
+    [Fact]
+    public void An_orderable_cards_root_element_exposes_a_button_role_and_is_tab_reachable()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+        var card = FindOfferCard(cut, "Rántott sertés szelet");
+
+        Assert.Equal("button", card.GetAttribute("role"));
+        Assert.Equal("0", card.GetAttribute("tabindex"));
+        Assert.Equal("false", card.GetAttribute("aria-disabled"));
+    }
+
+    [Fact]
+    public async Task Pressing_enter_on_a_focused_card_selects_it_like_a_click()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ => new TodayMenuDto(
+            Today, true, null,
+            [new MenuVariantDto("A", "Rántott hús", null, 0)],
+            MySelection: null,
+            ALaCarteOffers: [new ALaCarteOfferDto(1, "Rántott sertés szelet", ALaCarteCategory.Foetel, 2550, 7)],
+            MyALaCarteOrderLines: [],
+            ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+            IsALaCarteOrderableNow: true));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+        var card = FindOfferCard(cut, "Rántott sertés szelet");
+
+        await cut.InvokeAsync(() => card.KeyDown(key: "Enter"));
+
+        Assert.True(IsCardSelected(cut, "Rántott sertés szelet"));
+    }
+
+    [Fact]
+    public async Task Order_failure_shows_the_servers_item_specific_message_and_drops_the_now_unavailable_selection()
+    {
+        // AC: a szerver egy konkrét, tételnevesített hibaüzenetet ad (pl. "Csirkemell elfogyott."),
+        // ezt kell megjeleníteni egy általános szöveg helyett — és a beküldés után frissülő today
+        // alapján az azóta elfogyott tételt automatikusan kivesszük a kijelölésből, a még elérhetőt
+        // (másik kategória) viszont bent hagyjuk.
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Dolgozó Teszt", isAdmin: false));
+        var mediator = new FakeMediator();
+        var loadCount = 0;
+        mediator.Register<GetTodayMenuForUserQuery, TodayMenuDto>(_ =>
+        {
+            loadCount++;
+            var mainFreeCount = loadCount == 1 ? 7 : 0; // second load: sold out in the meantime
+            return new TodayMenuDto(
+                Today, true, null,
+                [new MenuVariantDto("A", "Rántott hús", null, 0)],
+                MySelection: null,
+                ALaCarteOffers:
+                [
+                    new ALaCarteOfferDto(1, "Csirkemell", ALaCarteCategory.Foetel, 2200, mainFreeCount),
+                    new ALaCarteOfferDto(2, "Rizi-bizi", ALaCarteCategory.Koret, 500, 7),
+                ],
+                MyALaCarteOrderLines: [],
+                ALaCarteOrderDeadlineLocalTime: new TimeOnly(10, 30),
+                IsALaCarteOrderableNow: true);
+        });
+        mediator.Register<PlaceALaCarteOrderCommand, Result<PlacedALaCarteOrderLinesDto>>(
+            _ => Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.OutOfStock, "Csirkemell elfogyott."));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var provider = Render<MudDialogProvider>();
+        var cut = Render<TodayMenu>((ComponentParameterCollectionBuilder<TodayMenu> _) => { });
+
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Csirkemell").Click());
+        await cut.InvokeAsync(() => FindOfferCard(cut, "Rizi-bizi").Click());
+
+        var orderButton = cut.FindAll("button").First(b => b.TextContent.Contains("Megrendelés"));
+        await cut.InvokeAsync(() => orderButton.Click());
+
+        var confirmButton = provider.FindAll("button").First(b => b.TextContent.Contains("Igen, megrendelem"));
+        await provider.InvokeAsync(() => confirmButton.Click());
+
+        Assert.Contains("Csirkemell elfogyott.", cut.Markup);
+        Assert.DoesNotContain("Ez a tétel időközben elfogyott.", cut.Markup);
+        Assert.False(IsCardSelected(cut, "Csirkemell")); // dropped: sold out on refresh
+        Assert.True(IsCardSelected(cut, "Rizi-bizi")); // kept: still available
+    }
+
     /// <summary>A legkisebb szöveget tartalmazó `mud-paper` a keresett tétel saját kártyája — a
     /// befoglaló szekció-paperek is tartalmazzák a nevet (minden leszármazott szövegét öröklik),
     /// de azoknak jóval hosszabb a TextContent-je.</summary>
@@ -404,13 +507,10 @@ public class TodayMenuTests : MudBunitContext
             .OrderBy(el => el.TextContent.Length)
             .First();
 
-    /// <summary>A "Kiválasztva" chip DOM-eleme mindig ott van a kártyán (fix magasság/szélesség
-    /// miatt, lásd TodayMenu.razor) — kiválasztatlanul csak `visibility:hidden`-nel van elrejtve,
-    /// ezért a "látszik-e" kérdést a style attribútum dönti el, nem a markupban való jelenlét.</summary>
-    private static bool IsKivalasztvaChipVisible(IRenderedComponent<TodayMenu> cut, string offerName)
-    {
-        var chip = FindOfferCard(cut, offerName).QuerySelectorAll(".mud-chip")
-            .FirstOrDefault(e => e.TextContent.Contains("Kiválasztva"));
-        return chip is not null && !(chip.GetAttribute("style") ?? string.Empty).Contains("hidden");
-    }
+    /// <summary>A kártya kijelölés-állapotát a checkbox (input[type=checkbox]) valós "checked"
+    /// attribútuma dönti el — ez az egyetlen olyan jelző a kártyán, ami minden render után pontosan
+    /// tükrözi a <c>selectedItemIds</c> tartalmát (a "Kiválasztva" chip csak színt vált, nem tűnik el,
+    /// lásd TodayMenu.razor).</summary>
+    private static bool IsCardSelected(IRenderedComponent<TodayMenu> cut, string offerName) =>
+        FindOfferCard(cut, offerName).QuerySelector("input[type=checkbox]")!.HasAttribute("checked");
 }

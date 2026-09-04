@@ -261,18 +261,24 @@ public class UserCalendarTests : MudBunitContext
     [Fact]
     public async Task Submitting_cancellations_sends_all_marked_dates_in_one_CancelMenuOrdersCommand_call()
     {
-        var tomorrow = Today.AddDays(1);
+        // A naptár-rács hétvégi napokat sosem renderel (BuildWeeks csak hétfő-péntek oszlopot épít),
+        // ezért a második naphoz nem elég "Today + 1 nap" — az szombatra eshet, és akkor a hozzá
+        // tartozó "Lemondásra jelölés" gomb egyszerűen nem létezik a DOM-ban, a teszt pedig a
+        // futtatás valódi hétnapjától függően hibázna. A NextWeekday mindkét dátumot a legközelebbi
+        // (a mai nappal bezárólag) munkanapokra rögzíti, függetlenül attól, hányadik nap fut a teszt.
+        var day1 = NextWeekday(Today);
+        var day2 = NextWeekday(day1.AddDays(1));
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
-            new OrderableDayDto(Today, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
-            new OrderableDayDto(tomorrow, false, true, "B", "Húsleves", ErrorCodes.AlreadyOrdered, null),
+            new OrderableDayDto(day1, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
+            new OrderableDayDto(day2, false, true, "B", "Húsleves", ErrorCodes.AlreadyOrdered, null),
         ]));
 
         CancelMenuOrdersCommand? sentCommand = null;
         mediator.Register<CancelMenuOrdersCommand, Result<BatchOrderResult>>(cmd =>
         {
             sentCommand = cmd;
-            return Result.Success(new BatchOrderResult([new DayResult(Today, "A"), new DayResult(tomorrow, "B")], []));
+            return Result.Success(new BatchOrderResult([new DayResult(day1, "A"), new DayResult(day2, "B")], []));
         });
 
         Render<MudDialogProvider>();
@@ -290,7 +296,17 @@ public class UserCalendarTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(1, sentCommand!.TargetUserId);
         Assert.Equal(1, sentCommand.CancelledByUserId);
-        Assert.Equal([Today, tomorrow], sentCommand.Dates.OrderBy(d => d));
+        Assert.Equal([day1, day2], sentCommand.Dates.OrderBy(d => d));
+    }
+
+    private static DateOnly NextWeekday(DateOnly date)
+    {
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+
+        return date;
     }
 
     [Fact]

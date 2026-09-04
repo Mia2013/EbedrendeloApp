@@ -132,13 +132,24 @@ else
                     {
                         <MudItem xs="12" sm="6" md="4">
                             <MudPaper Outlined="true" Class="pa-3" Style="@CardStyle(offer)" Elevation="0"
-                                      @onclick="@(() => OnCardClick(offer))">
+                                      role="button" tabindex="@(CanClickCard(offer) ? "0" : "-1")"
+                                      aria-disabled="@AriaBool(!CanClickCard(offer))" aria-pressed="@AriaBool(IsSelected(offer))"
+                                      @onclick="@(() => OnCardClick(offer))"
+                                      @onkeydown="@(e => OnCardKeyDown(e, offer))">
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
-                                    <MudText Typo="Typo.subtitle2">@offer.Name@(offer.IncludesSoup ? " (levessel)" : "")</MudText>
-                                    @* Fix méretű (szélesség ÉS magasság) hely a jelölő chipnek: a "Kiválasztva" chip
-                                       DOM-elem mindig ott van, kiválasztatlanul csak visibility:hidden — így a hely
-                                       mindig foglalt, kattintásra sem a névsor tördelése, sem a kártya magassága
-                                       nem ugrik meg. *@
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="flex-grow-1" Style="min-width:0;">
+                                        @* A checkbox a kártya elején egyértelmű, kifejezett kijelölő vezérlő — a
+                                           teljes kártyára kattintás is működik továbbra is, de a checkbox jelzi
+                                           elsőre is nyilvánvalóan, hogy a tétel kiválasztható. Ugyanaz a
+                                           sárga (kijelölve) / szürke (nincs kijelölve) színpár, mint a naptár
+                                           napi menü kijelölésénél (UserCalendar.razor TogglePending). *@
+                                        <span @onclick:stopPropagation="true">
+                                            <MudCheckBox T="bool" Value="IsSelected(offer)" Color="Color.Warning" UncheckedColor="Color.Default"
+                                                         Disabled="@(!CanClickCard(offer))" Dense="true"
+                                                         ValueChanged="@(_ => OnCardClick(offer))" />
+                                        </span>
+                                        <MudText Typo="Typo.subtitle2">@offer.Name@(offer.IncludesSoup ? " (levessel)" : "")</MudText>
+                                    </MudStack>
                                     <div style="min-width:112px; text-align:right;">
                                         @if (IsOrdered(offer))
                                         {
@@ -150,8 +161,14 @@ else
                                         }
                                         else
                                         {
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.Check"
-                                                     Style="@(IsSelected(offer) ? "" : "visibility:hidden;")">Kiválasztva</MudChip>
+                                            @* A chip mindig látszik (nem tűnik el teljesen kijelöletlenül) — csak
+                                               szürkére vált, ugyanazt a sárga/szürke jelölést követve, mint a
+                                               checkbox. Ez egyúttal a korábbi visibility:hidden trükköt is
+                                               feleslegessé teszi: a kártya magassága eleve nem ugrik, mert a chip
+                                               mindig ugyanazzal a tartalommal/mérettel renderelődik. *@
+                                            <MudChip T="string" Size="Size.Small" Color="@(IsSelected(offer) ? Color.Warning : Color.Default)" Icon="@Icons.Material.Filled.Check">
+                                                Kiválasztva
+                                            </MudChip>
                                         }
                                     </div>
                                 </MudStack>
@@ -159,9 +176,11 @@ else
                                 {
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">
                                         Allergén: @allergensShort
-                                        <MudTooltip Text="@AllergenCatalog.Format(offer.Allergens)" Inline="true">
-                                            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
-                                        </MudTooltip>
+                                        <span class="allergen-info" @onclick:stopPropagation="true">
+                                            <MudTooltip Text="@AllergenCatalog.Format(offer.Allergens)" Inline="true">
+                                                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" />
+                                            </MudTooltip>
+                                        </span>
                                     </MudText>
                                 }
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-2">
@@ -173,9 +192,11 @@ else
                                         }
                                         @if (FormatALaCarteNutrition(offer) is { } nutrition)
                                         {
-                                            <MudTooltip Text="@nutrition" Inline="true">
-                                                <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Size="Size.Small" Color="Color.Secondary" />
-                                            </MudTooltip>
+                                            <span class="nutrition-info" @onclick:stopPropagation="true">
+                                                <MudTooltip Text="@nutrition" Inline="true">
+                                                    <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Size="Size.Small" Color="Color.Secondary" />
+                                                </MudTooltip>
+                                            </span>
                                         }
                                     </MudStack>
                                 </MudStack>
@@ -224,9 +245,11 @@ else
         [ErrorCodes.MenuNotPublished] = "Mára még nincs publikált menü.",
     };
 
+    // Az OutOfStock szándékosan nincs itt — a handler már tételnevesített üzenetet ad
+    // (pl. "Csirkemell elfogyott."), azt kell megjeleníteni, nem egy általános szöveget, hogy a
+    // felhasználó több kijelölt tétel esetén is lássa, melyiket kell levennie a kijelölésből.
     private static readonly Dictionary<string, string> ALaCarteOrderErrorText = new()
     {
-        [ErrorCodes.OutOfStock] = "Ez a tétel időközben elfogyott.",
         [ErrorCodes.AlreadyOrdered] = "Ezt a tételt már megrendelted ma.",
         [ErrorCodes.DeadlinePassed] = "A mai à la carte rendelési határidő már lejárt.",
         [ErrorCodes.NotDirectlyOrderable] = "A leves önállóan nem rendelhető.",
@@ -234,6 +257,7 @@ else
         [ErrorCodes.NotWorkingDay] = "Ma nem munkanap.",
         [ErrorCodes.DayExcluded] = "A mai nap ki van zárva.",
         [ErrorCodes.OutsidePeriod] = "Ma nincs érvényes rendelési időszak.",
+        [ErrorCodes.DuplicateCategory] = "Kategóriánként csak egy tétel rendelhető egyszerre.",
     };
 
     private static readonly DialogOptions ConfirmDialogOptions = new()
@@ -244,7 +268,7 @@ else
     };
 
     private TodayMenuDto? today;
-    private readonly HashSet<int> selectedItemIds = [];
+    private HashSet<int> selectedItemIds = [];
     private bool isPlacingOrder;
     private string? orderErrorMessage;
 
@@ -255,6 +279,11 @@ else
     }
 
     private static string Describe(string? reason) => reason is null ? string.Empty : ReasonText.GetValueOrDefault(reason, reason);
+
+    /// <summary>Blazor a bool-típusú attribútum-kifejezéseket a natív HTML boolean-attribútumokként
+    /// kezeli (false → az attribútum ki sem kerül a DOM-ba) — az ARIA-attribútumoknak viszont a
+    /// szó szerinti "true"/"false" string kell, ezért itt explicit stringgé alakítjuk.</summary>
+    private static string AriaBool(bool value) => value ? "true" : "false";
 
     /// <summary>Csak hétvégén/kizárt napon nincs semmilyen kiszolgálás — ilyenkor az à la carte rész is
     /// üres (AC 4.1.3/4.2.7), a teljes oldalt egyetlen jelzés helyettesíti. "Nincs publikált menü" ennél
@@ -269,7 +298,13 @@ else
 
     private bool CanSelect(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !isPlacingOrder;
 
-    private bool CanClickCard(ALaCarteOfferDto offer) => !IsOrdered(offer) && offer.FreeCount > 0 && CanSelect(offer);
+    /// <summary>Kihagyja az <see cref="isPlacingOrder"/>-tiltást — ez az az állapot, ami a kártyák
+    /// kattinthatóságától függetlenül is eldönti, hogy a tétel elvileg még rendelhető-e (nem fogyott el,
+    /// nincs már megrendelve). A beküldés utáni kijelölés-szűrés ezt használja, mert akkor
+    /// <see cref="isPlacingOrder"/> még szándékosan igaz.</summary>
+    private bool IsStillAvailable(ALaCarteOfferDto offer) => !IsOrdered(offer) && offer.FreeCount > 0;
+
+    private bool CanClickCard(ALaCarteOfferDto offer) => IsStillAvailable(offer) && CanSelect(offer);
 
     private List<ALaCarteOfferDto> SelectedOffers => today!.ALaCarteOffers.Where(o => selectedItemIds.Contains(o.ALaCarteItemId)).ToList();
 
@@ -288,8 +323,9 @@ else
     }
 
     /// <summary>Kategóriánként legfeljebb egy tétel választható (rádiógomb-viselkedés — pl. 1 főétel,
-    /// 1 köret) — kijelöléskor előbb töröljük az adott kategóriában esetleg már kiválasztott tételt.
-    /// Már megrendelt vagy elfogyott tételre kattintva nem történik semmi.</summary>
+    /// 1 köret) — a szabályt maga a <c>ALaCarteSelectionRules</c> hordozza, nem a komponens, hogy
+    /// Blazor-render nélkül, sima unit teszttel is ellenőrizhető legyen (CLAUDE.md: "üzleti logika ne
+    /// .razor fájlban éljen"). Már megrendelt vagy elfogyott tételre kattintva nem történik semmi.</summary>
     private void OnCardClick(ALaCarteOfferDto offer)
     {
         if (!CanClickCard(offer))
@@ -297,51 +333,78 @@ else
             return;
         }
 
-        if (IsSelected(offer))
+        selectedItemIds = ALaCarteSelectionRules.Toggle(selectedItemIds, today!.ALaCarteOffers, offer.ALaCarteItemId);
+    }
+
+    private void OnCardKeyDown(KeyboardEventArgs e, ALaCarteOfferDto offer)
+    {
+        if (e.Key is "Enter" or " ")
         {
-            selectedItemIds.Remove(offer.ALaCarteItemId);
-        }
-        else
-        {
-            selectedItemIds.RemoveWhere(id => today!.ALaCarteOffers.Any(o => o.ALaCarteItemId == id && o.Category == offer.Category));
-            selectedItemIds.Add(offer.ALaCarteItemId);
+            OnCardClick(offer);
         }
     }
 
     /// <summary>A leves sosem szerepel önálló sorként a kínálatban (lásd <c>GetTodayMenuForUserHandler</c>) —
     /// az ára automatikusan beleolvad minden Főétel árába, amit a sor "(levessel)" jelzése már mutat, ezért
     /// itt nincs (és nem is lehet) külön leves-kijelölés, amit a Főétel kijelölésekor automatikusan be kéne
-    /// pipálni.</summary>
+    /// pipálni.
+    ///
+    /// A teljes megerősítés+beküldés folyamatot egyetlen <c>isPlacingOrder</c> tiltja (a dialógus
+    /// megnyitásától a beküldés végéig, try/finally-vel), hogy egy gyors dupla kattintás a "Megrendelés"
+    /// gombon ne nyithasson két megerősítő dialógust ugyanarra a kijelölésre.</summary>
     private async Task OpenOrderConfirmDialogAsync()
     {
-        var parameters = new DialogParameters<ALaCarteOrderConfirmDialog> { { x => x.Offers, SelectedOffers } };
-        var dialogRef = await DialogService.ShowAsync<ALaCarteOrderConfirmDialog>("Rendelés megerősítése", parameters, ConfirmDialogOptions);
-        var result = await dialogRef.Result;
-        if (result is null || result.Canceled)
+        if (isPlacingOrder)
         {
             return;
         }
 
-        await PlaceSelectedOrderAsync();
+        isPlacingOrder = true;
+        try
+        {
+            var parameters = new DialogParameters<ALaCarteOrderConfirmDialog> { { x => x.Offers, SelectedOffers } };
+            var dialogRef = await DialogService.ShowAsync<ALaCarteOrderConfirmDialog>("Rendelés megerősítése", parameters, ConfirmDialogOptions);
+            var result = await dialogRef.Result;
+            if (result is null || result.Canceled)
+            {
+                return;
+            }
+
+            await PlaceSelectedOrderAsync();
+        }
+        finally
+        {
+            isPlacingOrder = false;
+        }
     }
 
     private async Task PlaceSelectedOrderAsync()
     {
-        isPlacingOrder = true;
         orderErrorMessage = null;
 
         var result = await Mediator.Send(new PlaceALaCarteOrderCommand(CurrentUser.UserId, selectedItemIds.ToList()));
 
-        isPlacingOrder = false;
+        // Sikertelen beküldés után is frissítünk — a kiváltó ok (elfogyott/már megrendelt tétel) friss
+        // FreeCount-ot és MyALaCarteOrderLines-t igényel ahhoz, hogy a kártyák és a lenti kijelölés-
+        // szűrés a valós állapotot tükrözzék, ne a beküldéskori (esetleg már elavult) pillanatképet.
+        today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
 
         if (result.IsSuccess)
         {
             selectedItemIds.Clear();
-            today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
         }
         else
         {
             orderErrorMessage = result.ErrorCode is { } code && ALaCarteOrderErrorText.TryGetValue(code, out var text) ? text : result.ErrorMessage;
+
+            // A már nem választható (elfogyott/időközben megrendelt) tételeket kivesszük a
+            // kijelölésből, hogy a felhasználónak ne kelljen manuálisan rájönnie, melyiket kell
+            // levennie, mielőtt újra megnyomja a "Megrendelés" gombot.
+            selectedItemIds.RemoveWhere(id =>
+            {
+                var offer = today!.ALaCarteOffers.FirstOrDefault(o => o.ALaCarteItemId == id);
+                return offer is null || !IsStillAvailable(offer);
+            });
         }
     }
 
