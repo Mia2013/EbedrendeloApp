@@ -462,6 +462,11 @@ foglalást és nem is fogad el közvetlen rendelést** — a `PlaceALaCarteOrder
 nem növeli. Emiatt egy dolgozó tetszőleges számú *különböző* főételt rendelhet ugyanarra a napra (AC
 4.2.3 — tételenként, nem kategóriánként 1 db) anélkül, hogy a leves valaha „elfogyna".
 
+**Visszavonás — szimmetrikus atomi UPDATE.** A `CancelALaCarteOrderLineCommand` ugyanígy, egyetlen
+feltételes `ExecuteUpdateAsync`-cel adja vissza a foglalást (`OrderedCount - 1`, `OrderedCount > 0`
+védőfeltétellel), a napi a la carte határidőig (AC 4.2.5). A felszabaduló adag ugyanabban a
+tranzakcióban azonnal újra foglalható másnak — nincs elsőbbség a korábbi rendelőnek.
+
 ### 3.5 Határidő-ellenőrzések
 
 | Művelet | Feltételek |
@@ -603,8 +608,14 @@ határidő-eltolódását elfogadjuk, külön kezelés nélkül.
 
 ## 5. Aktuális felhasználó — dev felhasználóváltás
 
-Globális `InteractiveServer` mellett a prerender és a circuit **külön DI scope**, ezért egy egyszerű
-scoped „current user" mező nem elég. Megoldás: **valódi cookie authentication, fake bejelentkezéssel**.
+Jelenleg a globális `InteractiveServer` render mode `prerender: false`-szal fut (`App.razor` —
+a „Mai menü" oldal lassú betöltésének javítása miatt, mert a static prerender minden
+`OnInitializedAsync`-et, így a benne futó adatbázis-lekérdezéseket is, duplán futtatta le), ezért
+**jelenleg nincs külön prerender DI scope** — az eredetileg emiatt felmerülő „egy egyszerű scoped
+current user mező nem elég" probléma most nem áll fenn. Ha a prerender valaha visszakapcsolódik
+(pl. SEO miatt), a lenti cookie-alapú megoldás változtatás nélkül helyesen kezelné a prerender és a
+circuit közti scope-eltérést is — ez tehát egy hasznos, jövőre nézve robusztus tulajdonság, de **nem
+ez a döntő indok**. Megoldás: **valódi cookie authentication, fake bejelentkezéssel**.
 
 A cookie melletti döntő érv a fejlesztői munkafolyamat: a Data Protection kulcsok lemezre kerülnek
 (`%LOCALAPPDATA%\ASP.NET\DataProtection-Keys`), így a süti **túléli az alkalmazás újraindítását** és az
@@ -719,6 +730,10 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   `UnitPriceHuf`-ja a főétel árának és az aznapi Leves-ajánlat árának összege (0, ha nincs Leves-ajánlat),
   és a sor `IncludesSoup` mezője ekkor snapshotolódik; a mai napot lefedő időszakot feloldja, és
   `OrderingPeriodId`-ként rögzíti — lefedetlen napon a rendelés elutasítva
+- `CancelALaCarteOrderLineCommand` **[U]** — a `PlaceALaCarteOrderCommand`-dal szimmetrikus
+  visszavonás: ugyanaz a kapuzás (munkanap, nincs kizárva, 10:30 határidőn belül), egy adott mai
+  rendelési sor törlése és az `OrderedCount` atomikus csökkentése (3.4). Nincs ledger-hatás — az a la
+  carte sosem érinti a jóváírást (3.2/US-5.1.2)
 - `GetALaCarteDailySummaryQuery` **[A]** — aznapi konyhai lista tételenként, kategóriánként
   csoportosítva; a levesadag-szám **levezetett** érték: az aznapi `CategorySnapshot == Foetel` sorok
   darabszáma
@@ -774,7 +789,20 @@ a pipeline-ban `app.UseAuthentication(); app.UseAuthorization();` az `UseAntifor
 
 **`AddDbContextFactory`, nem scoped `AddDbContext`** — Blazor Serverben a circuit-scope hosszú életű és
 párhuzamos műveletek futhatnak rajta; a handlerek `IDbContextFactory<EbedrendeloDbContext>`-ből kérnek
-saját kontextust műveletenként. Egy handler = egy unit of work.
+saját kontextust műveletenként. Írásokat végző/tranzakciós handlernél egy handler = egy unit of work
+(egyetlen `DbContext`, szükség esetén egyetlen explicit tranzakcióval — lásd 3.4).
+
+**Kivétel — párhuzamos olvasás összegző lekérdezésekben.** Egy tisztán olvasó handler, amely több
+egymástól teljesen független adatot gyűjt össze egyetlen válasz-DTO-ba (pl.
+`GetTodayMenuForUserHandler`: mai menü+variánsok, saját aktív menürendelés, mai a la carte kínálat,
+saját a la carte rendelés, `AppSetting`), **több `DbContext`-et is nyithat egyszerre**, egyet
+lekérdezésenként, és `Task.WhenAll`-lal párhuzamosan futtatja őket — egy EF Core `DbContext`-példány
+nem biztonságos több konkurens művelethez, egy szekvenciális await-lánc pedig feleslegesen sok
+egymás utáni adatbázis-kört jelent (ez okozta a „Mai menü" oldal érezhetően lassú betöltését, mielőtt
+párhuzamosították). A kivétel csak ott érvényes, ahol a lekérdezések között nincs
+tranzakciós/konzisztencia-igény (nincs írás, és a válasz nem igényli, hogy az egyes részek
+ugyanabból az adatbázis-pillanatfelvételből származzanak) — íráshoz/módosításhoz továbbra is az
+egyetlen-`DbContext`-es minta kötelező.
 
 Connection string (`appsettings.json`):
 `Server=(localdb)\\MSSQLLocalDB;Database=EbedrendeloApp;Trusted_Connection=True;TrustServerCertificate=True`

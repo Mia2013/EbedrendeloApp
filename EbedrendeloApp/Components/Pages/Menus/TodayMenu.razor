@@ -4,6 +4,7 @@
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Domain.Enums
+@using EbedrendeloApp.Features.ALaCarte.CancelALaCarteOrderLine
 @using EbedrendeloApp.Features.ALaCarte.PlaceALaCarteOrder
 @using EbedrendeloApp.Features.Menus
 @using EbedrendeloApp.Features.Menus.GetTodayMenuForUser
@@ -79,11 +80,12 @@ else
             </MudGrid>
         </MudPaper>
 
-        <MudAlert Severity="@(today.MySelection is null ? Severity.Warning : Severity.Success)" Class="mb-3" Dense="true">
-            @(today.MySelection is { } selection
-                ? $"Ma a(z) {selection.VariantCode} menüt ({selection.VariantName}) rendelted, {HungarianNumberFormat.Huf(selection.PriceHuf)} értékben."
-                : "Ma még nem rendeltél menüt.")
-        </MudAlert>
+        @if (today.MySelection is { } selection)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-3" Dense="true">
+                Ma a(z) @selection.VariantCode menüt (@selection.VariantName) rendelted, @HungarianNumberFormat.Huf(selection.PriceHuf) értékben.
+            </MudAlert>
+        }
     }
     else
     {
@@ -130,47 +132,75 @@ else
                 <MudGrid Spacing="2">
                     @foreach (var offer in group)
                     {
+                        @* A már megrendelt tétel kártyája a rácsban marad (nem tűnik el, nem ugrik alá
+                           semmi) — csak lilára színeződik (ugyanaz a stílus, mint a kijelölésnél,
+                           CardStyle-ban) és letiltódik a kattinthatósága (CanClickCard/IsStillAvailable
+                           már eleve false rá). A megjelenített név/ár a rendelési sor pillanatfelvétele
+                           (orderedLine), nem az élő offer-adat — lásd IncludesSoup dokumentációja az
+                           ALaCarteOrderLine entitáson (a leves-ajánlat vagy az ár utólag változhat). *@
+                        var orderedLine = IsOrdered(offer) ? today.MyALaCarteOrderLines.First(l => l.ALaCarteItemId == offer.ALaCarteItemId) : null;
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Outlined="true" Class="pa-3" Style="@CardStyle(offer)" Elevation="0"
-                                      role="button" tabindex="@(CanClickCard(offer) ? "0" : "-1")"
-                                      aria-disabled="@AriaBool(!CanClickCard(offer))" aria-pressed="@AriaBool(IsSelected(offer))"
-                                      @onclick="@(() => OnCardClick(offer))"
-                                      @onkeydown="@(e => OnCardKeyDown(e, offer))">
+                            @* A billentyűzet-/kattintás-kezelés egy natív <div>-en ül, nem a MudPaper-en —
+                               a @onkeydown:preventDefault direktíva-módosító nem kombinálható a MudPaper
+                               (Razor-komponens, nem natív elem) attribútum-splattingjével, RZ10010
+                               fordítási hibát adna ("component parameter 'onkeydown' is used two or more
+                               times"). A natív div-en viszont pontosan úgy működik, mint bármelyik sima
+                               HTML elemen. *@
+                            <div role="button" tabindex="@(CanClickCard(offer) ? "0" : "-1")"
+                                 aria-disabled="@AriaBool(!CanClickCard(offer))" aria-pressed="@AriaBool(IsSelected(offer))"
+                                 @onclick="@(() => OnCardClick(offer))"
+                                 @onkeydown="@(e => OnCardKeyDown(e, offer))" @onkeydown:preventDefault="true">
+                            <MudPaper Outlined="true" Class="pa-3" Style="@CardStyle(offer)" Elevation="0">
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-1">
                                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="flex-grow-1" Style="min-width:0;">
-                                        @* A checkbox a kártya elején egyértelmű, kifejezett kijelölő vezérlő — a
-                                           teljes kártyára kattintás is működik továbbra is, de a checkbox jelzi
-                                           elsőre is nyilvánvalóan, hogy a tétel kiválasztható. Ugyanaz a
-                                           sárga (kijelölve) / szürke (nincs kijelölve) színpár, mint a naptár
-                                           napi menü kijelölésénél (UserCalendar.razor TogglePending). *@
-                                        <span @onclick:stopPropagation="true">
-                                            <MudCheckBox T="bool" Value="IsSelected(offer)" Color="Color.Warning" UncheckedColor="Color.Default"
-                                                         Disabled="@(!CanClickCard(offer))" Dense="true"
-                                                         ValueChanged="@(_ => OnCardClick(offer))" />
-                                        </span>
-                                        <MudText Typo="Typo.subtitle2">@offer.Name@(offer.IncludesSoup ? " (levessel)" : "")</MudText>
-                                    </MudStack>
-                                    <div style="min-width:112px; text-align:right;">
-                                        @if (IsOrdered(offer))
+                                        @if (orderedLine is not null)
                                         {
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">Megrendelve</MudChip>
-                                        }
-                                        else if (offer.FreeCount == 0)
-                                        {
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
+                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" Size="Size.Small" />
+                                            <MudText Typo="Typo.subtitle2">@orderedLine.ItemName@(orderedLine.IncludesSoup ? " (levessel)" : "")</MudText>
                                         }
                                         else
                                         {
-                                            @* A chip mindig látszik (nem tűnik el teljesen kijelöletlenül) — csak
-                                               szürkére vált, ugyanazt a sárga/szürke jelölést követve, mint a
-                                               checkbox. Ez egyúttal a korábbi visibility:hidden trükköt is
-                                               feleslegessé teszi: a kártya magassága eleve nem ugrik, mert a chip
-                                               mindig ugyanazzal a tartalommal/mérettel renderelődik. *@
-                                            <MudChip T="string" Size="Size.Small" Color="@(IsSelected(offer) ? Color.Warning : Color.Default)" Icon="@Icons.Material.Filled.Check">
-                                                Kiválasztva
-                                            </MudChip>
+                                            @* A checkbox az egyetlen kijelölés-jelző a kártyán — a teljes kártyára
+                                               kattintás/Enter/Space is működik továbbra is. KeyboardEnabled="false",
+                                               mert a MudCheckBox saját Space-kezelése (lásd MudBlazor dokumentáció)
+                                               a kártya @onkeydown-jával együtt kétszer váltaná a kijelölést, ha a
+                                               checkbox kap billentyűzet-fókuszt; a kártya (role=button) már amúgy is
+                                               a billentyűzet-célpont. Ugyanaz a sárga (kijelölve) / szürke (nincs
+                                               kijelölve) színpár, mint a naptár napi menü kijelölésénél
+                                               (UserCalendar.razor TogglePending). *@
+                                            <span @onclick:stopPropagation="true">
+                                                    <MudCheckBox T="bool" Value="IsSelected(offer)" Color="Color.Primary" UncheckedColor="Color.Default"
+                                                             Disabled="@(!CanClickCard(offer))" Dense="true" KeyboardEnabled="false"
+                                                             ValueChanged="@(_ => OnCardClick(offer))" />
+                                            </span>
+                                            <MudText Typo="Typo.subtitle2">@offer.Name@(offer.IncludesSoup ? " (levessel)" : "")</MudText>
                                         }
-                                    </div>
+                                    </MudStack>
+                                    @if (orderedLine is not null)
+                                    {
+                                        @* A Módosítás gomb a névsorban (nem az ár alatti sorban) jelenik meg,
+                                           hogy megrendeléskor/visszavonáskor ne változzon az alsó sor tartalma
+                                           (ár + Szabad/tápérték mindig ugyanaz marad) — így a kártya magassága
+                                           nem ugrik a rácsban. *@
+                                        if (today.IsALaCarteOrderableNow)
+                                        {
+                                            <span @onclick:stopPropagation="true">
+                                                <MudButton Variant="Variant.Text" Color="Color.Warning" Size="Size.Small"
+                                                           StartIcon="@Icons.Material.Filled.Edit"
+                                                           OnClick="@(() => OnModifyClickAsync(orderedLine))">
+                                                    Módosítás
+                                                </MudButton>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Már nem módosítható</MudText>
+                                        }
+                                    }
+                                    else if (offer.FreeCount == 0)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">Elfogyott</MudChip>
+                                    }
                                 </MudStack>
                                 @if (AllergenCatalog.FormatNumbersOnly(offer.Allergens) is { } allergensShort)
                                 {
@@ -184,9 +214,9 @@ else
                                     </MudText>
                                 }
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-2">
-                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">@HungarianNumberFormat.Huf(offer.PriceHuf)</MudText>
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">@HungarianNumberFormat.Huf(orderedLine?.UnitPriceHuf ?? offer.PriceHuf)</MudText>
                                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                                        @if (!IsOrdered(offer) && offer.FreeCount > 0)
+                                        @if (offer.FreeCount > 0)
                                         {
                                             <MudText Typo="Typo.caption" Class="mud-text-secondary">Szabad: @HungarianNumberFormat.Number(offer.FreeCount)</MudText>
                                         }
@@ -201,12 +231,18 @@ else
                                     </MudStack>
                                 </MudStack>
                             </MudPaper>
+                            </div>
                         </MudItem>
                     }
                 </MudGrid>
             }
 
-            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3">
+            @* Ha ma már van legalább egy leadott à la carte sorunk és épp nincs új kijelölés, a
+               "Nincs kiválasztott tétel." felirat félrevezető lenne (hisz rendeltünk már), viszont a
+               sort nem távolítjuk el, csak visibility:hidden-nel eltüntetjük — így a hely megmarad,
+               nem ugrik a UI, amikor a felhasználó egy másik kategóriában kijelöl valamit. *@
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3"
+                      Style="@(selectedItemIds.Count == 0 && HasAnyALaCarteOrder ? "visibility:hidden;" : null)">
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
                     @(selectedItemIds.Count == 0
                         ? "Nincs kiválasztott tétel."
@@ -220,20 +256,6 @@ else
             </MudStack>
         }
 
-        <MudText Typo="Typo.subtitle2" Class="mt-2">Saját à la carte rendelésed</MudText>
-        @if (today.MyALaCarteOrderLines.Count == 0)
-        {
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Ma nem rendeltél à la carte tételt.</MudText>
-        }
-        else
-        {
-            <MudStack Spacing="1" Class="mt-1">
-                @foreach (var line in today.MyALaCarteOrderLines)
-                {
-                    <MudText Typo="Typo.body2">@line.ItemName@(line.IncludesSoup ? " (levessel)" : "") (@ALaCarteCategoryDisplay.Name(line.Category)) — @HungarianNumberFormat.Huf(line.UnitPriceHuf)</MudText>
-                }
-            </MudStack>
-        }
     </MudPaper>
 }
 
@@ -258,6 +280,7 @@ else
         [ErrorCodes.DayExcluded] = "A mai nap ki van zárva.",
         [ErrorCodes.OutsidePeriod] = "Ma nincs érvényes rendelési időszak.",
         [ErrorCodes.DuplicateCategory] = "Kategóriánként csak egy tétel rendelhető egyszerre.",
+        [ErrorCodes.NotFound] = "Ezt a tételt ma nem rendelted.",
     };
 
     private static readonly DialogOptions ConfirmDialogOptions = new()
@@ -294,6 +317,8 @@ else
 
     private bool IsOrdered(ALaCarteOfferDto offer) => today!.MyALaCarteOrderLines.Any(l => l.ALaCarteItemId == offer.ALaCarteItemId);
 
+    private bool HasAnyALaCarteOrder => today!.MyALaCarteOrderLines.Count > 0;
+
     private bool IsSelected(ALaCarteOfferDto offer) => selectedItemIds.Contains(offer.ALaCarteItemId);
 
     private bool CanSelect(ALaCarteOfferDto offer) => today!.IsALaCarteOrderableNow && !isPlacingOrder;
@@ -314,6 +339,11 @@ else
 
     private string CardStyle(ALaCarteOfferDto offer)
     {
+        if (IsOrdered(offer))
+        {
+            return "cursor:default; background:var(--mud-palette-primary-hover);";
+        }
+
         if (IsSelected(offer))
         {
             return "cursor:pointer; background:var(--mud-palette-primary-hover);";
@@ -405,6 +435,34 @@ else
                 var offer = today!.ALaCarteOffers.FirstOrDefault(o => o.ALaCarteItemId == id);
                 return offer is null || !IsStillAvailable(offer);
             });
+        }
+    }
+
+    /// <summary>A kategória "Megrendelve" sávjának Módosítás gombja — visszavonja a mai rendelési
+    /// sort (AC 4.2.5/4.2.9), aminek nincs ledger-hatása (az à la carte sosem érinti a jóváírást),
+    /// csak a készletfoglalást adja vissza. Sikeres visszavonás után a kategória újra kártyarácsként
+    /// jelenik meg a frissített <see cref="today"/> alapján, így a felhasználó azonnal újraválaszthat.</summary>
+    private async Task OnModifyClickAsync(MyALaCarteLineDto line)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Rendelés visszavonása",
+            $"Biztosan visszavonod: {line.ItemName}? Utána újra választhatsz ebben a kategóriában.",
+            yesText: "Igen, visszavonom", cancelText: "Mégse");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        orderErrorMessage = null;
+        var result = await Mediator.Send(new CancelALaCarteOrderLineCommand(CurrentUser.UserId, line.ALaCarteItemId));
+        if (result.IsSuccess)
+        {
+            today = await Mediator.Send(new GetTodayMenuForUserQuery(CurrentUser.UserId));
+        }
+        else
+        {
+            orderErrorMessage = result.ErrorCode is { } code && ALaCarteOrderErrorText.TryGetValue(code, out var text) ? text : result.ErrorMessage;
         }
     }
 
