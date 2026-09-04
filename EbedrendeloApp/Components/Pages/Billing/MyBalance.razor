@@ -1,0 +1,78 @@
+@page "/egyenlegem"
+@using EbedrendeloApp.Common.Billing
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.GetMyBalance
+@using EbedrendeloApp.Features.Billing.GetMyCreditLedger
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<PageTitle>Egyenlegem</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Egyenlegem</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A jóváírásaid egyenlege és a mögöttük álló tételes könyvelés.
+            </MudText>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
+    @if (balanceHuf is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+    }
+    else
+    {
+        <MudStack Spacing="1">
+            <MudText Typo="Typo.h3" Color="@(balanceHuf > 0 ? Color.Success : Color.Default)">@HungarianNumberFormat.Huf(balanceHuf)</MudText>
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text">
+                Az egyenleg kizárólag menürendelésre számítható be, a la carte fedezetre nem használható.
+            </MudAlert>
+        </MudStack>
+    }
+</MudPaper>
+
+<MudTable Items="ledger" Loading="@(ledger is null)" Hover="true" Elevation="1" Dense="true" Class="mt-4">
+    <HeaderContent>
+        <MudTh>Dátum</MudTh>
+        <MudTh>Típus</MudTh>
+        <MudTh>Leírás</MudTh>
+        <MudTh Style="text-align:right">Összeg</MudTh>
+    </HeaderContent>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Még nincs jóváírás-tételed.</MudText>
+    </NoRecordsContent>
+    <RowTemplate>
+        <MudTd DataLabel="Dátum">@context.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")</MudTd>
+        <MudTd DataLabel="Típus">
+            <MudChip T="string" Size="Size.Small" Icon="@CreditEntryDisplay.KindIcon(context.Kind)" Color="@CreditEntryDisplay.KindColor(context.Kind)">
+                @CreditEntryDisplay.KindLabel(context.Kind)
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Leírás">@CreditEntryDisplay.Describe(context)</MudTd>
+        <MudTd DataLabel="Összeg" Style="text-align:right">
+            <MudText Color="@(context.AmountHuf >= 0 ? Color.Success : Color.Error)">@(context.AmountHuf >= 0 ? "+" : "")@HungarianNumberFormat.Huf(context.AmountHuf)</MudText>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private int? balanceHuf;
+    private List<CreditLedgerEntryDto>? ledger;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+
+        var balanceResult = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
+        balanceHuf = balanceResult.Value;
+
+        var ledgerResult = await Mediator.Send(new GetMyCreditLedgerQuery(CurrentUser.UserId));
+        ledger = ledgerResult.Value!.ToList();
+    }
+}

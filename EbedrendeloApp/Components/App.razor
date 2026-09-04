@@ -12,14 +12,23 @@
     <link rel="stylesheet" href="@Assets["EbedrendeloApp.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="InteractiveModeNoPrerender" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="InteractiveModeNoPrerender" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
 </body>
 
 </html>
+
+@code {
+    // prerender: false — static prerender minden OnInitializedAsync-et (és a benne futó
+    // adatbázis-lekérdezéseket) kétszer futtatná le: egyszer a kezdeti HTTP-válaszhoz, majd újra,
+    // amint a SignalR circuit csatlakozik és a komponens újrapéldányosodik. Interaktivitás nélkül a
+    // prerender alatt úgyis nem használható (gombok/kattintás nem működnek), ezért ez tiszta
+    // duplikált munka — ez okozta a "Mai menü" oldal lassú betöltését.
+    private static readonly IComponentRenderMode InteractiveModeNoPrerender = new InteractiveServerRenderMode(prerender: false);
+}

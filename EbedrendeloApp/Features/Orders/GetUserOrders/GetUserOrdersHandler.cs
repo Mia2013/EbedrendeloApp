@@ -16,7 +16,8 @@ public sealed class GetUserOrdersHandler(IDbContextFactory<EbedrendeloDbContext>
             .Where(o => request.OrderingPeriodId == null || o.OrderingPeriodId == request.OrderingPeriodId)
             .Where(o => request.UserId == null || o.UserId == request.UserId)
             .Where(o => request.Status == null || o.Status == request.Status)
-            .OrderBy(o => o.Date)
+            .OrderByDescending(o => o.Date)
+            .ThenByDescending(o => o.Id)
             .ToListAsync(cancellationToken);
 
         var variantIds = orders.Select(o => o.MenuVariantId).Distinct().ToList();

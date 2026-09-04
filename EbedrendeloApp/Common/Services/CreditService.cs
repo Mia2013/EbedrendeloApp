@@ -39,4 +39,21 @@ public sealed class CreditService : ICreditService
 
         original.RemainingHuf = 0;
     }
+
+    public CreditEntry IssueManualCredit(EbedrendeloDbContext db, int userId, int amountHuf, int createdByUserId, DateTime nowUtc, string note)
+    {
+        var entry = new CreditEntry
+        {
+            UserId = userId,
+            AmountHuf = amountHuf,
+            Kind = CreditEntryKind.ManualAdjustment,
+            CreatedAtUtc = nowUtc,
+            CreatedByUserId = createdByUserId,
+            Note = note,
+            RemainingHuf = amountHuf,
+        };
+
+        db.CreditEntries.Add(entry);
+        return entry;
+    }
 }

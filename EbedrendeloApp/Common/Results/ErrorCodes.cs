@@ -23,6 +23,7 @@ public static class ErrorCodes
     public const string OutOfStock = nameof(OutOfStock);
     public const string OfferNotFound = nameof(OfferNotFound);
     public const string NotDirectlyOrderable = nameof(NotDirectlyOrderable);
+    public const string DuplicateCategory = nameof(DuplicateCategory);
     public const string SoupAlreadyOffered = nameof(SoupAlreadyOffered);
     public const string CapacityBelowReserved = nameof(CapacityBelowReserved);
 }

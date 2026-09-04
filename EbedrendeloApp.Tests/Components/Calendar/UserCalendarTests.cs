@@ -2,6 +2,7 @@ using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Calendar;
+using EbedrendeloApp.Features.Billing.GetMyBalance;
 using EbedrendeloApp.Features.Calendar;
 using EbedrendeloApp.Features.Calendar.GetOrderableDays;
 using EbedrendeloApp.Features.Calendar.GetOrderingPeriods;
@@ -35,6 +36,7 @@ public class UserCalendarTests : MudBunitContext
 
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
         mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>([]));
+        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
         Services.AddSingleton<IMediator>(mediator);
     }
 
@@ -93,8 +95,8 @@ public class UserCalendarTests : MudBunitContext
         var checkbox = cut.Find("input[type=checkbox]:not([disabled])");
         checkbox.Change(true);
 
-        Assert.Contains("1400 Ft", cut.Markup);
-        Assert.Contains("Rendelés leadása (1 nap, 1400 Ft)", cut.Markup);
+        Assert.Contains("1\u00A0400 Ft", cut.Markup);
+        Assert.Contains("Rendelés leadása (1 nap, 1\u00A0400 Ft)", cut.Markup);
     }
 
     [Fact]
@@ -259,18 +261,24 @@ public class UserCalendarTests : MudBunitContext
     [Fact]
     public async Task Submitting_cancellations_sends_all_marked_dates_in_one_CancelMenuOrdersCommand_call()
     {
-        var tomorrow = Today.AddDays(1);
+        // A naptár-rács hétvégi napokat sosem renderel (BuildWeeks csak hétfő-péntek oszlopot épít),
+        // ezért a második naphoz nem elég "Today + 1 nap" — az szombatra eshet, és akkor a hozzá
+        // tartozó "Lemondásra jelölés" gomb egyszerűen nem létezik a DOM-ban, a teszt pedig a
+        // futtatás valódi hétnapjától függően hibázna. A NextWeekday mindkét dátumot a legközelebbi
+        // (a mai nappal bezárólag) munkanapokra rögzíti, függetlenül attól, hányadik nap fut a teszt.
+        var day1 = NextWeekday(Today);
+        var day2 = NextWeekday(day1.AddDays(1));
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
-            new OrderableDayDto(Today, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
-            new OrderableDayDto(tomorrow, false, true, "B", "Húsleves", ErrorCodes.AlreadyOrdered, null),
+            new OrderableDayDto(day1, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
+            new OrderableDayDto(day2, false, true, "B", "Húsleves", ErrorCodes.AlreadyOrdered, null),
         ]));
 
         CancelMenuOrdersCommand? sentCommand = null;
         mediator.Register<CancelMenuOrdersCommand, Result<BatchOrderResult>>(cmd =>
         {
             sentCommand = cmd;
-            return Result.Success(new BatchOrderResult([new DayResult(Today, "A"), new DayResult(tomorrow, "B")], []));
+            return Result.Success(new BatchOrderResult([new DayResult(day1, "A"), new DayResult(day2, "B")], []));
         });
 
         Render<MudDialogProvider>();
@@ -288,7 +296,17 @@ public class UserCalendarTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(1, sentCommand!.TargetUserId);
         Assert.Equal(1, sentCommand.CancelledByUserId);
-        Assert.Equal([Today, tomorrow], sentCommand.Dates.OrderBy(d => d));
+        Assert.Equal([day1, day2], sentCommand.Dates.OrderBy(d => d));
+    }
+
+    private static DateOnly NextWeekday(DateOnly date)
+    {
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+
+        return date;
     }
 
     [Fact]
@@ -368,5 +386,27 @@ public class UserCalendarTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(2, sentCommand!.TargetUserId);
         Assert.Equal(1, sentCommand.CancelledByUserId);
+    }
+
+    [Fact]
+    public void Shows_a_balance_notice_when_the_user_has_a_positive_balance()
+    {
+        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(1400));
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+
+        Assert.Contains("1\u00A0400 Ft", cut.Markup);
+        Assert.Contains("nem térül vissza készpénzben", cut.Markup);
+    }
+
+    [Fact]
+    public void Does_not_show_a_balance_notice_when_the_balance_is_zero()
+    {
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+
+        Assert.DoesNotContain("nem térül vissza készpénzben", cut.Markup);
     }
 }

@@ -21,6 +21,8 @@
 
 ## UI / komponensek
 
+- [ ] Design-referencia: https://happyetterem.hu/fooldal — a designja nagyon tetszett, érdemes
+      majd megnézni, mit lehetne belőle átvenni.
 - [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
       pl. select) legyen kiemelve önálló, újrafelhasználható komponensbe, és vezessük át az összes
       oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek).

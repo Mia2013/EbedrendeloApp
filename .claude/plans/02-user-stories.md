@@ -344,12 +344,21 @@ Azért, hogy a napi menü helyett vagy mellett egyéb ételeket fogyaszthassak.
 * **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába (hogy legyen mihez számlázni).
 * **AC 4.2.3 (Darabszám limit — tételenként, nem kategóriánként):** Egy felhasználó **tételenként** legfeljebb 1 darabot rendelhet aznapra — ugyanazon a napon **több különböző Főétel** tétel is megrendelhető (mindegyikből legfeljebb 1 db), csak ugyanazon tétel duplikálása tilos.
 * **AC 4.2.4 (Atomi készletfoglalás — Leves kivételével):** A foglalás egyetlen atomi feltételes SQL UPDATE-tel történik (`OrderedCount < Capacity`), **minden nem Leves kategóriájú tételre**. Ha bármely nem Leves tétel elfogyott, a tranzakció visszaáll (nincs részleges a la carte rendelés). Leves kategóriájú ajánlatra nincs foglalás — az korlátlan (AC 4.2.8), és rá közvetlen rendelés nem is adható le.
-* **AC 4.2.5 (Lemondás tiltása):** A leadott a la carte rendelések nem mondhatók le.
+* **AC 4.2.5 (Lemondás a napi határidőig):** A leadott a la carte rendelési sor a napi a la carte
+  határidőig (`ALaCarteOrderDeadlineLocalTime`, AC 4.2.1) **visszavonható** — utána nem, mert a
+  konyha a határidő után már a leadott mennyiség alapján készül. A visszavonás nincs ledger-hatással
+  (AC 5.1.2/7.1.3: az a la carte sosem érinti a jóváírást), tisztán a készletfoglalás
+  (`OrderedCount`) szimmetrikus visszaadásából áll — a felszabaduló adag azonnal újra foglalható
+  bárki által, nincs elsőbbség a korábbi rendelőnek.
 * **AC 4.2.6 (Az `IsOpen` és az `OrderDeadline` itt nem feltétel):** Ez aznapi vásárlás, nem előrendelés — a rendelési időszak csak a számlázási hovatartozás (`OrderingPeriodId`) miatt kell. Lezárt (`IsOpen = false`) vagy a leadási határidején túli időszak napján is leadható a la carte rendelés.
 * **AC 4.2.7 (Kizárt és lefedetlen nap):** Kizárt napra nem adható le rendelés (a kínálat is üres, AC 4.1.3); lefedetlen (rés-)napon a rendelés `OutsidePeriod` okkal elutasításra kerül.
 * **AC 4.2.8 (Leves a főétel árába rejtve, korlátlanul):** Leves kategóriájú ajánlatra közvetlen rendelés nem adható le — a felület nem is kínálja fel önálló, árazott sorként. Amikor a dolgozó egy Főétel-tételt rendel, a rendelési sor `UnitPriceHuf`-ja a főétel árának és az aznapi aktív Leves-ajánlat árának **összege**, egyetlen kombinált számként; a sor `IncludesSoup` mezője ekkor snapshotolódik, és a felület ebből (nem élő állapotból) jeleníti meg a „(levessel)" jelzést. Ha aznapra nincs Leves-ajánlat, a kombinált ár a puszta főétel ára (0 Ft leves-rész, nem hibaeset).
+* **AC 4.2.9 (Rendelési sor visszavonása):** A `CancelALaCarteOrderLineCommand` a felhasználó egy
+  adott mai rendelési sorát törli — ugyanazokkal a kapukkal, mint a rendelés-leadás (munkanap, nincs
+  kizárva, napi határidőn belül), plusz azzal, hogy a sornak léteznie kell. A felület a törlés után
+  a kategóriát újra kiválaszthatóvá teszi (a felhasználó választhat ugyanazt vagy másikat).
 
-**Technikai hivatkozás:** `PlaceALaCarteOrderCommand`, `ALaCarteOrder`, `ALaCarteOrderLine`
+**Technikai hivatkozás:** `PlaceALaCarteOrderCommand`, `CancelALaCarteOrderLineCommand`, `ALaCarteOrder`, `ALaCarteOrderLine`
 
 ---
 
@@ -616,7 +625,7 @@ Azért, hogy a valódi hitelesítés bevezetése előtt is végig lehessen prób
 * **AC 9.1.2 (Form POST kötelező):** A váltó felület **form POST**-tal hívja a végpontot. Interaktív circuitből (`@onclick` + service hívás) nincs `HttpContext`, ezért a bejelentkezés úgy nem működik.
 * **AC 9.1.3 (Tartósság):** A süti 30 napig érvényes, sliding expirationnel, és **túléli az alkalmazás újraindítását** — nem kell minden `dotnet run` után újra belépni.
 * **AC 9.1.4 (Kilépés):** A `POST /dev-logout` érvényteleníti a munkamenetet.
-* **AC 9.1.5 (Prerender és circuit):** Az aktuális felhasználó a prerender fázisban és az interaktív circuitben egyaránt ugyanazt az azonosítót adja.
+* **AC 9.1.5 (Prerender és circuit):** Az aktuális felhasználó a prerender fázisban és az interaktív circuitben egyaránt ugyanazt az azonosítót adja. (Jelenleg a globális render mode `prerender: false`-szal fut — lásd 01-szerver-architektura.md 5. fejezet —, így ténylegesen nincs prerender fázis; ez az AC azért marad dokumentálva, mert a cookie-alapú megoldás erre is felkészít, ha a prerender valaha visszakapcsolódik.)
 
 **Technikai hivatkozás:** `DevAuthEndpoints`, `ICurrentUser`, `AddDevAuthentication()`
 
@@ -691,8 +700,14 @@ minden érintett use case-en ellenőrizendők.
   kikerülni, és nincs is rá use case.
 * **NFR-6 (Konkurencia):** Az időszak-átfedés ellenőrzése serializable tranzakcióban fut (párhuzamos
   felvitel nem csúszhat át); az a la carte készletfoglalás egyetlen atomi feltételes UPDATE, így
-  párhuzamos rendelésnél sem lehet túlfoglalás. Egy handler = egy unit of work
-  (`IDbContextFactory`-ból kért saját `DbContext`).
+  párhuzamos rendelésnél sem lehet túlfoglalás. Írásokat végző/tranzakciós handlernél egy handler =
+  egy unit of work (`IDbContextFactory`-ból kért saját `DbContext`). **Kivétel:** tisztán olvasó,
+  több egymástól független lekérdezést összegző handler (pl. `GetTodayMenuForUserQuery`) több
+  `DbContext`-et is nyithat, egyet lekérdezésenként, hogy azok `Task.WhenAll`-lal párhuzamosan
+  fussanak — egy EF Core `DbContext`-példány ugyanis nem használható egyszerre több konkurens
+  művelethez, a szekvenciális await-lánc pedig feleslegesen lassítja a lapbetöltést. Ez csak ott
+  megengedett, ahol nincs tranzakciós/konzisztencia-igény a lekérdezések között (lásd 01. fejezet,
+  „Egy handler = egy unit of work").
 * **NFR-7 (Snapshot elv):** A pénzügyileg releváns adatok a rendelés pillanatában rögzülnek
   (`PriceHuf`, `ItemNameSnapshot`, `CategorySnapshot`, `UnitPriceHuf`, `OrderingPeriodId`), így a
   későbbi ár- vagy névváltozás nem írja át a múltat.
@@ -757,6 +772,7 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `RemoveDailyOfferCommand` | A | US-4.4 |
 | `GetDailyOffersQuery` | A/U | US-4.5 |
 | `PlaceALaCarteOrderCommand` | U | US-4.2 |
+| `CancelALaCarteOrderLineCommand` | U | US-4.2 |
 | `GetALaCarteDailySummaryQuery` | A | US-4.6 |
 | `GetALaCarteMonthlySummaryQuery` | A | US-4.6 |
 | `GetKitchenSummaryQuery` | A | US-6.1 |
@@ -771,18 +787,25 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyBalanceQuery` | U | US-5.1 |
 | `GetMyCreditLedgerQuery` | U | US-5.3 |
 | `AddManualCreditCommand` | A | US-5.2 |
+| `GetBalancesQuery` | A | *(nincs önálló story — AC 5.2.1-et támogató implementációs részlet)* |
 | `GetMyNotificationsQuery` | U | US-8.1 |
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-Minden use case-hez tartozik story és fordítva. A kereszt-metsző követelmények (Epic 10) minden sorra
-vonatkoznak.
+Minden use case-hez tartozik story és fordítva — a `GetBalancesQuery` az egyetlen kivétel, ez tisztán
+implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A kereszt-metsző követelmények
+(Epic 10) minden sorra vonatkoznak.
 
 **Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
-implementálva van. Az Epic 5–8 (Jóváírás, Konyha/napzárás, Számlázás, Értesítések — a fenti táblázat
-`GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig terjedő 15 sora) egyelőre csak
-tervezve van, a kód még nem készült el hozzá (ld. `01-szerver-architektura.md` "10. Végrehajtási
-sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se `NavMenu` link ezekhez. Emiatt a jóváírás/
-értesítés-írás (`ICreditService`/`INotificationService`, ami már ma is fut lemondás/kizárás/menütörlés
-esetén) jelenleg write-only: a dolgozó felé nincs még olvasó oldal az egyenlegéhez vagy az
-értesítéseihez.
+implementálva van. Az Epic 5 (Jóváírás-könyvelés és Egyenlegkezelés) UI-val együtt elkészült:
+`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `AddManualCreditCommand` és `GetBalancesQuery`
+(`Features/Billing/`), valamint `GetUsersQuery` (`Features/Users/`, US-9.4 előrehozott implementációja
+a kézi jóváírás autocomplete-jéhez) — a UI oldalon `MyBalance.razor` (`/egyenlegem`), `AdminBalances.razor`
+(`/egyenlegek`) és `ManualCreditDialog.razor`, `NavMenu` linkekkel mindkét ághoz, plusz egy egyenleg-
+figyelmeztető sáv a `Naptár` (`UserCalendar.razor`) oldalon, mivel a lemondott rendelés jóváírása nem
+térül vissza készpénzben, hanem a következő rendelésnél íródik jóvá. Az Epic 6–8 (Konyha/napzárás,
+Számlázás, Értesítések — a fenti táblázat `GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig
+terjedő 16 sorából a 12, amelyik nem az Epic 5 Billing use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
+`01-szerver-architektura.md` "10. Végrehajtási sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se
+`NavMenu` link ezekhez. Az `INotificationService` továbbra is write-only marad (Epic 8 olvasó oldala még
+nem készült el).

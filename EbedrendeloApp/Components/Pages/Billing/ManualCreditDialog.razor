@@ -1,0 +1,147 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.AddManualCredit
+@using EbedrendeloApp.Features.Billing.GetMyBalance
+@using EbedrendeloApp.Features.Users.GetUsers
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">Új jóváírás</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@errorMessage</MudAlert>
+        }
+
+        <MudAutocomplete T="UserOptionDto" Label="Felhasználó" Value="selectedUser" ValueChanged="OnSelectedUserChangedAsync"
+                          SearchFunc="SearchUsersAsync" ToStringFunc="@(u => u?.DisplayName ?? "")"
+                          CoerceText="true" Variant="Variant.Outlined" FullWidth="true" Class="mb-3">
+            <ItemTemplate Context="u">
+                <MudStack Spacing="0">
+                    <MudText>@u.DisplayName</MudText>
+                    @if (!string.IsNullOrWhiteSpace(DepartmentText(u)))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@DepartmentText(u)</MudText>
+                    }
+                </MudStack>
+            </ItemTemplate>
+        </MudAutocomplete>
+
+        @if (selectedUser is not null && currentBalanceHuf is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                @selectedUser.DisplayName jelenlegi egyenlege: @HungarianNumberFormat.Huf(currentBalanceHuf)
+            </MudAlert>
+        }
+
+        <MudNumericField T="int" Label="Összeg" @bind-Value="amountHuf" Variant="Variant.Outlined"
+                          Adornment="Adornment.End" AdornmentText="Ft" Min="1" Class="mb-3" />
+
+        <MudTextField T="string" Label="Indoklás" @bind-Value="note" Variant="Variant.Outlined"
+                      Lines="3" MaxLength="500" Immediate="true" FullWidth="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)"
+                   OnClick="SaveAsync" Disabled="!CanSubmit">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Mentés...</MudText>
+            }
+            else
+            {
+                <MudText>Mentés</MudText>
+            }
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => MudDialog.Cancel()" Disabled="isSaving">
+            Mégse
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Sor-szintű "Jóváírás hozzáadása" gombnál előre kitölti az autocomplete-et — a dialógus
+    /// maga tölti be a GetUsersQuery listát és keresi ki belőle ezt a felhasználót, hogy a GetUsersQuery
+    /// Billing-független, általános célú lekérdezés maradjon (nem kap kész DTO-t a hívótól).</summary>
+    [Parameter]
+    public int? PreselectedUserId { get; set; }
+
+    private List<UserOptionDto> allUsers = [];
+    private UserOptionDto? selectedUser;
+    private int? currentBalanceHuf;
+    private int amountHuf = 1;
+    private string note = string.Empty;
+    private bool isSaving;
+    private string? errorMessage;
+
+    private bool CanSave => selectedUser is not null && amountHuf > 0 && !string.IsNullOrWhiteSpace(note);
+    private bool CanSubmit => CanSave && !isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allUsers = (await Mediator.Send(new GetUsersQuery())).Value!.ToList();
+
+        if (PreselectedUserId is { } id)
+        {
+            selectedUser = allUsers.FirstOrDefault(u => u.Id == id);
+            await LoadBalanceForSelectedUserAsync();
+        }
+    }
+
+    private Task<IEnumerable<UserOptionDto>> SearchUsersAsync(string value, CancellationToken cancellationToken)
+    {
+        IEnumerable<UserOptionDto> source = string.IsNullOrWhiteSpace(value)
+            ? allUsers
+            : allUsers.Where(u =>
+                u.DisplayName.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                (u.Igazgatosag ?? "").Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                (u.Osztaly ?? "").Contains(value, StringComparison.OrdinalIgnoreCase));
+
+        IEnumerable<UserOptionDto> ordered = source.OrderBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase);
+        return Task.FromResult(ordered);
+    }
+
+    private static string DepartmentText(UserOptionDto u) =>
+        string.Join(" — ", new[] { u.Igazgatosag, u.Osztaly }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    private async Task OnSelectedUserChangedAsync(UserOptionDto? user)
+    {
+        selectedUser = user;
+        await LoadBalanceForSelectedUserAsync();
+    }
+
+    private async Task LoadBalanceForSelectedUserAsync()
+    {
+        currentBalanceHuf = selectedUser is null
+            ? null
+            : (await Mediator.Send(new GetMyBalanceQuery(selectedUser.Id))).Value;
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new AddManualCreditCommand(selectedUser!.Id, amountHuf, note.Trim(), CurrentUser.UserId));
+
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

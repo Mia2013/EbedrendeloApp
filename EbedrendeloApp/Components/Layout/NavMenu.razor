@@ -39,6 +39,11 @@
             À la carte konyhai lista
         </MudNavLink>
 
+        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">JÓVÁÍRÁS</MudText>
+        <MudNavLink Href="egyenlegek" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            Egyenlegek
+        </MudNavLink>
+
         <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">SAJÁT RENDELÉS</MudText>
         <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
             Naptár
@@ -48,6 +53,9 @@
         </MudNavLink>
         <MudNavLink Href="mai-menu" Icon="@Icons.Material.Filled.RestaurantMenu">
             Mai menü
+        </MudNavLink>
+        <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            Egyenlegem
         </MudNavLink>
     }
     else if (CurrentUser.IsLoaded)
@@ -60,6 +68,9 @@
         </MudNavLink>
         <MudNavLink Href="mai-menu" Icon="@Icons.Material.Filled.RestaurantMenu">
             Mai menü
+        </MudNavLink>
+        <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            Egyenlegem
         </MudNavLink>
     }
 </MudNavMenu>

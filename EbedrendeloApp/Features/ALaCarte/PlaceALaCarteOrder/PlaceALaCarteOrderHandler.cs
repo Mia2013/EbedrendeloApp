@@ -65,6 +65,15 @@ public sealed class PlaceALaCarteOrderHandler(
             return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.NotDirectlyOrderable, "A leves önállóan nem rendelhető.");
         }
 
+        // A UI kategóriánként legfeljebb egy tételt enged kiválasztani (rádiógomb-viselkedés), de ez
+        // csak kliensoldali szabály — enélkül egy hibás selectedItemIds-mutáció vagy egy jövőbeli
+        // közvetlen PlaceALaCarteOrderCommand-hívó két Főételt is lefoglalhatna egyetlen kötegben.
+        if (offers.GroupBy(o => o.ALaCarteItem!.Category).Any(g => g.Count() > 1))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.DuplicateCategory, "Kategóriánként csak egy tétel rendelhető egyszerre.");
+        }
+
         var existingOrder = await db.ALaCarteOrders
             .Include(o => o.Lines).ThenInclude(l => l.ALaCarteDailyOffer)
             .FirstOrDefaultAsync(o => o.UserId == request.UserId && o.Date == today, cancellationToken);
