@@ -51,7 +51,7 @@
         <MudTd DataLabel="Név">@context.DisplayName</MudTd>
         <MudTd DataLabel="Igazgatóság / Osztály">@DepartmentText(context)</MudTd>
         <MudTd DataLabel="Egyenleg" Style="text-align:right">
-            <MudText Color="@(context.BalanceHuf > 0 ? Color.Default : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+            <MudText Color="@(context.BalanceHuf > 0 ? Color.Success : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
         </MudTd>
         <MudTd DataLabel="Műveletek" Style="text-align:right">
             <MudIconButton Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Small"
@@ -87,7 +87,7 @@
                                         </MudItem>
                                         <MudItem xs="12" md="6" lg="5" xl="4">
                                             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                               Lemondva: @entry.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm") — @CreditEntryDisplay.Describe(entry)
+                                               @CreditEntryDisplay.DateLabel(entry.Kind): @entry.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm") — @CreditEntryDisplay.Describe(entry)
                                             </MudText></MudItem>
                                       <MudItem xs="12" md="2" lg="1">
                                         <MudText Align="Align.Right" Color="@(entry.AmountHuf >= 0 ? Color.Success : Color.Error)">@(entry.AmountHuf >= 0 ? "+" : "")@HungarianNumberFormat.Huf(entry.AmountHuf)</MudText>

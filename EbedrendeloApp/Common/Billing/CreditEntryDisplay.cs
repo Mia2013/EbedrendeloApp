@@ -38,6 +38,11 @@ public static class CreditEntryDisplay
         _ => Icons.Material.Filled.AttachMoney,
     };
 
+    /// <summary>A dátum előtti címke a történet-listában — csak <see cref="CreditEntryKind.CancellationCredit"/>
+    /// jelent tényleges lemondást, a többi fajta (kézi korrekció, beszámítás, visszavonás) nem, ezért nem
+    /// kaphat "Lemondva" feliratot.</summary>
+    public static string DateLabel(CreditEntryKind kind) => kind == CreditEntryKind.CancellationCredit ? "Lemondva" : "Rögzítve";
+
     /// <summary>Egysoros "mi történt" szöveg (AC 5.3.1/5.3.2). Forrás-rendelés esetén (lemondás) csak a
     /// rendelés napja + variáns-kódja ("2026.08.10. A menü") — a teljes fogásnév és a rögzítő neve csak
     /// zajt adott hozzá egy már amúgy is dátum-oszloppal rendelkező listában. Rendelés nélkül a Note
