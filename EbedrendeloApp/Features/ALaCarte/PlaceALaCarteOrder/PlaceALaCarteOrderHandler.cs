@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.ALaCarte;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Time;
@@ -15,26 +16,28 @@ public sealed class PlaceALaCarteOrderHandler(
     IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<PlaceALaCarteOrderCommand, Result<PlacedALaCarteOrderLinesDto>>
 {
-    private static readonly IReadOnlySet<DateOnly> EmptyExcludedSet = new HashSet<DateOnly>();
-
     public async Task<Result<PlacedALaCarteOrderLinesDto>> Handle(PlaceALaCarteOrderCommand request, CancellationToken cancellationToken)
     {
         var today = clock.Today;
 
-        if (!workingDayCalculator.IsWorkingDay(today, EmptyExcludedSet))
+        // A közös napi kapu (hétvége / kizárt nap / határidő) a visszavonással megosztva él, lásd
+        // ALaCarteOrderingGate.
+        var workingDay = ALaCarteOrderingGate.CheckWorkingDay(today, workingDayCalculator);
+        if (!workingDay.IsSuccess)
         {
-            return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.NotWorkingDay, "Ma nem munkanap.");
+            return workingDay.ToFailure<PlacedALaCarteOrderLinesDto>();
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
-        if (await db.ExcludedDays.AnyAsync(e => e.Date == today, cancellationToken))
+        var dayNotExcluded = await ALaCarteOrderingGate.CheckDayNotExcludedAsync(db, today, cancellationToken);
+        if (!dayNotExcluded.IsSuccess)
         {
-            return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.DayExcluded, "Erre a napra nincs rendelés.");
+            return dayNotExcluded.ToFailure<PlacedALaCarteOrderLinesDto>();
         }
 
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
-        if (clock.LocalNow.TimeOfDay > settings.ALaCarteOrderDeadlineLocalTime.ToTimeSpan())
+        if (ALaCarteOrderingGate.IsPastDeadline(settings, clock.LocalNow))
         {
             return Result.Failure<PlacedALaCarteOrderLinesDto>(ErrorCodes.DeadlinePassed, "A mai à la carte rendelési határidő lejárt.");
         }

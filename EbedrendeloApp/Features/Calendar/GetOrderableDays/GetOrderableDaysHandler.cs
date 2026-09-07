@@ -15,8 +15,6 @@ public sealed class GetOrderableDaysHandler(
     IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>
 {
-    private static readonly IReadOnlySet<DateOnly> ImmutableExcludedSet = new HashSet<DateOnly>();
-
     public async Task<Result<IReadOnlyList<OrderableDayDto>>> Handle(GetOrderableDaysQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
@@ -69,7 +67,7 @@ public sealed class GetOrderableDaysHandler(
             // IsWorkingDay(date, excludedDates) call) because this loop needs to tell them apart —
             // excluded days get an ErrorCodes.DayExcluded row, weekends get no row at all. Passing an
             // empty excluded-set here reuses the calculator's weekend rule without merging the two.
-            if (!workingDayCalculator.IsWorkingDay(date, ImmutableExcludedSet))
+            if (!workingDayCalculator.IsWorkingDay(date, ExcludedDates.None))
             {
                 continue;
             }

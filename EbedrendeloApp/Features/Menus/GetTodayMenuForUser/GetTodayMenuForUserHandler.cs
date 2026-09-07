@@ -16,13 +16,11 @@ public sealed class GetTodayMenuForUserHandler(
     IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<GetTodayMenuForUserQuery, TodayMenuDto>
 {
-    private static readonly IReadOnlySet<DateOnly> EmptyExcludedSet = new HashSet<DateOnly>();
-
     public async Task<TodayMenuDto> Handle(GetTodayMenuForUserQuery request, CancellationToken cancellationToken)
     {
         var today = clock.Today;
 
-        if (!workingDayCalculator.IsWorkingDay(today, EmptyExcludedSet))
+        if (!workingDayCalculator.IsWorkingDay(today, ExcludedDates.None))
         {
             return NotOrderable(today, ErrorCodes.NotWorkingDay);
         }
@@ -60,12 +58,11 @@ public sealed class GetTodayMenuForUserHandler(
             var myOrder = await myMenuOrderTask;
             if (myOrder is not null)
             {
-                var variant = menu!.Variants.FirstOrDefault(v => v.Id == myOrder.MenuVariantId);
-                if (variant is null)
-                {
-                    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-                    variant = await db.MenuVariants.FirstAsync(v => v.Id == myOrder.MenuVariantId, cancellationToken);
-                }
+                // menu.Variants az összes (törölt) variánst is tartalmazza — lásd LoadTodaysMenuAsync
+                // Include-ja lentebb —, pont azért, hogy egy korábban leadott rendelés variánsa akkor
+                // is megtalálható legyen itt, ha a variánst időközben eltávolították; ez felesleges
+                // (a fenti Task.WhenAll párhuzamos kötegét szétverő) hatodik DbContext-lekérdezést spórol meg.
+                var variant = menu!.Variants.First(v => v.Id == myOrder.MenuVariantId);
 
                 mySelection = new MyMenuSelectionDto(variant.Code, variant.SoupName, myOrder.PriceHuf);
             }
@@ -108,8 +105,13 @@ public sealed class GetTodayMenuForUserHandler(
     private async Task<(DailyMenu? Menu, List<MenuVariantDto> Variants)> LoadTodaysMenuAsync(DateOnly today, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        // Szándékosan az ÖSSZES (törölt is) variánst betöltjük — lásd a Handle()-ben a mySelection
+        // számítását: egy korábban leadott rendelés variánsa akkor is elérhető kell legyen innen, ha
+        // a variánst időközben eltávolították, hogy ne kelljen érte külön (a párhuzamos köteget
+        // szétverő) DbContext-lekérdezést nyitni. A kártyarácsban megjelenő lista (`variants` lentebb)
+        // viszont csak a nem törölteket mutatja.
         var menu = await db.DailyMenus
-            .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
+            .Include(m => m.Variants)
             .FirstOrDefaultAsync(m => m.Date == today && m.RemovedAtUtc == null, cancellationToken);
 
         if (menu is null || !menu.IsPublished)
@@ -119,6 +121,7 @@ public sealed class GetTodayMenuForUserHandler(
 
         var dishes = await MenuDishAllergenLookup.LoadAsync(db, cancellationToken);
         var variants = menu.Variants
+            .Where(v => v.RemovedAtUtc == null)
             .OrderBy(v => v.SortOrder).ThenBy(v => v.Code, StringComparer.Ordinal)
             .Select(v => MenuVariantDtoFactory.Create(v, dishes))
             .ToList();
