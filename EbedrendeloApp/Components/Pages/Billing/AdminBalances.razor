@@ -38,7 +38,7 @@
         <MudTh>Név</MudTh>
         <MudTh>Igazgatóság / Osztály</MudTh>
         <MudTh Style="text-align:right">Egyenleg</MudTh>
-        <MudTh>Műveletek</MudTh>
+        <MudTh Style="text-align:right">Műveletek</MudTh>
     </HeaderContent>
     <NoRecordsContent>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Nincs megjeleníthető (nem nulla) egyenleg.</MudText>
@@ -51,9 +51,9 @@
         <MudTd DataLabel="Név">@context.DisplayName</MudTd>
         <MudTd DataLabel="Igazgatóság / Osztály">@DepartmentText(context)</MudTd>
         <MudTd DataLabel="Egyenleg" Style="text-align:right">
-            <MudText Color="@(context.BalanceHuf > 0 ? Color.Success : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+            <MudText Color="@(context.BalanceHuf > 0 ? Color.Default : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
         </MudTd>
-        <MudTd DataLabel="Műveletek">
+        <MudTd DataLabel="Műveletek" Style="text-align:right">
             <MudIconButton Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Small"
                            title="Jóváírás hozzáadása" OnClick="() => AddCreditAsync(context.UserId)" />
         </MudTd>
@@ -73,26 +73,45 @@
                     }
                     else
                     {
-                        <MudTable Items="history" Dense="true" Elevation="0" Class="ma-2">
-                            <HeaderContent>
-                                <MudTh>Dátum</MudTh>
-                                <MudTh>Típus</MudTh>
-                                <MudTh>Leírás</MudTh>
-                                <MudTh Style="text-align:right">Összeg</MudTh>
-                            </HeaderContent>
-                            <RowTemplate Context="entry">
-                                <MudTd DataLabel="Dátum">@entry.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")</MudTd>
-                                <MudTd DataLabel="Típus">
-                                    <MudChip T="string" Size="Size.Small" Icon="@CreditEntryDisplay.KindIcon(entry.Kind)" Color="@CreditEntryDisplay.KindColor(entry.Kind)">
-                                        @CreditEntryDisplay.KindLabel(entry.Kind)
-                                    </MudChip>
-                                </MudTd>
-                                <MudTd DataLabel="Leírás">@CreditEntryDisplay.Describe(entry)</MudTd>
-                                <MudTd DataLabel="Összeg" Style="text-align:right">
-                                    <MudText Color="@(entry.AmountHuf >= 0 ? Color.Success : Color.Error)">@(entry.AmountHuf >= 0 ? "+" : "")@HungarianNumberFormat.Huf(entry.AmountHuf)</MudText>
-                                </MudTd>
-                            </RowTemplate>
-                        </MudTable>
+                        <MudStack Spacing="1" Class="ma-2">
+                            @foreach (var entry in history)
+                            {
+                                <MudPaper  Elevation="0" Class="pa-1">
+                                    <MudGrid Spacing="1">
+                                        <MudItem xs="12" md="4" lg="3" xl="2">
+
+                                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                            <MudIcon Icon="@CreditEntryDisplay.KindIcon(entry.Kind)" Color="@CreditEntryDisplay.KindColor(entry.Kind)" Size="Size.Small" />
+                                            <MudText Typo="Typo.body2">@CreditEntryDisplay.KindLabel(entry.Kind)</MudText>
+                                        </MudStack>
+                                        </MudItem>
+                                        <MudItem xs="12" md="6" lg="5" xl="4">
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                               Lemondva: @entry.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm") — @CreditEntryDisplay.Describe(entry)
+                                            </MudText></MudItem>
+                                      <MudItem xs="12" md="2" lg="1">
+                                        <MudText Align="Align.Right" Color="@(entry.AmountHuf >= 0 ? Color.Success : Color.Error)">@(entry.AmountHuf >= 0 ? "+" : "")@HungarianNumberFormat.Huf(entry.AmountHuf)</MudText>
+                                </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            }                    
+                                    <MudGrid Spacing="1" >
+                                           <MudItem xs="12" md="2" lg="9" xl="7"> <MudDivider /></MudItem>
+                                  <MudItem xs="12" md="10" lg="8" xl="6">
+
+                                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                            <MudIcon Icon="@Icons.Material.Filled.Functions"  Size="Size.Small" />
+                                            <MudText Typo="Typo.body2">Összesen</MudText>
+                                        </MudStack>
+                                        </MudItem>
+
+                                      <MudItem xs="12" md="2" lg="1">
+
+                                        <MudText Align="Align.Right">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+                                                                        </MudItem>                                    </MudGrid>
+
+
+                        </MudStack>
                     }
                 </td>
             </MudTr>

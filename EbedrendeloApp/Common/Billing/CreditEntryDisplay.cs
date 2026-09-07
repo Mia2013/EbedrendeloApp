@@ -38,28 +38,19 @@ public static class CreditEntryDisplay
         _ => Icons.Material.Filled.AttachMoney,
     };
 
-    /// <summary>Egysoros "mi történt" szöveg (AC 5.3.1/5.3.2): forrás-rendelés (dátum+variáns), ha van,
-    /// plusz mindig a Note (indoklás/visszavonás oka), ha van; ha egyik sincs, a Kind neve.</summary>
+    /// <summary>Egysoros "mi történt" szöveg (AC 5.3.1/5.3.2). Forrás-rendelés esetén (lemondás) csak a
+    /// rendelés napja + variáns-kódja ("2026.08.10. A menü") — a teljes fogásnév és a rögzítő neve csak
+    /// zajt adott hozzá egy már amúgy is dátum-oszloppal rendelkező listában. Rendelés nélkül a Note
+    /// (indoklás), a rögzítő nevével; ha egyik sincs, a Kind neve, szintén a rögzítővel.</summary>
     public static string Describe(CreditLedgerEntryDto entry)
     {
-        var parts = new List<string>();
-
         if (entry.SourceOrderDate is { } date)
         {
-            var variant = string.IsNullOrWhiteSpace(entry.SourceOrderVariantName) ? "" : $" ({entry.SourceOrderVariantName})";
-            parts.Add($"{date:yyyy.MM.dd.}{variant} rendelés");
+            var variant = string.IsNullOrWhiteSpace(entry.SourceOrderVariantCode) ? "" : $" {entry.SourceOrderVariantCode}";
+            return $"{date:yyyy.MM.dd.}{variant} menü";
         }
 
-        if (!string.IsNullOrWhiteSpace(entry.Note))
-        {
-            parts.Add(entry.Note);
-        }
-
-        if (parts.Count == 0)
-        {
-            parts.Add(KindLabel(entry.Kind));
-        }
-
-        return string.Join(" — ", parts) + $" ({entry.CreatedByDisplayName})";
+        var label = string.IsNullOrWhiteSpace(entry.Note) ? KindLabel(entry.Kind) : entry.Note;
+        return $"{label} ({entry.CreatedByDisplayName})";
     }
 }

@@ -7,8 +7,10 @@ namespace EbedrendeloApp.Features.Billing.GetMyCreditLedger;
 public sealed record GetMyCreditLedgerQuery(int UserId) : IRequest<Result<IReadOnlyList<CreditLedgerEntryDto>>>;
 
 /// <summary>AC 5.3.1-5.3.3 — one row per append-only <c>CreditEntry</c>. <see cref="SourceOrderDate"/>/
-/// <see cref="SourceOrderVariantName"/> are resolved from <see cref="SourceMenuOrderId"/> ("mi lett
-/// lemondva"). <see cref="PeriodInvoiceId"/> is exposed as a raw id (no join) for forward compatibility
+/// <see cref="SourceOrderVariantCode"/> are resolved from <see cref="SourceMenuOrderId"/> ("mi lett
+/// lemondva") — the variant's short code (e.g. "A"), not the dish combine name, matching the "A menü"
+/// wording used everywhere else a variant is shown to a user (<c>TodayMenu.razor</c> etc.).
+/// <see cref="PeriodInvoiceId"/> is exposed as a raw id (no join) for forward compatibility
 /// with Epic 7's billing — it is always null until <c>GeneratePeriodInvoicesCommand</c> exists.</summary>
 public sealed record CreditLedgerEntryDto(
     int Id,
@@ -21,6 +23,6 @@ public sealed record CreditLedgerEntryDto(
     string CreatedByDisplayName,
     int? SourceMenuOrderId,
     DateOnly? SourceOrderDate,
-    string? SourceOrderVariantName,
+    string? SourceOrderVariantCode,
     int? ConsumesCreditEntryId,
     int? PeriodInvoiceId);

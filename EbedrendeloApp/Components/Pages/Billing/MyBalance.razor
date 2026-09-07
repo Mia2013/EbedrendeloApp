@@ -50,9 +50,10 @@
     <RowTemplate>
         <MudTd DataLabel="Dátum">@context.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")</MudTd>
         <MudTd DataLabel="Típus">
-            <MudChip T="string" Size="Size.Small" Icon="@CreditEntryDisplay.KindIcon(context.Kind)" Color="@CreditEntryDisplay.KindColor(context.Kind)">
-                @CreditEntryDisplay.KindLabel(context.Kind)
-            </MudChip>
+            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@CreditEntryDisplay.KindIcon(context.Kind)" Color="@CreditEntryDisplay.KindColor(context.Kind)" Size="Size.Small" />
+                <MudText Typo="Typo.body2">@CreditEntryDisplay.KindLabel(context.Kind)</MudText>
+            </MudStack>
         </MudTd>
         <MudTd DataLabel="Leírás">@CreditEntryDisplay.Describe(context)</MudTd>
         <MudTd DataLabel="Összeg" Style="text-align:right">

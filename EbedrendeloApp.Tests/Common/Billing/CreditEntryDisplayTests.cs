@@ -10,8 +10,8 @@ public class CreditEntryDisplayTests
         CreditEntryKind kind = CreditEntryKind.ManualAdjustment,
         string? note = null,
         DateOnly? sourceOrderDate = null,
-        string? sourceOrderVariantName = null) =>
-        new(1, kind, 500, 500, DateTime.UtcNow, note, 2, "Nagy Éva", null, sourceOrderDate, sourceOrderVariantName, null, null);
+        string? sourceOrderVariantCode = null) =>
+        new(1, kind, 500, 500, DateTime.UtcNow, note, 2, "Nagy Éva", null, sourceOrderDate, sourceOrderVariantCode, null, null);
 
     [Theory]
     [InlineData(CreditEntryKind.CancellationCredit, "Lemondási jóváírás")]
@@ -24,15 +24,15 @@ public class CreditEntryDisplayTests
     }
 
     [Fact]
-    public void Describe_combines_order_date_variant_and_note()
+    public void Describe_shows_the_order_date_and_variant_code_for_a_cancellation()
     {
         var entry = Entry(
             kind: CreditEntryKind.CancellationCredit,
             note: null,
             sourceOrderDate: new DateOnly(2026, 8, 20),
-            sourceOrderVariantName: "Gulyásleves + Rántott sertés szelet");
+            sourceOrderVariantCode: "A");
 
-        Assert.Equal("2026.08.20. (Gulyásleves + Rántott sertés szelet) rendelés (Nagy Éva)", CreditEntryDisplay.Describe(entry));
+        Assert.Equal("2026.08.20. A menü", CreditEntryDisplay.Describe(entry));
     }
 
     [Fact]
@@ -44,11 +44,11 @@ public class CreditEntryDisplayTests
     }
 
     [Fact]
-    public void Describe_omits_variant_parenthetical_when_variant_name_is_null()
+    public void Describe_omits_variant_suffix_when_variant_code_is_null()
     {
-        var entry = Entry(sourceOrderDate: new DateOnly(2026, 8, 20), sourceOrderVariantName: null);
+        var entry = Entry(sourceOrderDate: new DateOnly(2026, 8, 20), sourceOrderVariantCode: null);
 
-        Assert.Equal("2026.08.20. rendelés (Nagy Éva)", CreditEntryDisplay.Describe(entry));
+        Assert.Equal("2026.08.20. menü", CreditEntryDisplay.Describe(entry));
     }
 
     [Fact]

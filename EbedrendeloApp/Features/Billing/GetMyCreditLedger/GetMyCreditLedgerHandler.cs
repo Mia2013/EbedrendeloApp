@@ -1,7 +1,6 @@
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
-using EbedrendeloApp.Features.Orders;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,9 +39,7 @@ public sealed class GetMyCreditLedgerHandler(IDbContextFactory<EbedrendeloDbCont
         var result = entries.Select(e =>
         {
             MenuOrder? order = e.SourceMenuOrderId is { } orderId ? orders.GetValueOrDefault(orderId) : null;
-            var variantName = order is not null
-                ? VariantDisplayName.Combine(variants[order.MenuVariantId].SoupName, variants[order.MenuVariantId].MainCourseName)
-                : null;
+            var variantCode = order is not null ? variants[order.MenuVariantId].Code : null;
 
             return new CreditLedgerEntryDto(
                 e.Id,
@@ -55,7 +52,7 @@ public sealed class GetMyCreditLedgerHandler(IDbContextFactory<EbedrendeloDbCont
                 creatorNames.GetValueOrDefault(e.CreatedByUserId, "Ismeretlen felhasználó"),
                 e.SourceMenuOrderId,
                 order?.Date,
-                variantName,
+                variantCode,
                 e.ConsumesCreditEntryId,
                 e.PeriodInvoiceId);
         }).ToList();

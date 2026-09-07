@@ -1,7 +1,6 @@
 using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Billing.GetMyCreditLedger;
-using EbedrendeloApp.Features.Orders;
 using EbedrendeloApp.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,8 +33,8 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
     }
 
     /// <summary>Seeds a cancelled MenuOrder (with a real variant) and its matching CancellationCredit —
-    /// everything GetMyCreditLedgerQuery's SourceMenuOrderId join needs to resolve a date + variant name.</summary>
-    private async Task<(int orderId, int creditId, string variantName)> SeedCancelledOrderWithCreditAsync(int userId, int amountHuf = 1400)
+    /// everything GetMyCreditLedgerQuery's SourceMenuOrderId join needs to resolve a date + variant code.</summary>
+    private async Task<(int orderId, int creditId, string variantCode)> SeedCancelledOrderWithCreditAsync(int userId, int amountHuf = 1400)
     {
         await using var db = dbFactory.CreateDbContext();
 
@@ -87,7 +86,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
         db.CreditEntries.Add(credit);
         await db.SaveChangesAsync();
 
-        return (order.Id, credit.Id, VariantDisplayName.Combine(variant.SoupName, variant.MainCourseName));
+        return (order.Id, credit.Id, variant.Code);
     }
 
     [Fact]
@@ -102,10 +101,10 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Returns_cancellation_credit_with_source_order_date_and_variant_name()
+    public async Task Returns_cancellation_credit_with_source_order_date_and_variant_code()
     {
         var userId = await SeedUserAsync();
-        var (orderId, _, variantName) = await SeedCancelledOrderWithCreditAsync(userId);
+        var (orderId, _, variantCode) = await SeedCancelledOrderWithCreditAsync(userId);
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
@@ -113,7 +112,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
         Assert.Equal(CreditEntryKind.CancellationCredit, entry.Kind);
         Assert.Equal(orderId, entry.SourceMenuOrderId);
         Assert.Equal(OrderDate, entry.SourceOrderDate);
-        Assert.Equal(variantName, entry.SourceOrderVariantName);
+        Assert.Equal(variantCode, entry.SourceOrderVariantCode);
     }
 
     [Fact]
@@ -176,7 +175,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
         Assert.Equal(CreditEntryKind.ManualAdjustment, entry.Kind);
         Assert.Null(entry.SourceMenuOrderId);
         Assert.Null(entry.SourceOrderDate);
-        Assert.Null(entry.SourceOrderVariantName);
+        Assert.Null(entry.SourceOrderVariantCode);
     }
 
     [Fact]
