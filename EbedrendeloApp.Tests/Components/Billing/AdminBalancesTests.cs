@@ -3,9 +3,11 @@ using Bunit.TestDoubles;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Billing;
+using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Billing.AddManualCredit;
 using EbedrendeloApp.Features.Billing.GetBalances;
 using EbedrendeloApp.Features.Billing.GetMyBalance;
+using EbedrendeloApp.Features.Billing.GetMyCreditLedger;
 using EbedrendeloApp.Features.Users.GetUsers;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
@@ -199,5 +201,91 @@ public class AdminBalancesTests : MudBunitContext
         await dialogProvider.InvokeAsync(() => saveButton.Click());
 
         Assert.Equal(2, loadCount);
+    }
+
+    private static CreditLedgerEntryDto LedgerEntry(CreditEntryKind kind, int amountHuf, string? note = null) =>
+        new(1, kind, amountHuf, amountHuf, DateTime.UtcNow, note, 1, "Admin Teszt", null, null, null, null, null);
+
+    [Fact]
+    public async Task Clicking_the_history_toggle_loads_and_shows_the_users_ledger()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
+            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
+        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
+            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminBalances>();
+        var toggleButton = cut.Find("button[title='Egyenleg-történet']");
+        await cut.InvokeAsync(() => toggleButton.Click());
+
+        Assert.Contains("Havi jóváírás", cut.Markup);
+        Assert.Contains("Kézi korrekció", cut.Markup);
+        Assert.Contains("+1 400 Ft", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Clicking_the_history_toggle_again_collapses_it()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
+            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
+        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
+            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminBalances>();
+        var toggleButton = cut.Find("button[title='Egyenleg-történet']");
+        await cut.InvokeAsync(() => toggleButton.Click());
+        Assert.Contains("Havi jóváírás", cut.Markup);
+
+        await cut.InvokeAsync(() => toggleButton.Click());
+
+        Assert.DoesNotContain("Havi jóváírás", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Shows_an_empty_state_when_the_user_has_no_ledger_entries()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
+            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
+        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
+            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([]));
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminBalances>();
+        var toggleButton = cut.Find("button[title='Egyenleg-történet']");
+        await cut.InvokeAsync(() => toggleButton.Click());
+
+        Assert.Contains("Nincs egyenleg-történet.", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Only_queries_the_ledger_once_per_user_across_repeated_toggles()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var mediator = new FakeMediator();
+        var ledgerQueryCount = 0;
+        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
+            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
+        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(_ =>
+        {
+            ledgerQueryCount++;
+            return Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400)]);
+        });
+        Services.AddSingleton<IMediator>(mediator);
+
+        var cut = Render<AdminBalances>();
+        var toggleButton = cut.Find("button[title='Egyenleg-történet']");
+        await cut.InvokeAsync(() => toggleButton.Click()); // nyit — lekérdez
+        await cut.InvokeAsync(() => toggleButton.Click()); // csuk
+        await cut.InvokeAsync(() => toggleButton.Click()); // újra nyit — gyorsítótárból
+
+        Assert.Equal(1, ledgerQueryCount);
     }
 }

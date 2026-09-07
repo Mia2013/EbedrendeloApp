@@ -81,6 +81,23 @@
       egyelemű listát küldő `CancelMenuOrderDialog.razor` időközben meg is szűnt — nincs már
       egyesével megerősítendő "Lemondás" gomb naptár-cellánként.
 
+## Egyenleg-kezelés (Epic 5)
+
+- [x] `AdminBalances.razor` sorain a névhez egy lenyíló mutatja az adott dolgozó egyenleg-történetét —
+      megoldva. Soronként egy expand-ikon (`MudTable` `ChildRowContent`) nyitja/csukja, a
+      `MyBalance.razor`-ban már meglévő `GetMyCreditLedgerQuery`-t hívja `UserId` paraméterrel,
+      felhasználónként gyorsítótárazva (csak az első nyitáskor kérdez le). Új jóváírás rögzítése után
+      a gyorsítótár és a nyitott sorok törlődnek, hogy egy esetleg nyitva hagyott előzmény ne
+      maradjon elavult (a dialógus a `CreditEntry` id-ját adja vissza, nem a célfelhasználót, ezért
+      szelektív frissítés helyett a teljes gyorsítótár ürül).
+- [ ] `ManualCreditDialog.razor` felhasználó-választója (`MudAutocomplete` + `SearchUsersAsync`,
+      névben/igazgatóságban/osztályban keres) nem elég jó — pontosítandó, mi hiányzik belőle
+      (esetleg gyorsabb/pontosabb találati sorrend, vagy más keresési szempont).
+- [ ] `ManualCreditDialog.razor` `amountHuf` mezője jelenleg `1`-re inicializálódik — legyen
+      alapértelmezetten az aktuális napi menü ára (`AppSetting.MenuPortionHuf`, lekérdezhető, lásd
+      `GetOrderableDaysHandler`/`PlacePeriodOrderHandler` hasonló felhasználását), ne kelljen minden
+      alkalommal kézzel beírni a szokásos 1400 Ft-ot.
+
 ---
 
 *Új tétel felvételekor elég egy rövid, egy-két mondatos leírás — a részletes elfogadási kritériumok
