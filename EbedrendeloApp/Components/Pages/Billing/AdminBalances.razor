@@ -1,0 +1,200 @@
+@page "/egyenlegek"
+@using EbedrendeloApp.Common.Billing
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.GetBalances
+@using EbedrendeloApp.Features.Billing.GetMyCreditLedger
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Egyenlegek</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Egyenlegek</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A dolgozók aktuális jóváírás-egyenlege. A 0 Ft-os egyenlegű dolgozók itt nem jelennek meg —
+                bármelyik dolgozónak az "Új jóváírás" gombbal rögzíthetsz jóváírást.
+            </MudText>
+        </MudStack>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddCreditAsync()">
+            Új jóváírás
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudTextField T="string" Value="searchText" ValueChanged="@(v => searchText = v)" Immediate="true"
+              Label="Keresés név vagy szervezet szerint" Variant="Variant.Outlined"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mt-4 mb-3" />
+
+<MudTable Items="filteredBalances" Loading="@(balances is null)" Hover="true" Elevation="1" Dense="true">
+    <HeaderContent>
+        <MudTh />
+        <MudTh>Név</MudTh>
+        <MudTh>Igazgatóság / Osztály</MudTh>
+        <MudTh Style="text-align:right">Egyenleg</MudTh>
+        <MudTh Style="text-align:right">Műveletek</MudTh>
+    </HeaderContent>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nincs megjeleníthető (nem nulla) egyenleg.</MudText>
+    </NoRecordsContent>
+    <RowTemplate>
+        <MudTd>
+            <MudIconButton Icon="@(IsHistoryExpanded(context.UserId) ? Icons.Material.Filled.KeyboardArrowUp : Icons.Material.Filled.KeyboardArrowDown)"
+                           Size="Size.Small" title="Egyenleg-történet" OnClick="() => ToggleHistoryAsync(context.UserId)" />
+        </MudTd>
+        <MudTd DataLabel="Név">@context.DisplayName</MudTd>
+        <MudTd DataLabel="Igazgatóság / Osztály">@DepartmentText(context)</MudTd>
+        <MudTd DataLabel="Egyenleg" Style="text-align:right">
+            <MudText Color="@(context.BalanceHuf > 0 ? Color.Success : Color.Error)">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+        </MudTd>
+        <MudTd DataLabel="Műveletek" Style="text-align:right">
+            <MudIconButton Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Small"
+                           title="Jóváírás hozzáadása" OnClick="() => AddCreditAsync(context.UserId)" />
+        </MudTd>
+    </RowTemplate>
+    <ChildRowContent>
+        @if (IsHistoryExpanded(context.UserId))
+        {
+            <MudTr>
+                <td colspan="5">
+                    @if (!historyByUserId.TryGetValue(context.UserId, out var history))
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="ma-2" />
+                    }
+                    else if (history.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2">Nincs egyenleg-történet.</MudText>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1" Class="ma-2">
+                            @foreach (var entry in history)
+                            {
+                                <MudPaper  Elevation="0" Class="pa-1">
+                                    <MudGrid Spacing="1">
+                                        <MudItem xs="12" md="4" lg="3" xl="2">
+
+                                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                            <MudIcon Icon="@CreditEntryDisplay.KindIcon(entry.Kind)" Color="@CreditEntryDisplay.KindColor(entry.Kind)" Size="Size.Small" />
+                                            <MudText Typo="Typo.body2">@CreditEntryDisplay.KindLabel(entry.Kind)</MudText>
+                                        </MudStack>
+                                        </MudItem>
+                                        <MudItem xs="12" md="6" lg="5" xl="4">
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                               @CreditEntryDisplay.DateLabel(entry.Kind): @entry.CreatedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm") — @CreditEntryDisplay.Describe(entry)
+                                            </MudText></MudItem>
+                                      <MudItem xs="12" md="2" lg="1">
+                                        <MudText Align="Align.Right" Color="@(entry.AmountHuf >= 0 ? Color.Success : Color.Error)">@(entry.AmountHuf >= 0 ? "+" : "")@HungarianNumberFormat.Huf(entry.AmountHuf)</MudText>
+                                </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            }                    
+                                    <MudGrid Spacing="1" >
+                                           <MudItem xs="12" md="2" lg="9" xl="7"> <MudDivider /></MudItem>
+                                  <MudItem xs="12" md="10" lg="8" xl="6">
+
+                                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                            <MudIcon Icon="@Icons.Material.Filled.Functions"  Size="Size.Small" />
+                                            <MudText Typo="Typo.body2">Összesen</MudText>
+                                        </MudStack>
+                                        </MudItem>
+
+                                      <MudItem xs="12" md="2" lg="1">
+
+                                        <MudText Align="Align.Right">@HungarianNumberFormat.Huf(context.BalanceHuf)</MudText>
+                                                                        </MudItem>                                    </MudGrid>
+
+
+                        </MudStack>
+                    }
+                </td>
+            </MudTr>
+        }
+    </ChildRowContent>
+</MudTable>
+
+@code {
+    private List<UserBalanceDto>? balances;
+    private string searchText = string.Empty;
+
+    // A történet lekérdezés csak az első lenyitáskor fut le felhasználónként — a bezárás/újranyitás
+    // ezt a gyorsítótárat használja, nem kérdez le újra (a lista úgyis csak jóváírás rögzítésekor
+    // változik, ami után LoadAsync az egész oldalt frissíti).
+    private readonly HashSet<int> expandedUserIds = [];
+    private readonly Dictionary<int, List<CreditLedgerEntryDto>> historyByUserId = [];
+
+    private IEnumerable<UserBalanceDto> filteredBalances => balances is null
+        ? []
+        : balances.Where(b => string.IsNullOrWhiteSpace(searchText)
+            || b.DisplayName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || (b.Igazgatosag ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || (b.Osztaly ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+    private static string DepartmentText(UserBalanceDto b) =>
+        string.Join(" — ", new[] { b.Igazgatosag, b.Osztaly }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).Value!.ToList();
+
+    private bool IsHistoryExpanded(int userId) => expandedUserIds.Contains(userId);
+
+    private async Task ToggleHistoryAsync(int userId)
+    {
+        if (!expandedUserIds.Add(userId))
+        {
+            expandedUserIds.Remove(userId);
+            return;
+        }
+
+        if (!historyByUserId.ContainsKey(userId))
+        {
+            var result = await Mediator.Send(new GetMyCreditLedgerQuery(userId));
+            historyByUserId[userId] = result.Value!.ToList();
+        }
+    }
+
+    private static readonly DialogOptions CreditDialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task AddCreditAsync(int? preselectedUserId = null)
+    {
+        var parameters = new DialogParameters<ManualCreditDialog> { { x => x.PreselectedUserId, preselectedUserId } };
+        var dialogRef = await DialogService.ShowAsync<ManualCreditDialog>("Új jóváírás", parameters, CreditDialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Jóváírás rögzítve.", Severity.Success);
+
+            // A dialógus eredménye a CreditEntry id-ját adja vissza, nem a célfelhasználót, ezért nem
+            // tudjuk szelektíven frissíteni csak az érintett sort — helyette az egész gyorsítótárat
+            // ürítjük (és a nyitott sorokat becsukjuk), hogy egy esetleg nyitott előzmény-sor ne
+            // maradjon elavult állapotban. Legközelebbi megnyitáskor újra lekérdeződik.
+            historyByUserId.Clear();
+            expandedUserIds.Clear();
+
+            await LoadAsync();
+        }
+    }
+}

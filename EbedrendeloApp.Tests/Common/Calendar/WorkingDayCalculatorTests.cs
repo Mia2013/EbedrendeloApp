@@ -15,7 +15,7 @@ public class WorkingDayCalculatorTests
         ALaCarteOrderDeadlineLocalTime = new TimeOnly(10, 30),
     };
 
-    private static readonly IReadOnlySet<DateOnly> NoExclusions = new HashSet<DateOnly>();
+    private static readonly IReadOnlySet<DateOnly> NoExclusions = ExcludedDates.None;
 
     [Theory]
     [InlineData(2026, 8, 17, true)]  // Monday

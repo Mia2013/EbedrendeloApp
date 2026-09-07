@@ -1,0 +1,51 @@
+@using EbedrendeloApp.Common.ALaCarte
+@using EbedrendeloApp.Features.Menus.GetTodayMenuForUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">Rendelés megerősítése</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">Az alábbi tételeket rendeled meg:</MudText>
+        <MudStack Spacing="1">
+            @foreach (var offer in Offers)
+            {
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.body2">
+                        @ALaCarteCategoryDisplay.Name(offer.Category): @offer.Name@(offer.IncludesSoup ? " (levessel)" : "")
+                    </MudText>
+                    <MudText Typo="Typo.body2">@HungarianNumberFormat.Huf(offer.PriceHuf)</MudText>
+                </MudStack>
+            }
+        </MudStack>
+        <MudDivider Class="my-2" />
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.subtitle1">Összesen</MudText>
+            <MudText Typo="Typo.subtitle1">@HungarianNumberFormat.Huf(Offers.Sum(o => o.PriceHuf))</MudText>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mt-3">Biztosan leadod a rendelést?</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="Confirm">
+            Igen, megrendelem
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel">
+            Mégse
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ALaCarteOfferDto> Offers { get; set; } = [];
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(true));
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

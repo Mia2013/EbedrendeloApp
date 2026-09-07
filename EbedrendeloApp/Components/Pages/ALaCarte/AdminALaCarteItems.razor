@@ -61,7 +61,7 @@
 <MudTable Items="filteredItems" GroupBy="groupDefinition" Loading="@(items is null)" Hover="true" Elevation="1" Dense="true">
     <HeaderContent>
         <MudTh>Név</MudTh>
-        <MudTh>Ár</MudTh>
+        <MudTh Style="text-align:right">Ár</MudTh>
         <MudTh>Tápérték</MudTh>
         <MudTh>Állapot</MudTh>
         <MudTh>Műveletek</MudTh>
@@ -76,7 +76,7 @@
     </GroupHeaderTemplate>
     <RowTemplate>
         <MudTd DataLabel="Név">@context.Name</MudTd>
-        <MudTd DataLabel="Ár">@context.PriceHuf Ft</MudTd>
+        <MudTd DataLabel="Ár" Style="text-align:right">@HungarianNumberFormat.Huf(context.PriceHuf)</MudTd>
         <MudTd DataLabel="Tápérték">@(HasNutrition(context) ? "✓" : "—")</MudTd>
         <MudTd DataLabel="Állapot">
             <MudChip T="string" Size="Size.Small" Icon="@(context.IsActive ? Icons.Material.Filled.ToggleOn : Icons.Material.Filled.ToggleOff)"

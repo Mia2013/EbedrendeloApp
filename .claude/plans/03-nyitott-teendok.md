@@ -21,6 +21,8 @@
 
 ## UI / komponensek
 
+- [ ] Design-referencia: https://happyetterem.hu/fooldal — a designja nagyon tetszett, érdemes
+      majd megnézni, mit lehetne belőle átvenni.
 - [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
       pl. select) legyen kiemelve önálló, újrafelhasználható komponensbe, és vezessük át az összes
       oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek).
@@ -78,6 +80,23 @@
       `CancelMenuOrdersCommand` hívásban küldi be az összes kijelölt dátumot. A leírásban említett,
       egyelemű listát küldő `CancelMenuOrderDialog.razor` időközben meg is szűnt — nincs már
       egyesével megerősítendő "Lemondás" gomb naptár-cellánként.
+
+## Egyenleg-kezelés (Epic 5)
+
+- [x] `AdminBalances.razor` sorain a névhez egy lenyíló mutatja az adott dolgozó egyenleg-történetét —
+      megoldva. Soronként egy expand-ikon (`MudTable` `ChildRowContent`) nyitja/csukja, a
+      `MyBalance.razor`-ban már meglévő `GetMyCreditLedgerQuery`-t hívja `UserId` paraméterrel,
+      felhasználónként gyorsítótárazva (csak az első nyitáskor kérdez le). Új jóváírás rögzítése után
+      a gyorsítótár és a nyitott sorok törlődnek, hogy egy esetleg nyitva hagyott előzmény ne
+      maradjon elavult (a dialógus a `CreditEntry` id-ját adja vissza, nem a célfelhasználót, ezért
+      szelektív frissítés helyett a teljes gyorsítótár ürül).
+- [ ] `ManualCreditDialog.razor` felhasználó-választója (`MudAutocomplete` + `SearchUsersAsync`,
+      névben/igazgatóságban/osztályban keres) nem elég jó — pontosítandó, mi hiányzik belőle
+      (esetleg gyorsabb/pontosabb találati sorrend, vagy más keresési szempont).
+- [ ] `ManualCreditDialog.razor` `amountHuf` mezője jelenleg `1`-re inicializálódik — legyen
+      alapértelmezetten az aktuális napi menü ára (`AppSetting.MenuPortionHuf`, lekérdezhető, lásd
+      `GetOrderableDaysHandler`/`PlacePeriodOrderHandler` hasonló felhasználását), ne kelljen minden
+      alkalommal kézzel beírni a szokásos 1400 Ft-ot.
 
 ---
 

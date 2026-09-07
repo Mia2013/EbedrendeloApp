@@ -2,6 +2,7 @@
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Features.Billing.GetMyBalance
 @using EbedrendeloApp.Features.Calendar
 @using EbedrendeloApp.Features.Calendar.GetOrderableDays
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
@@ -55,6 +56,13 @@
             {
                 <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
                     @colleagues.First(c => c.UserId == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
+                </MudAlert>
+            }
+
+            @if (myBalanceHuf is > 0)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                    Van fel nem használt jóváírásod a korábbi lemondásokból: <strong>@HungarianNumberFormat.Huf(myBalanceHuf)</strong> — ez nem térül vissza készpénzben, hanem automatikusan levonódik a következő számládból, amikor menüt rendelsz. <MudLink Href="egyenlegem">Részletek</MudLink>
                 </MudAlert>
             }
         </MudStack>
@@ -119,9 +127,9 @@ else
         <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4">
                 <MudStack Row Spacing="6" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                    <MudText Typo="Typo.body2">Egységár: <strong>@menuPortionHuf Ft</strong></MudText>
-                    <MudText Typo="Typo.body2">Darabszám: <strong>@pendingSelections.Count</strong></MudText>
-                    <MudText Typo="Typo.body2">Összesen: <strong>@PendingTotalHuf Ft</strong></MudText>
+                    <MudText Typo="Typo.body2">Egységár: <strong>@HungarianNumberFormat.Huf(menuPortionHuf)</strong></MudText>
+                    <MudText Typo="Typo.body2">Darabszám: <strong>@HungarianNumberFormat.Number(pendingSelections.Count)</strong></MudText>
+                    <MudText Typo="Typo.body2">Összesen: <strong>@HungarianNumberFormat.Huf(PendingTotalHuf)</strong></MudText>
                 </MudStack>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@(isSubmitting ? null : Icons.Material.Filled.CheckCircle)"
                            OnClick="SubmitOrdersAsync" Disabled="isSubmitting">
@@ -132,7 +140,7 @@ else
                     }
                     else
                     {
-                        <MudText>Rendelés leadása (@pendingSelections.Count nap, @PendingTotalHuf Ft)</MudText>
+                        <MudText>Rendelés leadása (@pendingSelections.Count nap, @HungarianNumberFormat.Huf(PendingTotalHuf))</MudText>
                     }
                 </MudButton>
             </MudStack>
@@ -248,6 +256,7 @@ else
     private int selectedPeriodId;
     private IReadOnlyList<DevUserOption> colleagues = [];
     private int? targetUserId;
+    private int? myBalanceHuf;
     private List<OrderDayCell>? days;
     private readonly Dictionary<DateOnly, string> pendingSelections = [];
     private readonly HashSet<DateOnly> pendingCancellations = [];
@@ -265,6 +274,7 @@ else
         await CurrentUser.EnsureLoadedAsync();
 
         colleagues = (await DevUserSwitcher.GetUsersAsync()).Where(u => u.UserId != CurrentUser.UserId).ToList();
+        myBalanceHuf = (await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId))).Value;
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
         var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();

@@ -15,8 +15,6 @@ public sealed class PlacePeriodOrderHandler(
     IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<PlacePeriodOrderCommand, Result<BatchOrderResult>>
 {
-    private static readonly IReadOnlySet<DateOnly> ImmutableExcludedSet = new HashSet<DateOnly>();
-
     public async Task<Result<BatchOrderResult>> Handle(PlacePeriodOrderCommand request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
@@ -69,7 +67,7 @@ public sealed class PlacePeriodOrderHandler(
                 continue;
             }
 
-            if (!workingDayCalculator.IsWorkingDay(date, ImmutableExcludedSet))
+            if (!workingDayCalculator.IsWorkingDay(date, ExcludedDates.None))
             {
                 skipped.Add(new DaySkip(date, ErrorCodes.NotWorkingDay));
                 continue;

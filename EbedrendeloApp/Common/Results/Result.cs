@@ -20,6 +20,19 @@ public class Result
     public static Result<T> Success<T>(T value) => Result<T>.Success(value);
 
     public static Result<T> Failure<T>(string errorCode, string errorMessage) => Result<T>.Failure(errorCode, errorMessage);
+
+    /// <summary>Egy nem generikus hibát tovább ad egy <see cref="Result{T}"/>-et váró hívónak
+    /// (hibakód és üzenet változatlanul) — így a közös, érték nélküli ellenőrzések (pl.
+    /// <c>ALaCarteOrderingGate</c>) értéket visszaadó handlerekben is használhatók.</summary>
+    public Result<T> ToFailure<T>()
+    {
+        if (IsSuccess)
+        {
+            throw new InvalidOperationException("Sikeres Result nem alakítható hibává.");
+        }
+
+        return Result<T>.Failure(ErrorCode!, ErrorMessage!);
+    }
 }
 
 public sealed class Result<T> : Result

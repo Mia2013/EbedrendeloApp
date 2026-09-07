@@ -202,6 +202,29 @@ public class PlaceALaCarteOrderHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Rejects_a_batch_with_two_items_from_the_same_category()
+    {
+        await SeedAsync();
+        int secondMainItemId;
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var secondMain = new ALaCarteItem { Name = "Csirkemell", Category = ALaCarteCategory.Foetel, PriceHuf = 1600 };
+            db.ALaCarteItems.Add(secondMain);
+            await db.SaveChangesAsync();
+            secondMainItemId = secondMain.Id;
+
+            db.ALaCarteDailyOffers.Add(new ALaCarteDailyOffer { Date = Mon, ALaCarteItemId = secondMain.Id, Capacity = 10, OrderedCount = 0 });
+            await db.SaveChangesAsync();
+        }
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
+
+        var result = await sut.Handle(new PlaceALaCarteOrderCommand(userId, [mainItemId, secondMainItemId]), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCodes.DuplicateCategory, result.ErrorCode);
+    }
+
+    [Fact]
     public async Task Rejects_ordering_the_same_item_twice_in_one_day()
     {
         await SeedAsync();
