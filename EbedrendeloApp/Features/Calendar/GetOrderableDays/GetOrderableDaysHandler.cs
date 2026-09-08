@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
@@ -33,10 +34,7 @@ public sealed class GetOrderableDaysHandler(
         var excludedDates = excludedDaysInRange.Select(e => e.Date).ToHashSet();
         var excludedReasons = excludedDaysInRange.ToDictionary(e => e.Date, e => e.Reason);
 
-        var kitchenClosures = await db.KitchenClosures
-            .Where(k => k.Date >= period.StartDate && k.Date <= period.EndDate)
-            .Select(k => k.Date)
-            .ToHashSetAsync(cancellationToken);
+        var kitchenClosures = await KitchenClosureQueries.GetClosedDatesAsync(db, period.StartDate, period.EndDate, cancellationToken);
 
         var dailyMenus = await db.DailyMenus
             .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
@@ -92,14 +90,14 @@ public sealed class GetOrderableDaysHandler(
 
             if (userOrders.TryGetValue(date, out var order))
             {
-                var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false);
+                var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date));
                 var variant = variants.GetValueOrDefault(order.MenuVariantId);
                 var cancelReason = cancellable ? null : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
                 result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.SoupName, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null, settings.MenuPortionHuf));
                 continue;
             }
 
-            var orderable = inOrderWindow || (period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false));
+            var orderable = inOrderWindow || (period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date)));
             var reason = orderable ? ErrorCodes.NoActiveOrder : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
             result.Add(new OrderableDayDto(date, orderable, false, null, null, reason, null, settings.MenuPortionHuf));
         }

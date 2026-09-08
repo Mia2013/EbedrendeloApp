@@ -21,6 +21,10 @@ public sealed class CancelMenuOrdersHandler(
     public async Task<Result<BatchOrderResult>> Handle(CancelMenuOrdersCommand request, CancellationToken cancellationToken)
     {
         var dates = request.Dates.Distinct().ToList();
+        if (dates.Count == 0)
+        {
+            return Result.Success(new BatchOrderResult([], []));
+        }
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -41,7 +45,7 @@ public sealed class CancelMenuOrdersHandler(
 
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
         var excludedDates = await db.ExcludedDays.Select(e => e.Date).ToHashSetAsync(cancellationToken);
-        var kitchenClosures = await db.KitchenClosures.Select(k => k.Date).ToHashSetAsync(cancellationToken);
+        var kitchenClosures = await KitchenClosureQueries.GetClosedDatesAsync(db, dates.Min(), dates.Max(), cancellationToken);
 
         var nowLocal = clock.LocalNow;
         var nowUtc = clock.UtcNow.UtcDateTime;
@@ -82,7 +86,7 @@ public sealed class CancelMenuOrdersHandler(
                 continue;
             }
 
-            if (!workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false))
+            if (!workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date)))
             {
                 skipped.Add(new DaySkip(date, ErrorCodes.DeadlinePassed));
                 continue;

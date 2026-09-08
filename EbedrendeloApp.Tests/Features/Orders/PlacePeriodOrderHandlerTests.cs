@@ -207,6 +207,27 @@ public class PlacePeriodOrderHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Orders_again_after_the_kitchen_reopens_the_day()
+    {
+        await SeedAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var closure = new KitchenClosure { Date = Wed, ClosedByUserId = userId, TotalPortions = 0 };
+            db.KitchenClosures.Add(closure);
+            await db.SaveChangesAsync();
+            db.KitchenClosureReopenings.Add(new KitchenClosureReopening { KitchenClosureId = closure.Id, ReopenedByUserId = userId });
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 10, 9, 0, 0));
+        var result = await sut.Handle(new PlacePeriodOrderCommand(userId, userId, periodId, [new DayOrderRequest(Wed, "A")]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+    }
+
+    [Fact]
     public async Task Rejects_a_workday_without_a_published_menu()
     {
         await SeedAsync();

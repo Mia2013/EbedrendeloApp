@@ -1,0 +1,84 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Kitchen
+@using EbedrendeloApp.Features.Kitchen.CloseDay
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Warning" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Nap lezárása</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@Date.ToString("yyyy.MM.dd.")</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        <MudText Class="mb-3">
+            Rögzíted a mai konyhai összesítőt: <b>@HungarianNumberFormat.Number(Summary.TotalPortions) adag</b>@LineBreakdownSuffix.
+        </MudText>
+
+        <MudAlert Severity="Severity.Warning">
+            Utána a nap rendelése és lemondása is le lesz zárva — a 3 munkanapos szabálytól függetlenül.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.Lock)" OnClick="ConfirmAsync" Disabled="isSaving">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Lezárás...</MudText>
+            }
+            else
+            {
+                <MudText>Lezárás</MudText>
+            }
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel" Disabled="isSaving">Mégse</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    [Parameter, EditorRequired]
+    public KitchenSummaryDto Summary { get; set; } = default!;
+
+    private bool isSaving;
+    private string? errorMessage;
+
+    private string LineBreakdownSuffix => Summary.Lines.Count == 0
+        ? string.Empty
+        : $" ({string.Join(" · ", Summary.Lines.Select(l => $"{l.VariantCode}: {l.Quantity}"))})";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new CloseDayCommand(Date, CurrentUser.UserId));
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

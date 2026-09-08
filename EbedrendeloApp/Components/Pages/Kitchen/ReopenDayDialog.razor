@@ -1,0 +1,77 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Kitchen
+@using EbedrendeloApp.Features.Kitchen.ReopenDay
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Nap újranyitása</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@Date.ToString("yyyy.MM.dd.")</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        <MudText>
+            A nap újra módosíthatóvá válik, ha a 3 munkanapos határidő még engedi.
+            A záráskori összesítő (<b>@HungarianNumberFormat.Number(Closure.TotalPortions) adag</b>) megmarad, nem vész el.
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Info" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.LockOpen)" OnClick="ConfirmAsync" Disabled="isSaving">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Újranyitás...</MudText>
+            }
+            else
+            {
+                <MudText>Újranyitás</MudText>
+            }
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel" Disabled="isSaving">Mégse</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    [Parameter, EditorRequired]
+    public KitchenClosureDto Closure { get; set; } = default!;
+
+    private bool isSaving;
+    private string? errorMessage;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new ReopenDayCommand(Date, CurrentUser.UserId));
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}

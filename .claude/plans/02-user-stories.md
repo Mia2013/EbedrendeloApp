@@ -803,9 +803,21 @@ implementálva van. Az Epic 5 (Jóváírás-könyvelés és Egyenlegkezelés) UI
 a kézi jóváírás autocomplete-jéhez) — a UI oldalon `MyBalance.razor` (`/egyenlegem`), `AdminBalances.razor`
 (`/egyenlegek`) és `ManualCreditDialog.razor`, `NavMenu` linkekkel mindkét ághoz, plusz egy egyenleg-
 figyelmeztető sáv a `Naptár` (`UserCalendar.razor`) oldalon, mivel a lemondott rendelés jóváírása nem
-térül vissza készpénzben, hanem a következő rendelésnél íródik jóvá. Az Epic 6–8 (Konyha/napzárás,
-Számlázás, Értesítések — a fenti táblázat `GetKitchenSummaryQuery`-től `MarkAllNotificationsReadCommand`-ig
-terjedő 16 sorából a 12, amelyik nem az Epic 5 Billing use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
+térül vissza készpénzben, hanem a következő rendelésnél íródik jóvá.
+
+Az Epic 6 (Konyhai összesítés és napzárás) szintén teljes egészében elkészült: `GetKitchenSummaryQuery`,
+`GetKitchenSummaryRangeQuery`, `CloseDayCommand`, `ReopenDayCommand`, `GetKitchenClosureQuery`
+(`Features/Kitchen/`), a `KitchenClosure`/`KitchenClosureLine`/`KitchenClosureReopening` append-only
+historikus adatmodellel (egy nap többször zárható/nyitható, minden zárás új `KitchenClosure` sort kap),
+a `KitchenClosureQueries.IsClosedAsync`/`GetClosedDatesAsync` közös kapu-ellenőrzéssel (ezt használja a
+rendelés/lemondás a `WorkingDayCalculator.CanChange`-en keresztül, a menü-szerkesztés/törlés és a nap
+kizárása is), UI-val (`KitchenSummary.razor` a `/konyhai-osszesito` alatt, `CloseDayDialog.razor`,
+`ReopenDayDialog.razor`, admin-only `NavMenu` "KONYHA" szekció) és teljes teszt-lefedettséggel mind az 5
+handlerre, mind a 3 komponensre.
+
+Az Epic 7–8 (Számlázás, Értesítések — a fenti táblázat `GeneratePeriodInvoicesCommand`-tól
+`MarkAllNotificationsReadCommand`-ig terjedő 11 sorából mind a 7, amelyik nem az Epic 5 Billing
+use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
 `01-szerver-architektura.md` "10. Végrehajtási sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se
 `NavMenu` link ezekhez. Az `INotificationService` továbbra is write-only marad (Epic 8 olvasó oldala még
 nem készült el).

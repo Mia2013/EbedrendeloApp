@@ -24,6 +24,7 @@ public sealed class EbedrendeloDbContext(DbContextOptions<EbedrendeloDbContext> 
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<KitchenClosure> KitchenClosures => Set<KitchenClosure>();
     public DbSet<KitchenClosureLine> KitchenClosureLines => Set<KitchenClosureLine>();
+    public DbSet<KitchenClosureReopening> KitchenClosureReopenings => Set<KitchenClosureReopening>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

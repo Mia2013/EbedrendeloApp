@@ -31,7 +31,7 @@ public sealed class ExcludeDayHandler(
             return Result.Failure(ErrorCodes.DayExcluded, "Ez a nap már ki van zárva.");
         }
 
-        if (await db.KitchenClosures.AnyAsync(k => k.Date == request.Date, cancellationToken))
+        if (await KitchenClosureQueries.IsClosedAsync(db, request.Date, cancellationToken))
         {
             return Result.Failure(ErrorCodes.DayClosed, "A nap már le van zárva.");
         }
