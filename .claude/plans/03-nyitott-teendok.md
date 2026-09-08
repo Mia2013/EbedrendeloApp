@@ -98,6 +98,16 @@
       `GetOrderableDaysHandler`/`PlacePeriodOrderHandler` hasonló felhasználását), ne kelljen minden
       alkalommal kézzel beírni a szokásos 1400 Ft-ot.
 
+## Konyhai összesítés és napzárás (Epic 6) — code review során talált, nem blokkoló észrevételek
+
+- [ ] `CloseDayCommand`/`ReopenDayCommand`-hoz nincs önálló FluentValidation validátor osztály — a
+      validáció (pl. "már le van zárva" / "nincs érvényben lévő zárás") inline `if` a
+      `CloseDayHandler`/`ReopenDayHandler`-ben van, eltérően a többi feature konvenciójától.
+      Funkcionálisan helyes, csak konzisztencia kérdés.
+- [ ] `KitchenSummary.razor` admin-jogosultság ellenőrzése kliens-oldali redirect
+      (`OnInitializedAsync`-ben, nem-adminra `mai-menu`-re navigál), nem route-szintű `[Authorize]`.
+      Ha ez eltér az app többi admin-oldalának mintájától, érdemes egységesíteni.
+
 ---
 
 *Új tétel felvételekor elég egy rövid, egy-két mondatos leírás — a részletes elfogadási kritériumok

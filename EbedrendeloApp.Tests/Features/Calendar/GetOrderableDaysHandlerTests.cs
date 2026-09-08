@@ -111,6 +111,36 @@ public class GetOrderableDaysHandlerTests : IDisposable
         Assert.Equal(ErrorCodes.PeriodClosed, day.Reason);
     }
 
+    [Fact]
+    public async Task A_kitchen_closed_day_is_not_orderable_but_becomes_orderable_again_after_a_reopen()
+    {
+        await SeedAsync();
+
+        int closureId;
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var closure = new KitchenClosure { Date = OrderableDay, ClosedByUserId = userId, TotalPortions = 0 };
+            db.KitchenClosures.Add(closure);
+            await db.SaveChangesAsync();
+            closureId = closure.Id;
+        }
+
+        var whileClosed = await sut.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
+        var closedDay = whileClosed.Value!.Single(d => d.Date == OrderableDay);
+        Assert.False(closedDay.Orderable);
+        Assert.Equal(ErrorCodes.DayClosed, closedDay.Reason);
+
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.KitchenClosureReopenings.Add(new KitchenClosureReopening { KitchenClosureId = closureId, ReopenedByUserId = userId });
+            await db.SaveChangesAsync();
+        }
+
+        var afterReopen = await sut.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
+        var reopenedDay = afterReopen.Value!.Single(d => d.Date == OrderableDay);
+        Assert.True(reopenedDay.Orderable);
+    }
+
     private async Task SeedAsync()
     {
         await using var db = dbFactory.CreateDbContext();

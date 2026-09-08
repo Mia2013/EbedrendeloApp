@@ -25,6 +25,7 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.Contains("Rendelési időszakok", cut.Markup);
         Assert.Contains("Nem rendelhető napok", cut.Markup);
         Assert.Contains("Rendelések", cut.Markup);
+        Assert.Contains("Konyhai összesítő", cut.Markup);
         Assert.Contains("À la carte ételek", cut.Markup);
         Assert.Contains("À la carte napi kínálat", cut.Markup);
         Assert.Contains("À la carte konyhai lista", cut.Markup);

@@ -201,6 +201,28 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancels_again_after_the_kitchen_reopens_the_day()
+    {
+        await SeedAsync();
+        await SeedActiveOrderAsync(Thu);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var closure = new KitchenClosure { Date = Thu, ClosedByUserId = userId, TotalPortions = 1 };
+            db.KitchenClosures.Add(closure);
+            await db.SaveChangesAsync();
+            db.KitchenClosureReopenings.Add(new KitchenClosureReopening { KitchenClosureId = closure.Id, ReopenedByUserId = userId });
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
+        var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+    }
+
+    [Fact]
     public async Task Rejects_when_there_is_no_active_order_for_the_date()
     {
         await SeedAsync();

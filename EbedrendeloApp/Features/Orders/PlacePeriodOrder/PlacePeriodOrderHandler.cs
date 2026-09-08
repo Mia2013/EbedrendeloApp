@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
@@ -32,7 +33,7 @@ public sealed class PlacePeriodOrderHandler(
         // Small tables loaded in full rather than windowed by period range — simpler and safer than
         // guessing a lookback window, and matches GetOrderableDaysHandler's reasoning for this data.
         var excludedDates = await db.ExcludedDays.Select(e => e.Date).ToHashSetAsync(cancellationToken);
-        var kitchenClosures = await db.KitchenClosures.Select(k => k.Date).ToHashSetAsync(cancellationToken);
+        var kitchenClosures = await KitchenClosureQueries.GetClosedDatesAsync(db, period.StartDate, period.EndDate, cancellationToken);
 
         var dailyMenus = await db.DailyMenus
             .Include(m => m.Variants.Where(v => v.RemovedAtUtc == null))
@@ -108,7 +109,7 @@ public sealed class PlacePeriodOrderHandler(
                 continue;
             }
 
-            if (!bulkWindow && !(supplementaryWindowOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, hasKitchenClosure: false)))
+            if (!bulkWindow && !(supplementaryWindowOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date))))
             {
                 skipped.Add(new DaySkip(date, period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed));
                 continue;

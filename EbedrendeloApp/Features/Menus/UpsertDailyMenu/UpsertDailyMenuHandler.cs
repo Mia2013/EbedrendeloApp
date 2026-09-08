@@ -26,7 +26,7 @@ public sealed class UpsertDailyMenuHandler(
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        if (await db.KitchenClosures.AnyAsync(k => k.Date == request.Date, cancellationToken))
+        if (await KitchenClosureQueries.IsClosedAsync(db, request.Date, cancellationToken))
         {
             return Result.Failure<int>(ErrorCodes.DayClosed, "A nap már le van zárva.");
         }

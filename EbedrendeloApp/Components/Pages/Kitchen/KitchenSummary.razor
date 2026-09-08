@@ -1,0 +1,293 @@
+@page "/konyhai-osszesito"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Features.Kitchen
+@using EbedrendeloApp.Features.Kitchen.GetKitchenClosure
+@using EbedrendeloApp.Features.Kitchen.GetKitchenSummary
+@using EbedrendeloApp.Features.Kitchen.GetKitchenSummaryRange
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Konyhai összesítő</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Konyhai összesítő</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Az adott nap élő rendelés-összesítője variánsonként — ez alapján tudja a konyha, mennyit kell
+                főznie. A nap lezárása rögzíti a végleges darabszámot: onnantól a 3 munkanapos szabálytól
+                függetlenül sem rendelni, sem lemondani nem lehet rá.
+            </MudText>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
+    <MudStack Row Spacing="2">
+        @foreach (var option in ViewModeOptions)
+        {
+            <MudChip T="string" Icon="@(option == "Napi" ? Icons.Material.Filled.Today : Icons.Material.Filled.DateRange)"
+                     Color="@(viewMode == option ? Color.Primary : Color.Default)"
+                     Variant="@(viewMode == option ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => SetViewModeAsync(option)">
+                @option
+            </MudChip>
+        }
+    </MudStack>
+
+    @if (viewMode == "Napi")
+    {
+        <DateNavigatorBar Label="@selectedDate.ToString("yyyy. MM. dd. (dddd)", HungarianCulture)" OnStep="ChangeDayAsync" />
+    }
+    else
+    {
+        <MudStack Row Spacing="3" AlignItems="AlignItems.End">
+            <MudDatePicker Label="Ettől" @bind-Date="fromDate" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:170px;" />
+            <MudDatePicker Label="Eddig" @bind-Date="toDate" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:170px;" />
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Primary" Variant="Variant.Filled" OnClick="LoadRangeAsync" title="Frissítés" />
+        </MudStack>
+    }
+</MudStack>
+
+@if (viewMode == "Napi")
+{
+    @if (summary is null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mt-4" />
+    }
+    else
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-4">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@(summary.IsClosed ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)"
+                             Color="@(summary.IsClosed ? Color.Error : Color.Success)" Size="Size.Large" />
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle1"><b>@(summary.IsClosed ? "Zárva" : "Nyitva")</b></MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @(summary.IsClosed
+                                ? "A rendelés és a lemondás nem lehetséges — a 3 munkanapos szabálytól függetlenül."
+                                : "Az adatok élőben frissülnek — a rendelés és a lemondás még engedélyezett erre a napra.")
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+
+                @if (summary.IsClosed)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.LockOpen" OnClick="ReopenDayAsync">
+                        Nap újranyitása
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Lock" OnClick="CloseDayAsync">
+                        Nap lezárása
+                    </MudButton>
+                }
+            </MudStack>
+        </MudPaper>
+
+        @if (closure is not null)
+        {
+            <MudStack Spacing="1" Class="mb-4">
+                <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mud-text-secondary" />
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Lezárta: <b>@closure.ClosedByUserName</b> — @closure.ClosedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")
+                    </MudText>
+                </MudStack>
+                @if (closure.ReopenedAtUtc is { } reopenedAtUtc)
+                {
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.LockOpen" Size="Size.Small" Class="mud-text-secondary" />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            Újranyitva: <b>@closure.ReopenedByUserName</b> — @reopenedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")
+                        </MudText>
+                    </MudStack>
+                }
+            </MudStack>
+        }
+
+        <MudTable Items="summary.Lines" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>Variáns</MudTh>
+                <MudTh>Menü</MudTh>
+                <MudTh Style="text-align:right;">Adag</MudTh>
+            </HeaderContent>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Erre a napra nincs aktív rendelés.</MudText>
+            </NoRecordsContent>
+            <RowTemplate>
+                <MudTd DataLabel="Variáns"><b>@context.VariantCode</b></MudTd>
+                <MudTd DataLabel="Menü">@context.VariantName</MudTd>
+                <MudTd DataLabel="Adag" Style="text-align:right;">@HungarianNumberFormat.Number(context.Quantity)</MudTd>
+            </RowTemplate>
+            <FooterContent>
+                <MudTd><b>Összesen</b></MudTd>
+                <MudTd />
+                <MudTd Style="text-align:right;"><b>@HungarianNumberFormat.Number(summary.TotalPortions)</b></MudTd>
+            </FooterContent>
+        </MudTable>
+
+        @if (summary.IsClosed)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                Ez a záráskori végleges darabszám — további rendelés már nem módosítja.
+            </MudText>
+        }
+        else if (closure is not null)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                Élő darabszám — a korábbi zárás pillanatképe @HungarianNumberFormat.Number(closure.TotalPortions) adag volt.
+            </MudText>
+        }
+    }
+}
+else
+{
+    @if (rangeSummaries is null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mt-4" />
+    }
+    else
+    {
+        <MudTable Items="rangeSummaries" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>Dátum</MudTh>
+                <MudTh>Bontás</MudTh>
+                <MudTh Style="text-align:right;">Összesen</MudTh>
+                <MudTh>Állapot</MudTh>
+            </HeaderContent>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">A megadott időszakban nincs rendelés.</MudText>
+            </NoRecordsContent>
+            <RowTemplate>
+                <MudTd DataLabel="Dátum">@context.Date.ToString("MM.dd. (ddd)", HungarianCulture)</MudTd>
+                <MudTd DataLabel="Bontás" Class="mud-text-secondary">@string.Join(" · ", context.Lines.Select(l => $"{l.VariantCode}: {l.Quantity}"))</MudTd>
+                <MudTd DataLabel="Összesen" Style="text-align:right;">@HungarianNumberFormat.Number(context.TotalPortions)</MudTd>
+                <MudTd DataLabel="Állapot">
+                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@(context.IsClosed ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)"
+                                 Color="@(context.IsClosed ? Color.Error : Color.Success)" Size="Size.Small" />
+                        <MudText Typo="Typo.body2">@(context.IsClosed ? "Zárva" : "Nyitva")</MudText>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo HungarianCulture = new("hu-HU");
+    private static readonly string[] ViewModeOptions = ["Napi", "Időszaki"];
+
+    private string viewMode = "Napi";
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateTime? fromDate = DateTime.Today.AddDays(-6);
+    private DateTime? toDate = DateTime.Today;
+
+    private KitchenSummaryDto? summary;
+    private KitchenClosureDto? closure;
+    private IReadOnlyList<KitchenSummaryDto>? rangeSummaries;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        await LoadDayAsync();
+    }
+
+    private async Task LoadDayAsync()
+    {
+        summary = null;
+        closure = null;
+        StateHasChanged();
+
+        summary = await Mediator.Send(new GetKitchenSummaryQuery(selectedDate));
+        closure = await Mediator.Send(new GetKitchenClosureQuery(selectedDate));
+    }
+
+    private async Task LoadRangeAsync()
+    {
+        if (fromDate is null || toDate is null)
+        {
+            return;
+        }
+
+        rangeSummaries = null;
+        StateHasChanged();
+
+        rangeSummaries = await Mediator.Send(new GetKitchenSummaryRangeQuery(DateOnly.FromDateTime(fromDate.Value), DateOnly.FromDateTime(toDate.Value)));
+    }
+
+    private async Task SetViewModeAsync(string mode)
+    {
+        viewMode = mode;
+        if (mode == "Napi")
+        {
+            await LoadDayAsync();
+        }
+        else
+        {
+            await LoadRangeAsync();
+        }
+    }
+
+    private async Task ChangeDayAsync(int deltaDays)
+    {
+        selectedDate = selectedDate.AddDays(deltaDays);
+        await LoadDayAsync();
+    }
+
+    private static readonly DialogOptions DialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task CloseDayAsync()
+    {
+        if (summary is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<CloseDayDialog> { { x => x.Date, selectedDate }, { x => x.Summary, summary } };
+        var dialogRef = await DialogService.ShowAsync<CloseDayDialog>("Nap lezárása", parameters, DialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("A nap lezárva.", Severity.Success);
+            await LoadDayAsync();
+        }
+    }
+
+    private async Task ReopenDayAsync()
+    {
+        if (closure is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<ReopenDayDialog> { { x => x.Date, selectedDate }, { x => x.Closure, closure } };
+        var dialogRef = await DialogService.ShowAsync<ReopenDayDialog>("Nap újranyitása", parameters, DialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("A nap újranyitva.", Severity.Success);
+            await LoadDayAsync();
+        }
+    }
+}
