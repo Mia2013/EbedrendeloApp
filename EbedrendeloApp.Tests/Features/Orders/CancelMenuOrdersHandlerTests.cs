@@ -251,4 +251,17 @@ public class CancelMenuOrdersHandlerTests : IDisposable
         Assert.Equal(Tue, skip.Date);
         Assert.Equal(ErrorCodes.DeadlinePassed, skip.Reason);
     }
+
+    [Fact]
+    public async Task Succeeds_with_empty_results_when_no_dates_are_given()
+    {
+        await SeedAsync();
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
+
+        var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, []), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+    }
 }

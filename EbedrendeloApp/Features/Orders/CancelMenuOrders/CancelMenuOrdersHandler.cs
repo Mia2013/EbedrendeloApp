@@ -21,6 +21,10 @@ public sealed class CancelMenuOrdersHandler(
     public async Task<Result<BatchOrderResult>> Handle(CancelMenuOrdersCommand request, CancellationToken cancellationToken)
     {
         var dates = request.Dates.Distinct().ToList();
+        if (dates.Count == 0)
+        {
+            return Result.Success(new BatchOrderResult([], []));
+        }
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
