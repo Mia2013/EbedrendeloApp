@@ -8,6 +8,6 @@ public sealed record PlacePeriodOrderCommand(
     int TargetUserId,
     int PlacedByUserId,
     int OrderingPeriodId,
-    IReadOnlyList<DayOrderRequest> Days) : IRequest<Result<BatchOrderResult>>, IActsOnBehalfOf;
+    IReadOnlyList<DayOrderRequest> Days) : IRequest<Result<BatchOrderResult>>, IAuditedOnBehalfOf;
 
 public sealed record DayOrderRequest(DateOnly Date, string VariantCode);

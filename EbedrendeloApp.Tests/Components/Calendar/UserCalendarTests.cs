@@ -2,6 +2,7 @@ using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Calendar;
+using EbedrendeloApp.Components.Shared;
 using EbedrendeloApp.Features.Billing.GetMyBalance;
 using EbedrendeloApp.Features.Calendar;
 using EbedrendeloApp.Features.Calendar.GetOrderableDays;
@@ -27,8 +28,8 @@ public class UserCalendarTests : MudBunitContext
 
     private readonly FakeMediator mediator = new();
 
-    // Más nevében rendelni csak admin tud, ezért a fixture felhasználója admin — így a „kinek rendelek"
-    // választót érintő tesztek egyáltalán találnak választót. A dolgozói eset külön tesztben.
+    // A fixture felhasználója admin (neki autocomplete jut a kolléga-választóban); a dolgozói,
+    // rejtett változatot külön teszt fedi.
     private readonly FakeCurrentUser currentUser = new(1, "Teszt Admin", isAdmin: true);
 
     public UserCalendarTests()
@@ -143,30 +144,45 @@ public class UserCalendarTests : MudBunitContext
         Assert.Equal("A", sentCommand.Days.Single().VariantCode);
     }
 
-    [Fact]
-    public void Shows_a_target_user_picker_defaulting_to_myself()
+    private static readonly UserOptionDto Colleague = new(2, "kanna", 2, "Kovács Anna", "User", "Gyártás", "Logisztika");
+
+    /// <summary>A kolléga kiválasztása a <c>ColleaguePicker</c> dolga; itt a `UserCalendar` bekötését
+    /// teszteljük, ezért a gyerekkomponens visszahívását váltjuk ki közvetlenül.</summary>
+    private static async Task PickColleagueAsync(IRenderedComponent<UserCalendar> cut, UserOptionDto colleague)
     {
-        // A MudSelect le nem nyitott állapotban csak a kiválasztott elemet rendereli a DOM-ba — a
-        // kollégalista tartalmát a lenti két teszt bizonyítja funkcionálisan (ValueChanged-en keresztül).
-        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
-
-        var cut = Render<UserCalendar>();
-
-        Assert.Contains("Kinek rendelek", cut.Markup);
-        Assert.Contains("Magamnak", cut.Markup);
+        var picker = cut.FindComponent<ColleaguePicker>();
+        await cut.InvokeAsync(() => picker.Instance.SelectedChanged.InvokeAsync(colleague));
     }
 
     [Fact]
-    public void Hides_the_target_user_picker_from_a_non_admin()
+    public void Starts_on_my_own_calendar_without_advertising_the_colleague_feature()
     {
-        // Más nevében rendelni csak admin tud; a szerveroldali kaput az IActsOnBehalfOf +
-        // AuthorizationBehavior adja, ez itt a felület oldala ugyanannak.
+        // A dolgozónak a más nevében rendelést NEM kínáljuk fel: felirat nélküli, semleges ikon van
+        // csak, ami magától nem hívja fel rá a figyelmet.
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(2, "Teszt Dolgozó", isAdmin: false));
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
 
         var cut = Render<UserCalendar>();
 
+        Assert.DoesNotContain("Rendelés kolléga nevében", cut.Markup);
         Assert.DoesNotContain("Kinek rendelek", cut.Markup);
+        Assert.DoesNotContain("Másik dolgozó naptára", cut.Markup);
+        Assert.DoesNotContain("az ő rendelése lesz", cut.Markup);
+        Assert.NotNull(cut.FindComponent<ColleaguePicker>());
+    }
+
+    [Fact]
+    public void Picking_a_colleague_switches_the_calendar_to_theirs_visibly()
+    {
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+        Assert.DoesNotContain("az ő rendelése lesz", cut.Markup);
+
+        PickColleagueAsync(cut, Colleague).GetAwaiter().GetResult();
+
+        Assert.Contains("Kovács Anna", cut.Markup);
+        Assert.Contains("az ő rendelése lesz", cut.Markup);
     }
 
     [Fact]
@@ -191,8 +207,7 @@ public class UserCalendarTests : MudBunitContext
         Render<MudDialogProvider>();
         var cut = Render<UserCalendar>();
 
-        var targetSelect = cut.FindComponents<MudSelect<int?>>().Single(s => s.Instance.Label == "Kinek rendelek");
-        await cut.InvokeAsync(() => targetSelect.Instance.ValueChanged.InvokeAsync(2));
+        await PickColleagueAsync(cut, Colleague);
 
         var checkbox = cut.Find("input[type=checkbox]:not([disabled])");
         checkbox.Change(true);
@@ -218,11 +233,10 @@ public class UserCalendarTests : MudBunitContext
         var cut = Render<UserCalendar>();
         Assert.Equal(1, requestedUserId);
 
-        var targetSelect = cut.FindComponents<MudSelect<int?>>().Single(s => s.Instance.Label == "Kinek rendelek");
-        await cut.InvokeAsync(() => targetSelect.Instance.ValueChanged.InvokeAsync(2));
+        await PickColleagueAsync(cut, Colleague);
 
         Assert.Equal(2, requestedUserId);
-        Assert.Contains("Kovács Anna nevében", cut.Markup);
+        Assert.Contains("Kovács Anna", cut.Markup);
     }
 
     [Fact]
@@ -396,8 +410,7 @@ public class UserCalendarTests : MudBunitContext
         Render<MudDialogProvider>();
         var cut = Render<UserCalendar>();
 
-        var targetSelect = cut.FindComponents<MudSelect<int?>>().Single(s => s.Instance.Label == "Kinek rendelek");
-        await cut.InvokeAsync(() => targetSelect.Instance.ValueChanged.InvokeAsync(2));
+        await PickColleagueAsync(cut, Colleague);
 
         var toggleButton = cut.Find("button[title='Lemondásra jelölés']");
         toggleButton.Click();

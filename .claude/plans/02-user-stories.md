@@ -260,7 +260,8 @@ Azért, hogy egyszerűen biztosítsam az ebédet az egész időszakra vagy a pó
 * **AC 3.1.3 (Részleges siker és kötegelés):** A leadott dátumlista feldolgozása nem "mindent vagy semmit" alapon működik. A sikeres napok egy tranzakcióban mentődnek (`Succeeded`), az elutasított napok pedig pontos hibakóddal a `Skipped` listába kerülnek.
 * **AC 3.1.4 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a művelet nem jelezhető tisztán sikeresnek a felületen; a kimaradt napokat és az okokat kötelező megjeleníteni.
 * **AC 3.1.5 (Napi 1 adag limit):** Egy felhasználónak egy napra legfeljebb 1 aktív menürendelése lehet (szűrt unique index `(UserId, Date) WHERE Status = 0`).
-* **AC 3.1.6 (Más nevében rendelés):** Rendelés leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`).
+* **AC 3.1.6 (Más nevében rendelés):** Rendelés leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`). A címzettet **azonosítani kell**: a dolgozó a nevével + igazgatóságával + osztályával keresi meg (`ResolveColleagueQuery`), és csak **pontos egyezésre** kap találatot — nincs böngészhető névsor, nincs részleges keresés, és a sikertelen keresés egyetlen semleges üzenetet ad, ami nem árulja el, melyik mező volt hibás. Az adminisztrátor — akinek amúgy is joga van a teljes névsorhoz (AC 9.4.1) — autocomplete-et kap helyette.
+* **AC 3.1.7 (A funkció nincs felkínálva):** A más nevében rendelés a dolgozói felületen **nem kiemelt funkció**: nincs rá hívogató felirat, csak egy visszafogott, felirat nélküli ikon, és az azonosító űrlap addig meg sem jelenik a DOM-ban, amíg valaki rá nem nyit. Ha van kiválasztott kolléga, a naptár **láthatóan az övére vált** (kerettel és a nevét tartalmazó felirattal), hogy egy pillanatra se lehessen összetéveszteni a sajátunkkal.
 * **AC 3.1.7 (Időszakhoz kötés):** Minden rendelt dátumnak az időszak `[StartDate, EndDate]` tartományába kell esnie (`OutsidePeriod` egyébként), és a létrejövő rendelésre rákerül az `OrderingPeriodId` — így a későbbi határmódosítás nem sodorja át a rendelést másik számlára.
 
 **Technikai hivatkozás:** `PlacePeriodOrderCommand`, `Result<BatchOrderResult>`, `GetOrderableDaysQuery`
@@ -641,7 +642,7 @@ Azért, hogy egy dolgozó ne tudjon menüt szerkeszteni, napot kizárni vagy sz�
 
 **Elfogadási Kritériumok:**
 * **AC 9.2.1 (Policy):** Az `[A]` jelölésű use case-eket az `"Admin"` policy védi; `User` szerepkörrel a hívás elutasításra kerül.
-* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) adja, nem a jogosultság.
+* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) és a címzett azonosítási kötelezettsége adja, nem a jogosultság. A kódban ezt az `IAuditedOnBehalfOf` jelölő teszi láthatóvá: a `PlacePeriodOrderCommand`, `CancelMenuOrdersCommand`, `GetOrderableDaysQuery` és `GetMyPeriodOrderQuery` szándékosan nyitva marad. Ez **nem** vonatkozik a pénzügyi lekérdezésekre: az egyenleg, a jóváírás-történet és a számlák (`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `GetMyInvoicesQuery`) idegen felhasználóra továbbra is admin-jogot kívánnak (`IActsOnBehalfOf`), mert azok nem kellenek a rendelés leadásához.
 * **AC 9.2.3 (Saját adat hatóköre):** A `[U]` jelölésű lekérdezések (egyenleg, ledger, saját rendelések, saját számlák, értesítések) mindig a bejelentkezett felhasználó adatait adják vissza, más felhasználóét nem.
 
 **Technikai hivatkozás:** `AddAuthorizationBuilder()`, `"Admin"` policy, `ICurrentUser`
@@ -671,7 +672,7 @@ Azért, hogy legyen kit kiválasztani a felhasználóváltóban és a más nevé
 **Elfogadási Kritériumok:**
 * **AC 9.4.1 (Lista):** A felhasználók névvel (`VezetekNev`, `KeresztNev`), `UserName`-mel, céges `UserId`-vel és szerepkörrel kérhetők le, névsor szerint rendezve.
 * **AC 9.4.2 (Egyedi lekérdezés):** Egy felhasználó azonosító és `UserName` alapján is lekérdezhető.
-* **AC 9.4.3 (Felhasználásai):** Ugyanez a lista szolgálja ki a dev felhasználóváltót (US-9.1) és a más nevében rendelés címzett-választóját (AC 3.1.6).
+* **AC 9.4.3 (Felhasználásai):** Ugyanez a lista szolgálja ki a dev felhasználóváltót (US-9.1), a kézi jóváírás címzett-választóját (US-5.2) és a más nevében rendelés **adminisztrátori** autocomplete-jét (AC 3.1.6). A dolgozó ezt a listát **nem** kapja meg (a `GetUsersQuery` admin-jogot kíván) — ő a `ResolveColleagueQuery`-vel, pontos név + igazgatóság + osztály hármassal azonosítja a kollégát, hogy ne lehessen végiglapozni a névsort.
 
 **Technikai hivatkozás:** `GetUsersQuery`, `GetUserByIdQuery`, `GetUserByUserNameQuery`
 

@@ -6,10 +6,7 @@ using MediatR;
 namespace EbedrendeloApp.Features.Orders.GetMyPeriodOrder;
 
 public sealed record GetMyPeriodOrderQuery(int UserId, int OrderingPeriodId)
-    : IRequest<Result<IReadOnlyList<MyPeriodOrderDto>>>, IActsOnBehalfOf
-{
-    int IActsOnBehalfOf.TargetUserId => UserId;
-}
+    : IRequest<Result<IReadOnlyList<MyPeriodOrderDto>>>, IAuditedOnBehalfOf;
 
 public sealed record MyPeriodOrderDto(
     DateOnly Date,

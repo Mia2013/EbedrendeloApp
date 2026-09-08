@@ -24,7 +24,7 @@ jön — a sablonoldalak (`Counter`, `Weather`, `Home`) csak akkor törlődnek.
 | Rendelési időszak | **Nem naptári hónap**, hanem az admin által megnyitott `[StartDate, EndDate]` tartomány (pl. aug. 5. – szept. 5.). Átfedés tilos, rés megengedett |
 | Rendelési ablak | **Kétfázisú**: az `OrderDeadline`-ig bármely időszaki napra; utána a 3 munkanapos szabály szerintiekre, akár egyszerre az összesre. Több nap egy hívásban, részleges sikerrel |
 | Értesítés | **In-app értesítés tábla** |
-| Más nevében rendelés | **Bárki bárki nevében**, de naplózzuk, ki adta le (`PlacedByUserId`) |
+| Más nevében rendelés | **Bárki bárki nevében**, de a címzettet azonosítani kell (név + igazgatóság + osztály, pontos egyezés), és naplózzuk, ki adta le (`PlacedByUserId`) |
 | Jóváírás | **Egyenleg-könyvelés (ledger)**, azonnal felhasználható egyenlegként, automatikus beszámítás |
 | Jóváírás hatóköre | **Csak menürendelésre számítható be** — a menü és a la carte pénzügy nem keveredik |
 | Lemondás időhorizontja | **Aznapi lemondás nincs** — sem menüre, sem a la carte-ra |
@@ -664,11 +664,14 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 > Ha ez a lista változik, a mátrixot is frissíteni kell.
 
 ### Users
-- `GetUsersQuery` **[A/U]** — felhasználólista (admin nézet és a dev váltó); a valós implementáció
-  (`Features/Users/GetUsers/`) a Billing kézi jóváírás autocomplete-jéhez készült el elsőként, két extra
-  mezővel (`Igazgatosag`, `Osztaly`) a névsor-egyértelműsítéshez — a dev váltó (`StubCurrentUser`) és a
-  "más nevében rendelek" választó (`UserCalendar.razor`, `colleagues`) egyelőre saját, korábbi
-  implementációt használ, nincs átvezetve erre.
+- `GetUsersQuery` **[A]** — a teljes felhasználólista, két extra mezővel (`Igazgatosag`, `Osztaly`) a
+  névsor-egyértelműsítéshez. **Admin-only**, szándékosan: a dolgozónak nem szabad végiglapozhatnia a
+  névsort (lásd `ResolveColleagueQuery`). Kiszolgálja a kézi jóváírás és a más nevében rendelés
+  *adminisztrátori* autocomplete-jét.
+- `ResolveColleagueQuery(Name, Igazgatosag, Osztaly)` **[A/U]** — egyetlen kolléga azonosítása a hármas
+  **pontos** egyezésével, a más nevében rendeléshez (AC 3.1.6). Nincs részleges keresés és nincs
+  listázás; a nem-találat egyetlen semleges üzenetet ad, hogy mezőnként ne lehessen kitalálni a
+  hármast. Kettőnél több vagy nulla találat egyaránt elutasítás — névazonos kollégáknál sem tippelünk.
 - `GetUserByIdQuery`, `GetUserByUserNameQuery` **[A/U]**
 
 ### Calendar

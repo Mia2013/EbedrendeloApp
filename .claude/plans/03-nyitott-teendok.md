@@ -19,8 +19,12 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       (`ValidationBehavior` ELŐTT fut), `IRequireAdmin` és `IActsOnBehalfOf` jelölőkkel; 32 admin és
       10 saját-adat use case megjelölve. A `UseCaseAuthorizationCoverageTests` architektúra-teszt
       elbukik, ha új use case jelöletlenül csúszik be, így a védelem nem tud csendben lyukassá válni.
-- [x] **Idegen nevében végzett műveletek** — a `TargetUserId` ellenőrzött, idegen id csak adminnak;
-      a `/naptar` „Kinek rendelek" választója szintén csak adminnak jelenik meg.
+- [x] **Idegen nevében végzett műveletek** — a `TargetUserId` ellenőrzött, idegen id csak adminnak.
+      **Kivéve a menürendelést**: az AC 3.1.6/9.2.2 szerint bárki rendelhet bárki nevében, ezt először
+      tévesen adminhoz kötöttem. Javítva: a rendelés/lemondás/naptár az `IAuditedOnBehalfOf` jelölőt
+      viseli (nyitva marad, a védelem az audit + a címzett azonosítása), a pénzügyi lekérdezések
+      viszont `IActsOnBehalfOf`-fal admin-jogot kívánnak idegen felhasználóra. A
+      `UseCaseAuthorizationCoverageTests` külön teszttel őrzi, hogy ez a négy use case nyitva maradjon.
 - [x] **`IDevUserSwitcher` kivezetése** — a `UserCalendar` és az `AdminOrders` a rendes
       `GetUsersQuery`-t használja; a `Home` dev-kártyája `IsDevelopment()` mögé került.
 - [x] **Naplózás** — a két behavior és a pénzmozgató handlerek (`GeneratePeriodInvoices`,

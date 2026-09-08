@@ -30,27 +30,11 @@
         {
             <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
         }
-        @* Más nevében rendelni csak admin tud — a szerveroldali kaput az IActsOnBehalfOf
-           jelölő + AuthorizationBehavior adja, ez itt csak a felület kényelme. *@
-        @if (CurrentUser.IsAdmin)
-        {
-            <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
-                       Class="panel-narrow-surface">
-                <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
-                @foreach (var colleague in colleagues)
-                {
-                    <MudSelectItem Value="@((int?)colleague.Id)">@colleague.DisplayName</MudSelectItem>
-                }
-            </MudSelect>
-        }
+        @* Más nevében rendelni bárki tud (AC 3.1.6/9.2.2) — a dolgozónak viszont azonosítania kell a
+           kollégát név + igazgatóság + osztály hármassal, lásd ColleaguePicker. *@
+        <ColleaguePicker Selected="targetUser" SelectedChanged="OnTargetUserSelectedAsync" />
     </Filters>
     <ChildContent>
-        @if (targetUserId is not null)
-        {
-            <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
-                @colleagues.First(c => c.Id == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
-            </MudAlert>
-        }
 
         @if (myBalanceHuf is > 0)
         {
@@ -90,14 +74,40 @@ else if (SelectedPeriod is { } period)
         </MudStack>
     </MudStack>
 
-    <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today" Class="mt-4">
-        <CellContent Context="date">
-            @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
-            {
-                @DayCell(cell)
-            }
-        </CellContent>
-    </WeekGrid>
+    @* Kolléga nevében rendeléskor a naptár láthatóan az övére vált: kerettel és névvel ellátott
+       felirat-sávval, hogy egy pillanatra se lehessen összekeverni a sajátunkkal. *@
+    @if (targetUser is { } target)
+    {
+        <MudPaper Elevation="0" Class="border-2 border-solid mud-border-secondary rounded-lg pa-3 mt-4">
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Secondary" />
+                <MudText Typo="Typo.subtitle1"><b>@target.DisplayName</b> naptára</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Amit itt leadsz vagy lemondasz, az az ő rendelése lesz — a rendszer rögzíti, hogy te intézted.
+                </MudText>
+            </MudStack>
+
+            <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today">
+                <CellContent Context="date">
+                    @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
+                    {
+                        @DayCell(cell)
+                    }
+                </CellContent>
+            </WeekGrid>
+        </MudPaper>
+    }
+    else
+    {
+        <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today" Class="mt-4">
+            <CellContent Context="date">
+                @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
+                {
+                    @DayCell(cell)
+                }
+            </CellContent>
+        </WeekGrid>
+    }
 
     @* A két összesítő sáv szándékosan a rács UTÁN, nem előtte jelenik meg — így egy pipálás nem tolja
        lejjebb a rácsot (ahol épp kattintott a felhasználó), csak a rács alatti terület nő. *@
@@ -233,8 +243,7 @@ else if (SelectedPeriod is { } period)
 
     private List<OrderingPeriodDto> periods = [];
     private int selectedPeriodId;
-    private IReadOnlyList<UserOptionDto> colleagues = [];
-    private int? targetUserId;
+    private UserOptionDto? targetUser;
     private int? myBalanceHuf;
     private List<OrderDayCell>? days;
     private readonly Dictionary<DateOnly, string> pendingSelections = [];
@@ -244,7 +253,7 @@ else if (SelectedPeriod is { } period)
     private bool isSubmittingCancellations;
     private int menuPortionHuf;
 
-    private int EffectiveTargetUserId => targetUserId ?? CurrentUser.UserId;
+    private int EffectiveTargetUserId => targetUser?.Id ?? CurrentUser.UserId;
 
     private int PendingTotalHuf => pendingSelections.Count * menuPortionHuf;
 
@@ -252,13 +261,6 @@ else if (SelectedPeriod is { } period)
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        if (CurrentUser.IsAdmin)
-        {
-            var users = await Mediator.Send(new GetUsersQuery());
-            colleagues = users.IsSuccess
-                ? users.Value!.Where(u => u.Id != CurrentUser.UserId).ToList()
-                : [];
-        }
         myBalanceHuf = (await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId))).Value;
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
@@ -286,9 +288,9 @@ else if (SelectedPeriod is { } period)
         await LoadDaysAsync();
     }
 
-    private async Task OnTargetUserSelectedAsync(int? userId)
+    private async Task OnTargetUserSelectedAsync(UserOptionDto? colleague)
     {
-        targetUserId = userId;
+        targetUser = colleague;
         pendingSelections.Clear();
         pendingCancellations.Clear();
         days = null;

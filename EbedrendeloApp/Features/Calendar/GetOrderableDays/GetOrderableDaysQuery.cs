@@ -3,10 +3,12 @@ using MediatR;
 
 namespace EbedrendeloApp.Features.Calendar.GetOrderableDays;
 
-public sealed record GetOrderableDaysQuery(int OrderingPeriodId, int UserId) : IRequest<Common.Results.Result<IReadOnlyList<OrderableDayDto>>>, IActsOnBehalfOf
-{
-    int IActsOnBehalfOf.TargetUserId => UserId;
-}
+/// <summary>A kolléga nevében rendeléshez az ő naptárát is látni kell, ezért ez a lekérdezés is a
+/// „bárki bárkinek, auditálva" körbe tartozik (AC 3.1.6) — a címzettet előtte azonosítani kell
+/// (<c>ResolveColleagueQuery</c>). A pénzügyi lekérdezések (egyenleg, jóváírás-történet, számlák)
+/// ezzel szemben idegen felhasználóra továbbra is admin-jogot kívánnak.</summary>
+public sealed record GetOrderableDaysQuery(int OrderingPeriodId, int UserId)
+    : IRequest<Common.Results.Result<IReadOnlyList<OrderableDayDto>>>, IAuditedOnBehalfOf;
 
 public sealed record OrderableDayDto(
     DateOnly Date,

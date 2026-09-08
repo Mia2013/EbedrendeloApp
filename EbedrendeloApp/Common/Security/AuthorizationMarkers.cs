@@ -21,6 +21,18 @@ public interface IActsOnBehalfOf
 }
 
 /// <summary>
+/// Jelölő interfész: a kérés **szándékosan bárkinek engedett bárki nevében** — a védelmet az audit
+/// adja (`PlacedByUserId` / `CancelledByUserId`), nem a jogosultság. Ez a menürendelés dokumentált
+/// döntése (AC 3.1.6 és AC 9.2.2): a kollégának is le lehet adni a rendelését.
+///
+/// A „bárki bárkinek" nem jelent névsor-böngészést: a címzettet a dolgozónak azonosítania kell
+/// (név + igazgatóság + osztály, <c>ResolveColleagueQuery</c>), a felület nem kínál végiglapozható
+/// listát. Ez a jelölő tehát nem „nem gondoltunk rá", hanem „végiggondoltuk, és nyitva marad" —
+/// ezért van saját interfésze ahelyett, hogy a jelöletlenek közé csúszna.
+/// </summary>
+public interface IAuditedOnBehalfOf;
+
+/// <summary>
 /// Jogosultsági sértés. Szándékosan kivétel és nem <c>Result.Failure</c>: nem üzleti kimenet, amit a
 /// felületnek meg kellene jelenítenie, hanem hiba vagy visszaélés — ugyanaz az elv, mint a
 /// <c>ValidationBehavior</c>-nál (NFR-2). A <c>MainLayout</c> <c>ErrorBoundary</c>-ja kezeli.
