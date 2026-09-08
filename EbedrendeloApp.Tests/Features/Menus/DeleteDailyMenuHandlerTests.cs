@@ -170,6 +170,20 @@ public class DeleteDailyMenuHandlerTests : IDisposable
 
         var variant = await db.MenuVariants.SingleAsync(v => v.DailyMenuId == menuId);
 
+        // A rendelés már ki van számlázva — csak így jár jóváírás a menü törlésekor (lásd ICreditService).
+        var invoice = new PeriodInvoice
+        {
+            UserId = userId,
+            OrderingPeriodId = period.Id,
+            SequenceNumber = 1,
+            GrossHuf = 1400,
+            CreditAppliedHuf = 0,
+            PayableHuf = 1400,
+            GeneratedAtUtc = date.AddDays(-14).ToDateTime(new TimeOnly(9, 0)),
+        };
+        db.PeriodInvoices.Add(invoice);
+        await db.SaveChangesAsync();
+
         var order = new MenuOrder
         {
             UserId = userId,
@@ -179,6 +193,7 @@ public class DeleteDailyMenuHandlerTests : IDisposable
             PriceHuf = 1400,
             Status = OrderStatus.Active,
             PlacedByUserId = userId,
+            PeriodInvoiceId = invoice.Id,
         };
         db.MenuOrders.Add(order);
         await db.SaveChangesAsync();

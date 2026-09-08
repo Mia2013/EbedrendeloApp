@@ -23,8 +23,7 @@ public class AdminInvoicesTests : MudBunitContext
 
     private static readonly InvoiceDto Invoice = new(
         Id: 10, UserId: 5, UserDisplayName: "Nagy Béla", OrderingPeriodId: 1, PeriodName: "2026. szeptember",
-        MenuGrossHuf: 28000, ALaCarteGrossHuf: 4500, GrossHuf: 32500, CreditAppliedHuf: 3000,
-        MenuPayableHuf: 25000, ALaCartePayableHuf: 4500, PayableHuf: 29500,
+        SequenceNumber: 1, DayCount: 20, GrossHuf: 28000, CreditAppliedHuf: 3000, PayableHuf: 25000,
         IsPaid: false, PaidAtUtc: null, GeneratedAtUtc: new DateTime(2026, 9, 16, 9, 0, 0));
 
     public AdminInvoicesTests()
@@ -63,10 +62,8 @@ public class AdminInvoicesTests : MudBunitContext
 
         Assert.Contains("Nagy Béla", cut.Markup);
         Assert.Contains("28 000 Ft", cut.Markup);
-        Assert.Contains("4 500 Ft", cut.Markup);
         Assert.Contains("3 000 Ft", cut.Markup);
         Assert.Contains("25 000 Ft", cut.Markup);
-        Assert.Contains("29 500 Ft", cut.Markup);
         Assert.Contains("Fizetetlen", cut.Markup);
     }
 
@@ -121,7 +118,10 @@ public class AdminInvoicesTests : MudBunitContext
         mediator.Register<GeneratePeriodInvoicesCommand, Result<BatchInvoiceResult>>(cmd =>
         {
             sentCommand = cmd;
-            return Result.Success(new BatchInvoiceResult([new GeneratedInvoiceDto(10, 5, 28000, 0, 0, 28000, 0, 28000)], [3, 4]));
+            return Result.Success(new BatchInvoiceResult([
+                new GeneratedInvoiceDto(InvoiceId: 10, UserId: 5, SequenceNumber: 1, DayCount: 20, GrossHuf: 28000, CreditAppliedHuf: 0, PayableHuf: 28000),
+                new GeneratedInvoiceDto(InvoiceId: 11, UserId: 6, SequenceNumber: 2, DayCount: 2, GrossHuf: 2800, CreditAppliedHuf: 0, PayableHuf: 2800),
+            ]));
         });
         Services.AddSingleton<IMediator>(mediator);
 
@@ -137,8 +137,8 @@ public class AdminInvoicesTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(Period.Id, sentCommand!.OrderingPeriodId);
         Assert.Equal(7, sentCommand.GeneratedByUserId);
-        Assert.Contains("1 számla legenerálva", cut.Markup);
-        Assert.Contains("2 dolgozó kihagyva", cut.Markup);
+        Assert.Contains("2 számla legenerálva", cut.Markup);
+        Assert.Contains("1 kiegészítő számla", cut.Markup);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using EbedrendeloApp.Domain.Entities;
+using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Billing.GetInvoices;
 using EbedrendeloApp.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
@@ -31,18 +32,41 @@ public class GetInvoicesHandlerTests : IDisposable
         db.Users.AddRange(user1, user2);
         await db.SaveChangesAsync();
 
-        db.PeriodInvoices.AddRange(
-            new PeriodInvoice
+        var invoice1 = new PeriodInvoice
+        {
+            UserId = user1.Id, OrderingPeriodId = period1.Id, SequenceNumber = 1, GrossHuf = 1400,
+            CreditAppliedHuf = 0, PayableHuf = 1400, IsPaid = true,
+            GeneratedAtUtc = new DateTime(2026, 7, 20, 9, 0, 0),
+        };
+        var invoice2 = new PeriodInvoice
+        {
+            UserId = user2.Id, OrderingPeriodId = period2.Id, SequenceNumber = 1, GrossHuf = 2800,
+            CreditAppliedHuf = 300, PayableHuf = 2500, IsPaid = false,
+            GeneratedAtUtc = new DateTime(2026, 8, 20, 9, 0, 0),
+        };
+        db.PeriodInvoices.AddRange(invoice1, invoice2);
+
+        var dish = new MenuDish { Kind = MenuDishKind.Leves, Name = "Gulyásleves" };
+        db.MenuDishes.Add(dish);
+        await db.SaveChangesAsync();
+
+        var menu = new DailyMenu { Date = new DateOnly(2026, 9, 10), IsPublished = true };
+        menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Gulyásleves", SoupDishId = dish.Id, SortOrder = 0 });
+        db.DailyMenus.Add(menu);
+        await db.SaveChangesAsync();
+
+        // A napszám a számlához kötött rendelésekből jön — user2 számlája 2 napot fedez.
+        var variantId = menu.Variants[0].Id;
+        db.MenuOrders.AddRange(
+            new MenuOrder
             {
-                UserId = user1.Id, OrderingPeriodId = period1.Id, MenuGrossHuf = 1400, ALaCarteGrossHuf = 0, GrossHuf = 1400,
-                CreditAppliedHuf = 0, MenuPayableHuf = 1400, ALaCartePayableHuf = 0, PayableHuf = 1400, IsPaid = true,
-                GeneratedAtUtc = new DateTime(2026, 7, 20, 9, 0, 0),
+                UserId = user2.Id, Date = new DateOnly(2026, 9, 10), OrderingPeriodId = period2.Id, MenuVariantId = variantId,
+                PriceHuf = 1400, Status = OrderStatus.Active, PlacedByUserId = user2.Id, PeriodInvoiceId = invoice2.Id,
             },
-            new PeriodInvoice
+            new MenuOrder
             {
-                UserId = user2.Id, OrderingPeriodId = period2.Id, MenuGrossHuf = 2800, ALaCarteGrossHuf = 500, GrossHuf = 3300,
-                CreditAppliedHuf = 300, MenuPayableHuf = 2500, ALaCartePayableHuf = 500, PayableHuf = 3000, IsPaid = false,
-                GeneratedAtUtc = new DateTime(2026, 8, 20, 9, 0, 0),
+                UserId = user2.Id, Date = new DateOnly(2026, 9, 11), OrderingPeriodId = period2.Id, MenuVariantId = variantId,
+                PriceHuf = 1400, Status = OrderStatus.Active, PlacedByUserId = user2.Id, PeriodInvoiceId = invoice2.Id,
             });
         await db.SaveChangesAsync();
 
@@ -62,12 +86,11 @@ public class GetInvoicesHandlerTests : IDisposable
         Assert.Equal(user2Id, period2Invoice.UserId);
         Assert.Equal("Nagy Béla", period2Invoice.UserDisplayName);
         Assert.Equal("Szeptember", period2Invoice.PeriodName);
-        Assert.Equal(2800, period2Invoice.MenuGrossHuf);
-        Assert.Equal(500, period2Invoice.ALaCarteGrossHuf);
+        Assert.Equal(1, period2Invoice.SequenceNumber);
+        Assert.Equal(2, period2Invoice.DayCount);
+        Assert.Equal(2800, period2Invoice.GrossHuf);
         Assert.Equal(300, period2Invoice.CreditAppliedHuf);
-        Assert.Equal(2500, period2Invoice.MenuPayableHuf);
-        Assert.Equal(500, period2Invoice.ALaCartePayableHuf);
-        Assert.Equal(3000, period2Invoice.PayableHuf);
+        Assert.Equal(2500, period2Invoice.PayableHuf);
 
         var unpaidOnly = await sut.Handle(new GetInvoicesQuery(null, false), CancellationToken.None);
         Assert.Equal(user2Id, Assert.Single(unpaidOnly.Value!).UserId);

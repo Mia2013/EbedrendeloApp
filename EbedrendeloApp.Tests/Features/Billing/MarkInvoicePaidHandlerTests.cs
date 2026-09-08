@@ -45,12 +45,9 @@ public class MarkInvoicePaidHandlerTests : IDisposable
         {
             UserId = worker.Id,
             OrderingPeriodId = period.Id,
-            MenuGrossHuf = 1400,
-            ALaCarteGrossHuf = 0,
+            SequenceNumber = 1,
             GrossHuf = 1400,
             CreditAppliedHuf = 0,
-            MenuPayableHuf = 1400,
-            ALaCartePayableHuf = 0,
             PayableHuf = 1400,
             IsPaid = isPaid,
             PaidAtUtc = isPaid ? new DateTime(2026, 9, 1, 0, 0, 0) : null,

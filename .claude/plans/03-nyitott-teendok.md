@@ -9,6 +9,76 @@
 
 ---
 
+## Epic 1–7 átvilágítás (2026-09-08) — még nyitott tételek
+
+A teljes átvilágítás megállapításai; a Fázis 1 (számlázási modell + jóváírás-szabály) elkészült, az
+alábbiak maradtak.
+
+### Biztonság (Epic 9 előfeltétele)
+- [ ] **Nincs szerveroldali jogosultság-ellenőrzés.** 17 admin use case egyetlen védelme egy
+      kliens-oldali `if (!CurrentUser.IsAdmin) NavigationManager.NavigateTo(...)` az oldal
+      `OnInitializedAsync`-jében; a handlerek a `PerformedByUserId` / `GeneratedByUserId` paramétert
+      elhiszik. Megoldás: `AuthorizationBehavior` MediatR pipeline behavior `IRequireAdmin` markerrel,
+      a `ValidationBehavior` mintájára.
+- [ ] **Bárki rendelhet/lemondhat bárki nevében.** A `/naptar` „Kinek rendelek" választója minden
+      dolgozónak látszik (`UserCalendar.razor`), és a `TargetUserId` szerveroldalon ellenőrizetlen
+      (`PlacePeriodOrderCommand`, `CancelMenuOrdersCommand`). Ugyanez a saját-adat lekérdezéseknél:
+      `GetMyBalanceQuery`, `GetMyInvoicesQuery`, `GetMyPeriodOrderQuery`, `GetMyCreditLedgerQuery`.
+      Megoldás: `IActsOnBehalfOf` marker + ugyanaz a behavior; a választó csak adminnak jelenjen meg.
+- [ ] **`IDevUserSwitcher` (dev impersonation) 3 éles oldalon** — `Home`, `UserCalendar`,
+      `AdminOrders`. Van rendes `GetUsersQuery`, de azt csak a `ManualCreditDialog` használja.
+      A `Home` dev-kártyája kerüljön `IsDevelopment()` mögé.
+- [ ] **Nulla naplózás** — egyetlen `ILogger` sincs az appban. Legalább a behaviorok és a pénzmozgató
+      handlerek (`GeneratePeriodInvoices`, `MarkInvoicePaid`, `AddManualCredit`, `CancelMenuOrders`).
+
+### Hibatűrés
+- [ ] **Nincs `ErrorBoundary` sehol.** A `ValidationBehavior` szándékosan `ValidationException`-t dob
+      (NFR-2), és `DbUpdateException` is felszállhat — bármelyik ledönti a SignalR circuitot a natív
+      sárga „An unhandled error has occurred" sávra. Kell egy `ErrorBoundary` a `MainLayout`-ba.
+- [ ] **16 helyen `result.Value!`** ellenőrzés nélkül (`AdminInvoices`, `MyInvoices`, `MyBalance`,
+      `AdminBalances`, `UserCalendar`, `MyOrders`, `AdminOrders`, `DailyMenuEditor`,
+      `ManualCreditDialog`) — sikertelen `Result` esetén NRE.
+
+### UI egységesítés (a „szétesett" érzés konkrét okai)
+- [ ] **Az oldalfejléc 13× kimásolva** — lásd a lenti, régebbi „UI / komponensek" tételt is. Driftel:
+      `mb-4` van/nincs, `flex-grow-1` van/nincs, a szűrő hol a fejlécben, hol alatta.
+- [ ] **Ugyanaz a naptárrács 4× lemásolva** más BEM-prefixszel (`order-calendar`, `menu-calendar`,
+      `admin-orders-calendar`, `my-orders-calendar`) — azonos grid, cella, radius, shadow, 1279px
+      breakpoint, ~180 sor CSS; a `BuildWeeks()` hét-bontó logika szintén 4 példányban. Kell egy közös
+      `WeekGrid` komponens a meglévő `WeekdayHeaderRow` párjaként.
+- [ ] **Az időszak-választó 5 oldalon újraírva** (`UserCalendar`, `MyOrders`, `AdminOrders`,
+      `DailyMenuEditor`, `AdminInvoices`) — saját `periods` mező, saját betöltés, saját
+      `OnPeriodSelectedAsync`, eltérő `Margin`/`Class`. Kell egy `PeriodSelector`.
+- [ ] **Keverednek a visszajelzés-minták**: Snackbar (8 oldal), inline elutasítható `MudAlert`
+      (`AdminInvoices`), dialóguson belüli `errorMessage`, és néma elnyelés; a betöltésjelzés is
+      háromféle. Rögzítendő konvenció + közös üres/betöltés/hiba állapot-komponens.
+- [ ] **A `/` kezdőlap tartalma gyakorlatilag egy dev eszköz** — egy gomb + a felhasználóváltó kártya.
+      A dolgozónak nincs áttekintője (mai menü, egyenleg, fizetetlen számla).
+- [ ] **A sötét paletta halott** — `AppTheme.PaletteDark` definiálva, de a `MudThemeProvider` nincs
+      `IsDarkMode`-hoz kötve és nincs kapcsoló. Vagy kössük be, vagy töröljük.
+- [ ] 83 inline `Style="…"` (sűrűsödve `AdminInvoices`, `AdminALaCarteDailyOffer` körül), szemben a
+      „MudBlazor komponens a kézi CSS helyett" elvvel.
+
+### Hiányzó / halott funkciók
+- [ ] **`UserNotification`: 8 írási hely, 0 olvasási.** Minden értesítés a táblába megy, de nincs se
+      query, se UI — ez az Epic 8. Amíg nincs kész, a dolgozó soha nem tudja meg, hogy lemondták vagy
+      átvezették a rendelését.
+- [ ] **`AppSetting` szerkeszthetetlen** — adagár és a három határidő seedből jön, nincs admin felület,
+      az `UpdatedByUserId`/`UpdatedAtUtc` halott mező. Az érték ma csak SQL-ből módosítható.
+- [ ] **À la carte fizetés rögzítése** — a dolgozó aznap fizeti (AC 7.1.2), de a rendszer csak a
+      rendelést tárolja, a fizetést nem; nincs pénztár/kassza-modul, így az à la carte pénzügyileg nem
+      zárható le. Ha kell: fizetés-állapot az `ALaCarteOrder`-en + napi kassza-riport.
+
+### Konvenció-driftek
+- [ ] 6 command-nak nincs FluentValidation validátora, a validáció inline `if` a handlerben
+      (`CloseDay`, `ReopenDay`, `RemoveExcludedDay`, `SetALaCarteItemActive`, `RemoveDailyOffer`,
+      `CancelALaCarteOrderLine`).
+- [ ] A `Features/Billing` tesztmappa-konvenció kevert: `AddManualCredit/…` (use case almappa) vs.
+      `GeneratePeriodInvoicesHandlerTests.cs` (lapos).
+- [ ] A kommentnyelv hol magyar, hol angol, néha egy fájlon belül.
+
+---
+
 ## Rendelési időszak (Epic 1)
 
 - [ ] Új időszak felvételekor a kezdő dátum alapértelmezetten a legutolsó (meglévő) időszak

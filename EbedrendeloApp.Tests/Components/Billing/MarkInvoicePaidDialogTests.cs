@@ -16,8 +16,7 @@ public class MarkInvoicePaidDialogTests : MudBunitContext
 {
     private static readonly InvoiceDto Invoice = new(
         Id: 10, UserId: 5, UserDisplayName: "Nagy Béla", OrderingPeriodId: 1, PeriodName: "2026. szeptember",
-        MenuGrossHuf: 28000, ALaCarteGrossHuf: 4500, GrossHuf: 32500, CreditAppliedHuf: 3000,
-        MenuPayableHuf: 25000, ALaCartePayableHuf: 4500, PayableHuf: 29500,
+        SequenceNumber: 1, DayCount: 20, GrossHuf: 28000, CreditAppliedHuf: 3000, PayableHuf: 25000,
         IsPaid: false, PaidAtUtc: null, GeneratedAtUtc: new DateTime(2026, 9, 16, 9, 0, 0));
 
     public MarkInvoicePaidDialogTests()
@@ -40,7 +39,7 @@ public class MarkInvoicePaidDialogTests : MudBunitContext
 
         Assert.Contains("Nagy Béla", provider.Markup);
         Assert.Contains("2026. szeptember", provider.Markup);
-        Assert.Contains("29 500 Ft", provider.Markup);
+        Assert.Contains("25 000 Ft", provider.Markup);
     }
 
     [Fact]

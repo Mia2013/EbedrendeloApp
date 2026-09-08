@@ -14,13 +14,20 @@ public sealed class GetMyInvoicesHandler(IDbContextFactory<EbedrendeloDbContext>
 
         var invoices = await db.PeriodInvoices
             .Where(i => i.UserId == request.UserId)
-            .OrderByDescending(i => i.GeneratedAtUtc)
+            .OrderByDescending(i => i.GeneratedAtUtc).ThenByDescending(i => i.SequenceNumber)
             .ToListAsync(cancellationToken);
 
         var periodIds = invoices.Select(i => i.OrderingPeriodId).Distinct().ToList();
         var periods = await db.OrderingPeriods
             .Where(p => periodIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, cancellationToken);
+
+        var invoiceIds = invoices.Select(i => i.Id).ToList();
+        var dayCounts = await db.MenuOrders
+            .Where(o => o.PeriodInvoiceId != null && invoiceIds.Contains(o.PeriodInvoiceId!.Value))
+            .GroupBy(o => o.PeriodInvoiceId!.Value)
+            .Select(g => new { InvoiceId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.InvoiceId, x => x.Count, cancellationToken);
 
         var result = invoices
             .Select(i =>
@@ -32,12 +39,10 @@ public sealed class GetMyInvoicesHandler(IDbContextFactory<EbedrendeloDbContext>
                     period?.Name ?? "Ismeretlen időszak",
                     period?.StartDate ?? default,
                     period?.EndDate ?? default,
-                    i.MenuGrossHuf,
-                    i.ALaCarteGrossHuf,
+                    i.SequenceNumber,
+                    dayCounts.GetValueOrDefault(i.Id, 0),
                     i.GrossHuf,
                     i.CreditAppliedHuf,
-                    i.MenuPayableHuf,
-                    i.ALaCartePayableHuf,
                     i.PayableHuf,
                     i.IsPaid,
                     i.PaidAtUtc,

@@ -74,10 +74,30 @@ public class CancelMenuOrdersHandlerTests : IDisposable
         await db.SaveChangesAsync();
     }
 
-    private async Task<int> SeedActiveOrderAsync(DateOnly date)
+    /// <param name="invoiced">Ha igaz, a naphoz számla is készül és a rendelés arra hivatkozik — a
+    /// lemondás jóváírása csak ilyenkor jár (lásd ICreditService).</param>
+    private async Task<int> SeedActiveOrderAsync(DateOnly date, bool invoiced = false)
     {
         await using var db = dbFactory.CreateDbContext();
         var menu = await db.DailyMenus.Include(m => m.Variants).SingleAsync(m => m.Date == date);
+
+        int? invoiceId = null;
+        if (invoiced)
+        {
+            var invoice = new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = periodId,
+                SequenceNumber = 1,
+                GrossHuf = 1400,
+                CreditAppliedHuf = 0,
+                PayableHuf = 1400,
+                GeneratedAtUtc = new DateTime(2026, 8, 15, 9, 0, 0),
+            };
+            db.PeriodInvoices.Add(invoice);
+            await db.SaveChangesAsync();
+            invoiceId = invoice.Id;
+        }
 
         var order = new MenuOrder
         {
@@ -88,6 +108,7 @@ public class CancelMenuOrdersHandlerTests : IDisposable
             PriceHuf = 1400,
             Status = OrderStatus.Active,
             PlacedByUserId = userId,
+            PeriodInvoiceId = invoiceId,
         };
         db.MenuOrders.Add(order);
         await db.SaveChangesAsync();
@@ -95,10 +116,10 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancels_an_order_within_the_change_deadline_and_issues_credit()
+    public async Task Cancels_an_invoiced_order_within_the_change_deadline_and_issues_credit()
     {
         await SeedAsync();
-        var orderId = await SeedActiveOrderAsync(Thu);
+        var orderId = await SeedActiveOrderAsync(Thu, invoiced: true);
         var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0)); // Monday 09:00, deadline is 11:00
 
         var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
@@ -253,34 +274,48 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Rejects_cancellation_when_the_period_is_already_invoiced()
+    public async Task Cancelling_an_uninvoiced_order_succeeds_but_issues_no_credit()
     {
+        // Ki nem számlázott napért nem jár jóváírás: azt a dolgozó soha nem fizette ki, és a
+        // delta-számlázás eleve nem fogja rátenni egyetlen számlára sem. Jóváírás nélkül a lemondás
+        // önmagában elég — enélkül ingyen pénzt osztanánk.
         await SeedAsync();
-        await SeedActiveOrderAsync(Thu);
-        await using (var db = dbFactory.CreateDbContext())
-        {
-            db.PeriodInvoices.Add(new PeriodInvoice
-            {
-                UserId = userId,
-                OrderingPeriodId = periodId,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
-                GrossHuf = 1400,
-                CreditAppliedHuf = 0,
-                MenuPayableHuf = 1400,
-                ALaCartePayableHuf = 0,
-                PayableHuf = 1400,
-                GeneratedAtUtc = new DateTime(2026, 8, 15, 9, 0, 0),
-            });
-            await db.SaveChangesAsync();
-        }
+        var orderId = await SeedActiveOrderAsync(Thu);
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
 
-        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0)); // well within the deadline otherwise
         var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        var skip = Assert.Single(result.Value!.Skipped);
-        Assert.Equal(ErrorCodes.AlreadyInvoiced, skip.Reason);
+        Assert.Single(result.Value!.Succeeded);
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.Equal(OrderStatus.Cancelled, (await db.MenuOrders.SingleAsync(o => o.Id == orderId)).Status);
+        Assert.False(await db.CreditEntries.AnyAsync(c => c.SourceMenuOrderId == orderId));
+
+        // Az értesítés is a valóságot mondja: lemondva, de nincs mit jóváírni.
+        var notification = await db.UserNotifications.SingleAsync(n => n.RelatedMenuOrderId == orderId);
+        Assert.Equal(NotificationType.MenuCancelled, notification.Type);
+        Assert.Contains("nem volt kiszámlázva", notification.Message);
+    }
+
+    [Fact]
+    public async Task Cancelling_after_the_invoice_is_still_allowed()
+    {
+        // A számla kiállítása nem zárja le a hónapot: a 3 munkanapos szabályon belül továbbra is
+        // lemondható a nap (US-3.2), a keletkező jóváírás a következő időszak számláját csökkenti.
+        await SeedAsync();
+        var orderId = await SeedActiveOrderAsync(Thu, invoiced: true);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
+        var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+
+        await using var db = dbFactory.CreateDbContext();
+        var credit = await db.CreditEntries.SingleAsync(c => c.SourceMenuOrderId == orderId);
+        Assert.Equal(1400, credit.RemainingHuf);
     }
 
     [Fact]

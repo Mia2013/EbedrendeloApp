@@ -11,6 +11,7 @@ namespace EbedrendeloApp.Tests.Features.Billing;
 public class GeneratePeriodInvoicesHandlerTests : IDisposable
 {
     private static readonly DateOnly OrderDate = new(2026, 9, 10);
+    private static readonly DateOnly SecondOrderDate = new(2026, 9, 11);
 
     private readonly SqliteDbContextFactory dbFactory = new();
     private int periodId;
@@ -68,13 +69,13 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
         return user.Id;
     }
 
-    private async Task SeedMenuOrderAsync(int userId, int priceHuf)
+    private async Task SeedMenuOrderAsync(int userId, int priceHuf, DateOnly? date = null)
     {
         await using var db = dbFactory.CreateDbContext();
         db.MenuOrders.Add(new MenuOrder
         {
             UserId = userId,
-            Date = OrderDate,
+            Date = date ?? OrderDate,
             OrderingPeriodId = periodId,
             MenuVariantId = variantId,
             PriceHuf = priceHuf,
@@ -116,8 +117,53 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Generates_an_invoice_splitting_menu_and_alacarte_gross_amounts()
+    public async Task Generates_a_base_invoice_from_the_periods_menu_orders()
     {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+        await SeedMenuOrderAsync(userId, 1400, SecondOrderDate);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var invoice = Assert.Single(result.Value!.Generated);
+        Assert.Equal(1, invoice.SequenceNumber);
+        Assert.Equal(2, invoice.DayCount);
+        Assert.Equal(2800, invoice.GrossHuf);
+        Assert.Equal(0, invoice.CreditAppliedHuf);
+        Assert.Equal(2800, invoice.PayableHuf);
+
+        await using var db = dbFactory.CreateDbContext();
+        var persisted = await db.PeriodInvoices.SingleAsync(i => i.UserId == userId);
+        Assert.Equal(periodId, persisted.OrderingPeriodId);
+        Assert.Equal(2800, persisted.GrossHuf);
+        Assert.False(persisted.IsPaid);
+    }
+
+    [Fact]
+    public async Task Stamps_the_invoice_id_on_every_billed_order()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        var invoiceId = Assert.Single(result.Value!.Generated).InvoiceId;
+
+        await using var db = dbFactory.CreateDbContext();
+        var order = await db.MenuOrders.SingleAsync(o => o.UserId == userId);
+        Assert.Equal(invoiceId, order.PeriodInvoiceId);
+    }
+
+    [Fact]
+    public async Task Ignores_alacarte_orders_entirely()
+    {
+        // Az à la carte-ot a dolgozó aznap fizeti, nem az időszaki számlán — a számla csak a
+        // menürendelésekről szól, akkor is, ha az időszakhoz tartozik à la carte forgalom.
         await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
         var userId = await SeedUserAsync();
         await SeedMenuOrderAsync(userId, 1400);
@@ -126,45 +172,104 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
         var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
         var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
         var invoice = Assert.Single(result.Value!.Generated);
-        Assert.Equal(1400, invoice.MenuGrossHuf);
-        Assert.Equal(800, invoice.ALaCarteGrossHuf);
-        Assert.Equal(0, invoice.CreditAppliedHuf);
-        Assert.Equal(1400, invoice.MenuPayableHuf);
-        Assert.Equal(800, invoice.ALaCartePayableHuf);
-        Assert.Equal(2200, invoice.PayableHuf);
-        Assert.Empty(result.Value.SkippedAlreadyInvoicedUserIds);
-
-        await using var db = dbFactory.CreateDbContext();
-        var persisted = await db.PeriodInvoices.SingleAsync(i => i.UserId == userId);
-        Assert.Equal(periodId, persisted.OrderingPeriodId);
-        Assert.Equal(2200, persisted.GrossHuf);
-        Assert.False(persisted.IsPaid);
+        Assert.Equal(1400, invoice.GrossHuf);
+        Assert.Equal(1400, invoice.PayableHuf);
     }
 
     [Fact]
-    public async Task Applies_credit_only_to_the_menu_portion_never_the_alacarte_portion()
+    public async Task A_user_with_only_alacarte_orders_gets_no_invoice()
     {
         await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
         var userId = await SeedUserAsync();
-        await SeedMenuOrderAsync(userId, 1400);
-        await SeedALaCarteOrderAsync(userId, 1000);
-        await SeedCreditAsync(userId, 2000, new DateTime(2026, 8, 1, 8, 0, 0));
+        await SeedALaCarteOrderAsync(userId, 800);
 
         var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
         var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        var invoice = Assert.Single(result.Value!.Generated);
-        Assert.Equal(1400, invoice.CreditAppliedHuf); // capped at MenuGrossHuf, not the full 2000 available
-        Assert.Equal(0, invoice.MenuPayableHuf);
-        Assert.Equal(1000, invoice.ALaCartePayableHuf); // untouched by the credit
-        Assert.Equal(1000, invoice.PayableHuf);
+        Assert.Empty(result.Value!.Generated);
     }
 
     [Fact]
-    public async Task Leftover_credit_beyond_the_menu_gross_rolls_over_on_the_ledger()
+    public async Task Rerunning_bills_only_the_days_ordered_since_the_previous_invoice()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        // B-fázisú pótrendelés a számlázás után.
+        await SeedMenuOrderAsync(userId, 1400, SecondOrderDate);
+
+        var second = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        var supplementary = Assert.Single(second.Value!.Generated);
+        Assert.Equal(2, supplementary.SequenceNumber);
+        Assert.Equal(1, supplementary.DayCount);
+        Assert.Equal(1400, supplementary.GrossHuf); // csak az új nap, nem a teljes időszak újra
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.Equal(2, await db.PeriodInvoices.CountAsync(i => i.UserId == userId));
+    }
+
+    [Fact]
+    public async Task Rerunning_with_nothing_new_generates_no_invoice()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+        var second = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        Assert.True(second.IsSuccess);
+        Assert.Empty(second.Value!.Generated);
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.Equal(1, await db.PeriodInvoices.CountAsync(i => i.UserId == userId));
+    }
+
+    [Fact]
+    public async Task Bills_only_the_user_with_uninvoiced_days()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var earlyUserId = await SeedUserAsync();
+        var lateUserId = await SeedUserAsync();
+        await SeedMenuOrderAsync(earlyUserId, 1400);
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        await SeedMenuOrderAsync(lateUserId, 1400);
+        var second = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        var generated = Assert.Single(second.Value!.Generated);
+        Assert.Equal(lateUserId, generated.UserId);
+        Assert.Equal(1, generated.SequenceNumber); // neki ez az első számlája
+    }
+
+    [Fact]
+    public async Task Applies_credit_capped_at_the_invoices_gross()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+        await SeedCreditAsync(userId, 2000, new DateTime(2026, 8, 1, 8, 0, 0));
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        var invoice = Assert.Single(result.Value!.Generated);
+        Assert.Equal(1400, invoice.CreditAppliedHuf); // a 2000-ből csak a bruttóig, nem többet
+        Assert.Equal(0, invoice.PayableHuf);
+    }
+
+    [Fact]
+    public async Task Leftover_credit_beyond_the_gross_rolls_over_on_the_ledger()
     {
         await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
         var userId = await SeedUserAsync();
@@ -176,7 +281,7 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
 
         await using var db = dbFactory.CreateDbContext();
         var source = await db.CreditEntries.SingleAsync(c => c.Id == creditId);
-        Assert.Equal(600, source.RemainingHuf); // 2000 - 1400, stays on the ledger for the next period
+        Assert.Equal(600, source.RemainingHuf); // 2000 - 1400, a következő időszakra marad
 
         var applied = await db.CreditEntries.SingleAsync(c => c.Kind == CreditEntryKind.CreditApplied);
         Assert.Equal(-1400, applied.AmountHuf);
@@ -207,7 +312,7 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
         var userId = await SeedUserAsync();
         await SeedMenuOrderAsync(userId, 1400);
         var generationInstant = new DateTime(2026, 8, 20, 9, 0, 0);
-        await SeedCreditAsync(userId, 1400, generationInstant); // no EligibleFrom delay — same instant is fine
+        await SeedCreditAsync(userId, 1400, generationInstant); // nincs EligibleFrom késleltetés
 
         var sut = CreateHandler(generationInstant);
         var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
@@ -217,50 +322,13 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Skips_users_who_already_have_an_invoice_for_the_period()
-    {
-        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
-        var invoicedUserId = await SeedUserAsync();
-        var freshUserId = await SeedUserAsync();
-        await SeedMenuOrderAsync(invoicedUserId, 1400);
-        await SeedMenuOrderAsync(freshUserId, 1400);
-
-        await using (var db = dbFactory.CreateDbContext())
-        {
-            db.PeriodInvoices.Add(new PeriodInvoice
-            {
-                UserId = invoicedUserId,
-                OrderingPeriodId = periodId,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
-                GrossHuf = 1400,
-                CreditAppliedHuf = 0,
-                MenuPayableHuf = 1400,
-                ALaCartePayableHuf = 0,
-                PayableHuf = 1400,
-                GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
-            });
-            await db.SaveChangesAsync();
-        }
-
-        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
-        var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        var generated = Assert.Single(result.Value!.Generated);
-        Assert.Equal(freshUserId, generated.UserId);
-        var skipped = Assert.Single(result.Value.SkippedAlreadyInvoicedUserIds);
-        Assert.Equal(invoicedUserId, skipped);
-    }
-
-    [Fact]
     public async Task Rejects_generation_before_the_order_deadline_has_passed()
     {
         await SeedPeriodAsync(new DateTime(2026, 8, 25, 10, 0, 0));
         var userId = await SeedUserAsync();
         await SeedMenuOrderAsync(userId, 1400);
 
-        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0)); // before OrderDeadline
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0)); // a határidő előtt
         var result = await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
 
         Assert.False(result.IsSuccess);

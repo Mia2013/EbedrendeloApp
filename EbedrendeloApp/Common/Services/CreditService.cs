@@ -6,8 +6,14 @@ namespace EbedrendeloApp.Common.Services;
 
 public sealed class CreditService : ICreditService
 {
-    public CreditEntry IssueCancellationCredit(EbedrendeloDbContext db, MenuOrder order, int createdByUserId, DateTime nowUtc)
+    public CreditEntry? IssueCancellationCredit(EbedrendeloDbContext db, MenuOrder order, int createdByUserId, DateTime nowUtc)
     {
+        // Ki nem számlázott nap lemondásáért nincs jóváírás — lásd ICreditService.
+        if (order.PeriodInvoiceId is null)
+        {
+            return null;
+        }
+
         var entry = new CreditEntry
         {
             UserId = order.UserId,
@@ -58,9 +64,9 @@ public sealed class CreditService : ICreditService
     }
 
     public CreditApplicationResult ApplyCreditToInvoice(
-        EbedrendeloDbContext db, IReadOnlyList<CreditEntry> availableCreditsFifoOrdered, int menuGrossHuf, int createdByUserId, DateTime nowUtc)
+        EbedrendeloDbContext db, IReadOnlyList<CreditEntry> availableCreditsFifoOrdered, int grossHuf, int createdByUserId, DateTime nowUtc)
     {
-        var remaining = menuGrossHuf;
+        var remaining = grossHuf;
         var applied = new List<CreditEntry>();
 
         foreach (var source in availableCreditsFifoOrdered)

@@ -19,9 +19,9 @@
         <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Számlák</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                A számla a rendelési időszak tömeges leadási határidejének leteltével generálható; a felhalmozott
-                jóváírás kizárólag a menütételek bruttó összegéből vonható le, az à la carte tételek mindig teljes
-                egészében fizetendők.
+                A számla a rendelési időszak tömeges leadási határidejének leteltével generálható, és csak a
+                menürendeléseket tartalmazza — az à la carte tételeket a dolgozó aznap fizeti. Újrafuttatva csak
+                az azóta leadott napokról készít kiegészítő számlát, a korábban kiszámlázottakat nem érinti.
             </MudText>
         </MudStack>
 
@@ -75,12 +75,10 @@
     <HeaderContent>
         <MudTh>Dolgozó</MudTh>
         <MudTh>Időszak</MudTh>
-        <MudTh Style="text-align:right">Bruttó menü</MudTh>
-        <MudTh Style="text-align:right">Bruttó à la carte</MudTh>
+        <MudTh Style="text-align:right">Napok</MudTh>
+        <MudTh Style="text-align:right">Bruttó</MudTh>
         <MudTh Style="text-align:right">Jóváírás</MudTh>
-        <MudTh Style="text-align:right">Fizetendő (menü)</MudTh>
-        <MudTh Style="text-align:right">Fizetendő (à la carte)</MudTh>
-        <MudTh Style="text-align:right">Összesen</MudTh>
+        <MudTh Style="text-align:right">Fizetendő</MudTh>
         <MudTh>Állapot</MudTh>
         <MudTh />
     </HeaderContent>
@@ -89,9 +87,20 @@
     </NoRecordsContent>
     <RowTemplate>
         <MudTd DataLabel="Dolgozó">@context.UserDisplayName</MudTd>
-        <MudTd DataLabel="Időszak" Class="mud-text-secondary">@context.PeriodName</MudTd>
-        <MudTd DataLabel="Bruttó menü" Style="text-align:right">@HungarianNumberFormat.Huf(context.MenuGrossHuf)</MudTd>
-        <MudTd DataLabel="Bruttó à la carte" Style="text-align:right">@HungarianNumberFormat.Huf(context.ALaCarteGrossHuf)</MudTd>
+        <MudTd DataLabel="Időszak" Class="mud-text-secondary">
+            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                <span>@context.PeriodName</span>
+                @if (context.SequenceNumber > 1)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                             title="Kiegészítő számla a korábbi számla kiállítása után leadott napokról">
+                        @context.SequenceNumber. számla
+                    </MudChip>
+                }
+            </MudStack>
+        </MudTd>
+        <MudTd DataLabel="Napok" Style="text-align:right">@context.DayCount</MudTd>
+        <MudTd DataLabel="Bruttó" Style="text-align:right">@HungarianNumberFormat.Huf(context.GrossHuf)</MudTd>
         <MudTd DataLabel="Jóváírás" Style="text-align:right">
             @if (context.CreditAppliedHuf > 0)
             {
@@ -102,9 +111,7 @@
                 @HungarianNumberFormat.Huf(context.CreditAppliedHuf)
             }
         </MudTd>
-        <MudTd DataLabel="Fizetendő (menü)" Style="text-align:right">@HungarianNumberFormat.Huf(context.MenuPayableHuf)</MudTd>
-        <MudTd DataLabel="Fizetendő (à la carte)" Style="text-align:right">@HungarianNumberFormat.Huf(context.ALaCartePayableHuf)</MudTd>
-        <MudTd DataLabel="Összesen" Style="text-align:right"><b>@HungarianNumberFormat.Huf(context.PayableHuf)</b></MudTd>
+        <MudTd DataLabel="Fizetendő" Style="text-align:right"><b>@HungarianNumberFormat.Huf(context.PayableHuf)</b></MudTd>
         <MudTd DataLabel="Állapot">
             <MudStack Spacing="0">
                 <MudChip T="string" Size="Size.Small" Color="@(context.IsPaid ? Color.Success : Color.Warning)"
@@ -126,7 +133,7 @@
         </MudTd>
     </RowTemplate>
     <FooterContent>
-        <MudTd colspan="7"><b>Összesen (@(invoices?.Count ?? 0) számla)</b></MudTd>
+        <MudTd colspan="5"><b>Összesen (@(invoices?.Count ?? 0) számla)</b></MudTd>
         <MudTd Style="text-align:right"><b>@HungarianNumberFormat.Huf(invoices?.Sum(i => i.PayableHuf) ?? 0)</b></MudTd>
         <MudTd colspan="2" />
     </FooterContent>
@@ -215,13 +222,19 @@
 
     private static string BuildGenerationSummary(string periodName, BatchInvoiceResult result)
     {
-        var text = $"{periodName}: {result.Generated.Count} számla legenerálva.";
-        if (result.SkippedAlreadyInvoicedUserIds.Count > 0)
+        if (result.Generated.Count == 0)
         {
-            text += $" {result.SkippedAlreadyInvoicedUserIds.Count} dolgozó kihagyva — nekik erre az időszakra már korábban elkészült a számlája.";
+            return $"{periodName}: nem volt kiszámlázatlan rendelés, nem készült új számla.";
         }
 
-        return text;
+        var supplementary = result.Generated.Count(i => i.SequenceNumber > 1);
+        var text = $"{periodName}: {result.Generated.Count} számla legenerálva";
+        if (supplementary > 0)
+        {
+            text += $" (ebből {supplementary} kiegészítő számla a korábbi számlázás óta leadott napokról)";
+        }
+
+        return text + $", összesen {HungarianNumberFormat.Huf(result.Generated.Sum(i => i.PayableHuf))} fizetendő.";
     }
 
     private async Task MarkPaidAsync(InvoiceDto invoice)

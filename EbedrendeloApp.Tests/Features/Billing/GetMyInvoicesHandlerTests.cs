@@ -38,20 +38,20 @@ public class GetMyInvoicesHandlerTests : IDisposable
             db.PeriodInvoices.AddRange(
                 new PeriodInvoice
                 {
-                    UserId = meId, OrderingPeriodId = period1.Id, MenuGrossHuf = 1400, ALaCarteGrossHuf = 0, GrossHuf = 1400,
-                    CreditAppliedHuf = 0, MenuPayableHuf = 1400, ALaCartePayableHuf = 0, PayableHuf = 1400,
+                    UserId = meId, OrderingPeriodId = period1.Id, SequenceNumber = 1, GrossHuf = 1400,
+                    CreditAppliedHuf = 0, PayableHuf = 1400,
                     GeneratedAtUtc = new DateTime(2026, 7, 20, 9, 0, 0),
                 },
                 new PeriodInvoice
                 {
-                    UserId = meId, OrderingPeriodId = period2.Id, MenuGrossHuf = 2800, ALaCarteGrossHuf = 0, GrossHuf = 2800,
-                    CreditAppliedHuf = 1400, MenuPayableHuf = 1400, ALaCartePayableHuf = 0, PayableHuf = 1400,
+                    UserId = meId, OrderingPeriodId = period2.Id, SequenceNumber = 1, GrossHuf = 2800,
+                    CreditAppliedHuf = 1400, PayableHuf = 1400,
                     GeneratedAtUtc = new DateTime(2026, 8, 20, 9, 0, 0),
                 },
                 new PeriodInvoice
                 {
-                    UserId = otherId, OrderingPeriodId = period2.Id, MenuGrossHuf = 1400, ALaCarteGrossHuf = 0, GrossHuf = 1400,
-                    CreditAppliedHuf = 0, MenuPayableHuf = 1400, ALaCartePayableHuf = 0, PayableHuf = 1400,
+                    UserId = otherId, OrderingPeriodId = period2.Id, SequenceNumber = 1, GrossHuf = 1400,
+                    CreditAppliedHuf = 0, PayableHuf = 1400,
                     GeneratedAtUtc = new DateTime(2026, 8, 20, 9, 0, 0),
                 });
             await db.SaveChangesAsync();

@@ -142,8 +142,10 @@ public class GetOrderableDaysHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task An_invoiced_period_is_never_orderable_or_cancellable()
+    public async Task An_invoiced_period_stays_orderable_and_cancellable()
     {
+        // A számla kiállítása nem zárja le a naptárat: a B-fázisú pótrendelés és a 3 munkanapos szabály
+        // szerinti lemondás a hónap alatt végig működik (01-szerver-architektura.md 3.1).
         await SeedAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
@@ -151,12 +153,9 @@ public class GetOrderableDaysHandlerTests : IDisposable
             {
                 UserId = userId,
                 OrderingPeriodId = periodId,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
+                SequenceNumber = 1,
                 GrossHuf = 1400,
                 CreditAppliedHuf = 0,
-                MenuPayableHuf = 1400,
-                ALaCartePayableHuf = 0,
                 PayableHuf = 1400,
                 GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
             });
@@ -166,13 +165,8 @@ public class GetOrderableDaysHandlerTests : IDisposable
         var result = await sut.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
         var days = result.Value!.ToDictionary(d => d.Date);
 
-        var alreadyOrdered = days[AlreadyOrderedDay];
-        Assert.False(alreadyOrdered.Cancellable);
-        Assert.Equal(ErrorCodes.AlreadyInvoiced, alreadyOrdered.Reason);
-
-        var orderable = days[OrderableDay];
-        Assert.False(orderable.Orderable);
-        Assert.Equal(ErrorCodes.AlreadyInvoiced, orderable.Reason);
+        Assert.True(days[AlreadyOrderedDay].Cancellable);
+        Assert.True(days[OrderableDay].Orderable);
     }
 
     private async Task SeedAsync()

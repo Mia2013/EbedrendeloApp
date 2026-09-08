@@ -144,8 +144,11 @@ public class PlacePeriodOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Rejects_placing_an_order_when_the_period_is_already_invoiced()
+    public async Task Allows_a_new_order_after_the_period_was_already_invoiced()
     {
+        // A számla kiállítása nem zárja le a hónapot (B-fázis, 01-szerver-architektura.md 3.1): az új nap
+        // felvehető, és PeriodInvoiceId nélkül jön létre, hogy a következő generálás kiegészítő számlára
+        // tegye.
         await SeedAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
@@ -153,12 +156,9 @@ public class PlacePeriodOrderHandlerTests : IDisposable
             {
                 UserId = userId,
                 OrderingPeriodId = periodId,
-                MenuGrossHuf = 0,
-                ALaCarteGrossHuf = 0,
+                SequenceNumber = 1,
                 GrossHuf = 0,
                 CreditAppliedHuf = 0,
-                MenuPayableHuf = 0,
-                ALaCartePayableHuf = 0,
                 PayableHuf = 0,
                 GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
             });
@@ -169,8 +169,12 @@ public class PlacePeriodOrderHandlerTests : IDisposable
         var result = await sut.Handle(new PlacePeriodOrderCommand(userId, userId, periodId, [new DayOrderRequest(Mon, "A")]), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        var skip = Assert.Single(result.Value!.Skipped);
-        Assert.Equal(ErrorCodes.AlreadyInvoiced, skip.Reason);
+        Assert.Single(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+
+        await using var verifyDb = dbFactory.CreateDbContext();
+        var order = await verifyDb.MenuOrders.SingleAsync(o => o.Date == Mon);
+        Assert.Null(order.PeriodInvoiceId);
     }
 
     [Fact]

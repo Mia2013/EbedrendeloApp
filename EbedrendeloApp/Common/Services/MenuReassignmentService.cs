@@ -38,13 +38,15 @@ public sealed class MenuReassignmentService(ICreditService creditService, INotif
                 order.CancelledByUserId = performedByUserId;
                 order.CancellationReason = CancellationReason.VariantRemoved;
 
-                creditService.IssueCancellationCredit(db, order, performedByUserId, nowUtc);
+                var credit = creditService.IssueCancellationCredit(db, order, performedByUserId, nowUtc);
                 notificationService.Notify(
                     db,
                     order.UserId,
                     NotificationType.MenuCancelled,
                     "Rendelésed lemondásra került",
-                    $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed jóváírásra került.",
+                    credit is null
+                        ? $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                        : $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed jóváírásra került.",
                     nowUtc,
                     date,
                     order.Id);

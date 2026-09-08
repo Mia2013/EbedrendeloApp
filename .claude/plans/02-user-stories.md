@@ -276,7 +276,8 @@ Azért, hogy a távollétem idejére ne készüljön feleslegesen étel és az �
 **Elfogadási Kritériumok:**
 * **AC 3.2.1 (Lemondási határidő):** A lemondás feltétele: `now <= ChangeDeadline(Date)` ÉS nincs `KitchenClosure(Date)`. (Példa: csütörtöki ebéd lemondási határideje a megelőző hétfő 11:00 helyi idő szerint).
 * **AC 3.2.2 (Aznapi lemondás tiltása):** Aznapi menürendelés lemondása szigorúan tilos és nem lehetséges.
-* **AC 3.2.3 (Jóváírás és audit):** A lemondott rendelés `Status = Cancelled`, `CancellationReason = ByUser` állapotot kap, és azonnal létrejön a hozzá tartozó `CancellationCredit` ledger tétel.
+* **AC 3.2.3 (Jóváírás és audit):** A lemondott rendelés `Status = Cancelled`, `CancellationReason = ByUser` állapotot kap. `CancellationCredit` ledger tétel **csak akkor** jön létre, ha a rendelés már ki volt számlázva (`MenuOrder.PeriodInvoiceId != null`) — ki nem számlázott napért nem jár pénz vissza, azt a dolgozó soha nem fizette ki, és a delta-számlázás (AC 7.1.6) eleve nem teszi rá egyetlen számlára sem. Az értesítés szövege ennek megfelelően különbözik a két esetben.
+* **AC 3.2.7 (Számlázás utáni lemondás):** A számla kiállítása nem zárja le a hónapot: a nap a 3 munkanapos szabályon belül továbbra is lemondható, a keletkező jóváírás pedig a következő menüszámlát csökkenti (3.3 „görgetés"). A kiállított számla pillanatkép, nem íródik át.
 * **AC 3.2.4 (Köteges lemondás részleges sikerrel):** A parancs **dátumlistát** fogad, és ugyanúgy `Result<BatchOrderResult>` értéket ad vissza, mint a rendelés: a sikeres napok egy tranzakcióban mentődnek (`Succeeded`), a kihagyottak a `Skipped` listába kerülnek `DeadlinePassed` / `DayClosed` / `NoActiveOrder` okkal. Egyetlen nap lemondása ennek az egyelemű esete — nincs rá külön parancs.
 * **AC 3.2.5 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a lemondás nem jelezhető tisztán sikeresnek; a kimaradt napokat és az okukat kötelező megjeleníteni (ugyanaz a szabály, mint AC 3.1.4). Ellenkező esetben a dolgozó abban a hitben marad, hogy lemondta az ebédjét, miközben az elkészül és kiszámlázásra kerül.
 * **AC 3.2.6 (A bulk ablak nem ad kedvezményt):** A lemondásra mindkét rendelési fázisban ugyanaz a `ChangeDeadline` szabály vonatkozik — az `OrderDeadline` előtti időszak sem enged közelebbi napot lemondani.
@@ -341,13 +342,13 @@ Azért, hogy a napi menü helyett vagy mellett egyéb ételeket fogyaszthassak.
 
 **Elfogadási Kritériumok:**
 * **AC 4.2.1 (Időkorlát):** Rendelés csak aznap (munkanapon), legkésőbb helyi idő szerint 10:30-ig adható le.
-* **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába (hogy legyen mihez számlázni).
+* **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába — az à la carte rendelés így is időszakhoz kötött (`OrderingPeriodId`), hogy a napi forgalom időszakonként kimutatható legyen; a *számlára* nem kerül rá (AC 7.1.2), azt a dolgozó aznap fizeti.
 * **AC 4.2.3 (Darabszám limit — tételenként, nem kategóriánként):** Egy felhasználó **tételenként** legfeljebb 1 darabot rendelhet aznapra — ugyanazon a napon **több különböző Főétel** tétel is megrendelhető (mindegyikből legfeljebb 1 db), csak ugyanazon tétel duplikálása tilos.
 * **AC 4.2.4 (Atomi készletfoglalás — Leves kivételével):** A foglalás egyetlen atomi feltételes SQL UPDATE-tel történik (`OrderedCount < Capacity`), **minden nem Leves kategóriájú tételre**. Ha bármely nem Leves tétel elfogyott, a tranzakció visszaáll (nincs részleges a la carte rendelés). Leves kategóriájú ajánlatra nincs foglalás — az korlátlan (AC 4.2.8), és rá közvetlen rendelés nem is adható le.
 * **AC 4.2.5 (Lemondás a napi határidőig):** A leadott a la carte rendelési sor a napi a la carte
   határidőig (`ALaCarteOrderDeadlineLocalTime`, AC 4.2.1) **visszavonható** — utána nem, mert a
   konyha a határidő után már a leadott mennyiség alapján készül. A visszavonás nincs ledger-hatással
-  (AC 5.1.2/7.1.3: az a la carte sosem érinti a jóváírást), tisztán a készletfoglalás
+  (AC 5.1.2/7.1.2: az a la carte nem kerül számlára, így a jóváírást sem érinti), tisztán a készletfoglalás
   (`OrderedCount`) szimmetrikus visszaadásából áll — a felszabaduló adag azonnal újra foglalható
   bárki által, nincs elsőbbség a korábbi rendelőnek.
 * **AC 4.2.6 (Az `IsOpen` és az `OrderDeadline` itt nem feltétel):** Ez aznapi vásárlás, nem előrendelés — a rendelési időszak csak a számlázási hovatartozás (`OrderingPeriodId`) miatt kell. Lezárt (`IsOpen = false`) vagy a leadási határidején túli időszak napján is leadható a la carte rendelés.
@@ -433,7 +434,8 @@ Azért, hogy tudjam, mennyi felhasználható összeg áll rendelkezésemre a kö
 
 **Elfogadási Kritériumok:**
 * **AC 5.1.1 (Azonnali egyenleg):** Az egyenleg az aktív tételek összegét mutatja (`Σ RemainingHuf`). Nincs várakozási idő (`EligibleFrom`), a jóváírás a keletkezés pillanatától él.
-* **AC 5.1.2 (Menü-hatókör kimondása):** Az egyenleg **kizárólag menürendelésre** számítható be; a felület ezt egyértelműen jelzi, nehogy a dolgozó a la carte fedezetnek higgye.
+* **AC 5.1.2 (Menü-hatókör kimondása):** Az egyenleg **kizárólag menüszámlára** számítható be; a felület ezt egyértelműen jelzi, nehogy a dolgozó a la carte fedezetnek higgye (az a la carte-ot aznap, készpénzben fizeti — AC 7.1.2).
+* **AC 5.1.3 (Mikor keletkezik jóváírás):** Jóváírás lemondásból csak akkor keletkezik, ha a lemondott nap már ki volt számlázva (AC 3.2.3).
 
 **Technikai hivatkozás:** `GetMyBalanceQuery`, `CreditEntry`
 
@@ -522,7 +524,7 @@ Azért, hogy egy utólagos eltérés esetén bizonyítható legyen a leadott ös
 
 ## Epic 7: Elszámolás és Számlázás
 
-### US-7.1: Időszaki számlák generálása szigorú menü-jóváírás beszámítással `[A]`
+### US-7.1: Időszaki menüszámlák generálása jóváírás-beszámítással `[A]`
 **Leírás:**  
 Mint **Rendszeradminisztrátor**,  
 Akarok **időszaki számlákat generálni a dolgozók számára a jóváírások automatikus elszámolásával**,  
@@ -530,17 +532,17 @@ Azért, hogy mindenki a ténylegesen fizetendő, korrigált összeget kapja meg.
 
 **Elfogadási Kritériumok:**
 * **AC 7.1.1 (Időszak alapú gyűjtés):** A számla nem naptári hónap, hanem a rendeléskor rögzített `OrderingPeriodId` alapján gyűjti össze a tételeket.
-* **AC 7.1.2 (Szigorú menü-hatókör):** A felhalmozott jóváírás **kizárólag a menütételek bruttó összegéből (`MenuGrossHuf`) vonható le** FIFO sorrendben.
-* **AC 7.1.3 (A la carte elkülönítés):** Az a la carte összeg (`ALaCarteGrossHuf`) teljes egészében fizetendő marad, jóváírás azt nem csökkentheti:
-  - `CreditAppliedHuf <= MenuGrossHuf`
-  - `MenuPayableHuf = MenuGrossHuf - CreditAppliedHuf`
-  - `ALaCartePayableHuf = ALaCarteGrossHuf`
-  - `PayableHuf = MenuPayableHuf + ALaCartePayableHuf`
-* **AC 7.1.4 (Görgetés):** Ha az egyenleg meghaladja a menü bruttó összegét, a fennmaradó rész a ledgerben marad a következő olyan időszakra, amelyben van menürendelés.
-* **AC 7.1.5 (Értesítés):** A számla létrejöttekor a dolgozó értesítést kap a levont jóváírások részletezésével.
-* **AC 7.1.6 (Időszakonként egy számla):** Egy felhasználóra egy időszakhoz legfeljebb egy számla keletkezik (unique `UserId` + `OrderingPeriodId`).
+* **AC 7.1.2 (Csak menü):** A számla kizárólag **menürendeléseket** tartalmaz. Az a la carte kizárólag aznapra vehető, a menüszámla viszont az étkezési hónap kezdete előtt készül (előre fizetés) — a dolgozó az a la carte-ot aznap fizeti, az nem kerül a számlára.
+* **AC 7.1.3 (Jóváírás-beszámítás):** A felhalmozott jóváírás FIFO sorrendben, a számla bruttójáig számítható be:
+  - `CreditAppliedHuf <= GrossHuf`
+  - `PayableHuf = GrossHuf - CreditAppliedHuf`
+* **AC 7.1.4 (Görgetés):** Ha az egyenleg meghaladja a számla bruttó összegét, a fennmaradó rész a ledgerben marad a következő menüszámlára.
+* **AC 7.1.5 (Értesítés):** Ha a számlán jóváírás került beszámításra, a dolgozó erről értesítést kap a levont összeggel.
+* **AC 7.1.6 (Delta-számlázás, kiegészítő számla):** A parancs csak a **még ki nem számlázott** aktív menürendeléseket számlázza (`MenuOrder.PeriodInvoiceId IS NULL`), és a bekerült napokra ráírja a számla azonosítóját. Újrafuttatva ezért csak az azóta leadott (B-fázisú) napokról készül **kiegészítő számla**, növekvő `SequenceNumber`-rel; ha nincs kiszámlázatlan nap, nem keletkezik új számla. Egy felhasználó egy időszakhoz így több számlát is kaphat (unique `UserId` + `OrderingPeriodId` + `SequenceNumber`).
+* **AC 7.1.7 (Korai számlázás tiltása):** A generálás elutasításra kerül (`OrderWindowOpen`), amíg az időszak tömeges leadási határideje (`OrderDeadline`) le nem telt.
+* **AC 7.1.8 (A számlázás nem zárja le a hónapot):** A számla kiállítása után az érintett napok **továbbra is lemondhatók** a 3 munkanapos szabály szerint (US-3.2), és **új nap is rendelhető** a B-fázisban (US-3.1) — a kiállított számla pillanatkép, nem íródik át; a lemondás jóváírást szül a következő számlára, az új rendelés pedig kiegészítő számlát kap.
 
-**Technikai hivatkozás:** `GeneratePeriodInvoicesCommand`, `PeriodInvoice`, `ICreditService`
+**Technikai hivatkozás:** `GeneratePeriodInvoicesCommand`, `PeriodInvoice`, `MenuOrder.PeriodInvoiceId`, `ICreditService`
 
 ---
 
@@ -565,7 +567,7 @@ Azért, hogy lássam, kitől van még hátralék.
 
 **Elfogadási Kritériumok:**
 * **AC 7.3.1 (Szűrők):** A lista szűrhető `OrderingPeriodId`-re és fizetettségi állapotra.
-* **AC 7.3.2 (Bontás):** Minden soron látszik a bruttó menü, a bruttó a la carte, a beszámított jóváírás és a **két fizetendő sor** külön (menü / a la carte), valamint a végösszeg.
+* **AC 7.3.2 (Bontás):** Minden soron látszik a számlához tartozó napok száma, a bruttó összeg, a beszámított jóváírás és a fizetendő végösszeg, valamint — kiegészítő számlánál — a sorszám.
 
 **Technikai hivatkozás:** `GetInvoicesQuery`
 
@@ -578,7 +580,7 @@ Akarok **látni a saját időszaki számláimat**,
 Azért, hogy tudjam, mennyit kell fizetnem, és hogy a jóváírásaimat valóban beszámították-e.
 
 **Elfogadási Kritériumok:**
-* **AC 7.4.1 (Időszakonkénti bontás):** Időszakonként megjelenik a bruttó menü, a bruttó a la carte, a beszámított jóváírás és a két fizetendő sor.
+* **AC 7.4.1 (Számlánkénti bontás):** Számlánként megjelenik az időszak neve és dátumtartománya, a fedezett napok száma, a bruttó összeg, a beszámított jóváírás és a fizetendő végösszeg. Kiegészítő számlánál külön jelzés mutatja, hogy az a korábbi számla utáni napokat tartalmazza.
 * **AC 7.4.2 (Fizetettség):** A számla fizetettségi állapota és a fizetés időpontja látszik.
 * **AC 7.4.3 (Kapcsolat a ledgerrel):** A beszámított jóváírás összege megegyezik a ledgerben az adott számlához (`PeriodInvoiceId`) tartozó `CreditApplied` tételek összegével (US-5.3).
 

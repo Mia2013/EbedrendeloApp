@@ -215,8 +215,8 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
     [Fact]
     public async Task Surfaces_period_invoice_id_when_present()
     {
-        // Epic 7 (GeneratePeriodInvoicesCommand) isn't built yet, so no handler produces this today —
-        // seeded directly to prove the DTO round-trips the field for forward compatibility (AC 5.3.1).
+        // A CreditApplied tételt a számlagenerálás írja; itt közvetlenül seedeljük, hogy a DTO
+        // mezőjének körbejárását önmagában ellenőrizzük (AC 5.3.1).
         var userId = await SeedUserAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
@@ -228,12 +228,9 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
             {
                 UserId = userId,
                 OrderingPeriodId = period.Id,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
+                SequenceNumber = 1,
                 GrossHuf = 1400,
                 CreditAppliedHuf = 1400,
-                MenuPayableHuf = 0,
-                ALaCartePayableHuf = 0,
                 PayableHuf = 0,
                 GeneratedAtUtc = DateTime.UtcNow,
             };

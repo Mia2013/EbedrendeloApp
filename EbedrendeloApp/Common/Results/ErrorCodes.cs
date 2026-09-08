@@ -28,6 +28,5 @@ public static class ErrorCodes
     public const string CapacityBelowReserved = nameof(CapacityBelowReserved);
 
     public const string OrderWindowOpen = nameof(OrderWindowOpen);
-    public const string AlreadyInvoiced = nameof(AlreadyInvoiced);
     public const string AlreadyPaid = nameof(AlreadyPaid);
 }

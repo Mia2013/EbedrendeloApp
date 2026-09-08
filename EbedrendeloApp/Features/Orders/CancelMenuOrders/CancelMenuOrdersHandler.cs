@@ -46,8 +46,6 @@ public sealed class CancelMenuOrdersHandler(
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
         var excludedDates = await db.ExcludedDays.Select(e => e.Date).ToHashSetAsync(cancellationToken);
         var kitchenClosures = await KitchenClosureQueries.GetClosedDatesAsync(db, dates.Min(), dates.Max(), cancellationToken);
-        var invoicedUserPeriods = await PeriodInvoiceQueries.GetInvoicedUserPeriodsAsync(
-            db, [request.TargetUserId], periodIds, cancellationToken);
 
         var nowLocal = clock.LocalNow;
         var nowUtc = clock.UtcNow.UtcDateTime;
@@ -77,16 +75,6 @@ public sealed class CancelMenuOrdersHandler(
                 continue;
             }
 
-            // Epic 7 — once the user's period is invoiced (PeriodInvoice exists for it), cancellation of
-            // that period's orders is blocked outright, as a deliberate business rule (not a data-
-            // integrity necessity — a post-invoice cancellation's credit would harmlessly roll into the
-            // next invoiced period per 3.3's "görgetés", since the invoice itself is a frozen snapshot).
-            if (invoicedUserPeriods.Contains((request.TargetUserId, order.OrderingPeriodId)))
-            {
-                skipped.Add(new DaySkip(date, ErrorCodes.AlreadyInvoiced));
-                continue;
-            }
-
             var period = periods[order.OrderingPeriodId];
 
             // Cancellation also requires the period to still be IsOpen, matching the already-shipped
@@ -109,13 +97,17 @@ public sealed class CancelMenuOrdersHandler(
             order.CancelledByUserId = request.CancelledByUserId;
             order.CancellationReason = CancellationReason.ByUser;
 
-            creditService.IssueCancellationCredit(db, order, request.CancelledByUserId, nowUtc);
+            // Jóváírás csak akkor keletkezik, ha a nap már ki volt számlázva (lásd ICreditService) —
+            // ezért az értesítés szövege sem állíthatja, hogy jóváírás történt.
+            var credit = creditService.IssueCancellationCredit(db, order, request.CancelledByUserId, nowUtc);
             notificationService.Notify(
                 db,
                 order.UserId,
-                NotificationType.CreditIssued,
+                credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
                 "Rendelésed lemondva",
-                $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került.",
+                credit is null
+                    ? $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                    : $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került.",
                 nowUtc,
                 date,
                 order.Id);

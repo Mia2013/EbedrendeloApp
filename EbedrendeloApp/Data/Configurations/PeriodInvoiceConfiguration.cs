@@ -8,7 +8,10 @@ public sealed class PeriodInvoiceConfiguration : IEntityTypeConfiguration<Period
 {
     public void Configure(EntityTypeBuilder<PeriodInvoice> builder)
     {
-        builder.HasIndex(i => new { i.UserId, i.OrderingPeriodId }).IsUnique();
+        // Egy dolgozónak egy időszakra több számlája is lehet (alap + kiegészítő), ezért a párra nem
+        // tehető unique index — a sorszámmal együtt viszont igen, és ez fogja meg azt is, ha két
+        // párhuzamos generálás ugyanazt a következő sorszámot számolná ki.
+        builder.HasIndex(i => new { i.UserId, i.OrderingPeriodId, i.SequenceNumber }).IsUnique();
 
         builder.HasOne<User>().WithMany().HasForeignKey(i => i.UserId)
             .OnDelete(DeleteBehavior.Restrict);

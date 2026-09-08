@@ -42,7 +42,7 @@ public class GenerateInvoicesDialogTests : MudBunitContext
         mediator.Register<GeneratePeriodInvoicesCommand, Result<BatchInvoiceResult>>(cmd =>
         {
             sentCommand = cmd;
-            return Result.Success(new BatchInvoiceResult([], []));
+            return Result.Success(new BatchInvoiceResult([]));
         });
         Services.AddSingleton<IMediator>(mediator);
 
@@ -86,7 +86,7 @@ public class GenerateInvoicesDialogTests : MudBunitContext
         mediator.Register<GeneratePeriodInvoicesCommand, Result<BatchInvoiceResult>>(_ =>
         {
             called = true;
-            return Result.Success(new BatchInvoiceResult([], []));
+            return Result.Success(new BatchInvoiceResult([]));
         });
         Services.AddSingleton<IMediator>(mediator);
 

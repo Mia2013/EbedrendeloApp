@@ -46,9 +46,6 @@ public sealed class PlacePeriodOrderHandler(
             .Select(o => o.Date)
             .ToHashSetAsync(cancellationToken);
 
-        var isInvoiced = (await PeriodInvoiceQueries.GetInvoicedUserPeriodsAsync(
-            db, [request.TargetUserId], [period.Id], cancellationToken)).Count > 0;
-
         var nowLocal = clock.LocalNow;
         var nowUtc = clock.UtcNow.UtcDateTime;
 
@@ -109,14 +106,6 @@ public sealed class PlacePeriodOrderHandler(
             if (userOrders.Contains(date))
             {
                 skipped.Add(new DaySkip(date, ErrorCodes.AlreadyOrdered));
-                continue;
-            }
-
-            // Epic 7 — symmetric to CancelMenuOrdersHandler's guard: once the user's period is invoiced,
-            // a new supplementary order (B-fázis) would create a charge no invoice will ever reflect.
-            if (isInvoiced)
-            {
-                skipped.Add(new DaySkip(date, ErrorCodes.AlreadyInvoiced));
                 continue;
             }
 

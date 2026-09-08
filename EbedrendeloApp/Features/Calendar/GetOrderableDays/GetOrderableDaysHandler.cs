@@ -51,11 +51,6 @@ public sealed class GetOrderableDaysHandler(
             .Where(v => variantIds.Contains(v.Id))
             .ToDictionaryAsync(v => v.Id, cancellationToken);
 
-        // Epic 7 — once the user's period is invoiced, the calendar must not offer an order/cancel
-        // action that PlacePeriodOrderHandler/CancelMenuOrdersHandler will reject anyway.
-        var isInvoiced = (await PeriodInvoiceQueries.GetInvoicedUserPeriodsAsync(
-            db, [request.UserId], [period.Id], cancellationToken)).Count > 0;
-
         var nowLocal = clock.LocalNow;
         // Both ordering phases require IsOpen (01-szerver-architektura.md §"A rendelés két fázisa": "A —
         // IsOpen ÉS now <= OrderDeadline", "B — IsOpen ÉS now > OrderDeadline ÉS ..."). A period an admin
@@ -95,15 +90,15 @@ public sealed class GetOrderableDaysHandler(
 
             if (userOrders.TryGetValue(date, out var order))
             {
-                var cancellable = !isInvoiced && period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date));
+                var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date));
                 var variant = variants.GetValueOrDefault(order.MenuVariantId);
-                var cancelReason = cancellable ? null : (isInvoiced ? ErrorCodes.AlreadyInvoiced : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed));
+                var cancelReason = cancellable ? null : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
                 result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.SoupName, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null, settings.MenuPortionHuf));
                 continue;
             }
 
-            var orderable = !isInvoiced && (inOrderWindow || (period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date))));
-            var reason = orderable ? ErrorCodes.NoActiveOrder : (isInvoiced ? ErrorCodes.AlreadyInvoiced : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed));
+            var orderable = inOrderWindow || (period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date)));
+            var reason = orderable ? ErrorCodes.NoActiveOrder : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
             result.Add(new OrderableDayDto(date, orderable, false, null, null, reason, null, settings.MenuPortionHuf));
         }
 

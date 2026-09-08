@@ -3,23 +3,23 @@ using MediatR;
 
 namespace EbedrendeloApp.Features.Billing.GeneratePeriodInvoices;
 
-/// <summary>US-7.1 — generates one <c>PeriodInvoice</c> per user who has period activity (an Active
-/// <c>MenuOrder</c> or an <c>ALaCarteOrder</c>) and does not already have one for this period (AC 7.1.6).
-/// Only allowed once the period's bulk ordering window has closed (<c>OrderDeadline</c> passed) —
-/// <c>IsOpen</c> is not the right gate here, because it also controls in-month day-by-day cancellation
-/// (01-szerver-architektura.md 3.1) and must stay usable through the eating period.</summary>
+/// <summary>
+/// Kiszámlázza az időszak összes olyan aktív menürendelését, amelyhez még nem tartozik számla.
+/// Újrafuttatható: másodszorra csak az azóta keletkezett (B-fázisú) rendelésekről készít kiegészítő
+/// számlát, a korábban kiszámlázott napokat nem érinti.
+/// </summary>
 public sealed record GeneratePeriodInvoicesCommand(int OrderingPeriodId, int GeneratedByUserId)
     : IRequest<Result<BatchInvoiceResult>>;
 
-public sealed record BatchInvoiceResult(
-    IReadOnlyList<GeneratedInvoiceDto> Generated, IReadOnlyList<int> SkippedAlreadyInvoicedUserIds);
+public sealed record BatchInvoiceResult(IReadOnlyList<GeneratedInvoiceDto> Generated);
 
+/// <param name="SequenceNumber">1 = alapszámla, 2+ = kiegészítő számla.</param>
+/// <param name="DayCount">Hány menünap került rá.</param>
 public sealed record GeneratedInvoiceDto(
     int InvoiceId,
     int UserId,
-    int MenuGrossHuf,
-    int ALaCarteGrossHuf,
+    int SequenceNumber,
+    int DayCount,
+    int GrossHuf,
     int CreditAppliedHuf,
-    int MenuPayableHuf,
-    int ALaCartePayableHuf,
     int PayableHuf);

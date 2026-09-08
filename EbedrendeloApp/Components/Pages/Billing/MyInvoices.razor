@@ -13,7 +13,8 @@
         <MudStack Spacing="0" Class="flex-grow-1">
             <MudText Typo="Typo.h4">Számláim</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Az időszaki számláid, és hogy a jóváírásaidat valóban beszámították-e.
+                Az időszaki menüszámláid, és hogy a jóváírásaidat valóban beszámították-e. Az à la carte tételeket
+                aznap fizeted, azok nem kerülnek ide.
             </MudText>
         </MudStack>
     </MudStack>
@@ -34,7 +35,15 @@ else
         <MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Spacing="3">
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.subtitle1"><b>@invoice.PeriodName</b></MudText>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.subtitle1"><b>@invoice.PeriodName</b></MudText>
+                        @if (invoice.SequenceNumber > 1)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                @invoice.SequenceNumber. számla
+                            </MudChip>
+                        }
+                    </MudStack>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">
                         @invoice.PeriodStartDate.ToString("yyyy.MM.dd.") &ndash; @invoice.PeriodEndDate.ToString("yyyy.MM.dd.")
                     </MudText>
@@ -56,11 +65,10 @@ else
             <MudDivider Class="my-3" />
 
             <MudGrid Spacing="1">
-                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó menü</MudText></MudItem>
-                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.MenuGrossHuf)</MudText></MudItem>
-
-                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó à la carte</MudText></MudItem>
-                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.ALaCarteGrossHuf)</MudText></MudItem>
+                <MudItem xs="8">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó menü (@invoice.DayCount nap)</MudText>
+                </MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.GrossHuf)</MudText></MudItem>
 
                 <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Beszámított jóváírás</MudText></MudItem>
                 <MudItem xs="4">
@@ -71,14 +79,6 @@ else
 
                 <MudItem xs="12"><MudDivider Style="border-style:dashed;" /></MudItem>
 
-                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Fizetendő (menü)</MudText></MudItem>
-                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.MenuPayableHuf)</MudText></MudItem>
-
-                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Fizetendő (à la carte)</MudText></MudItem>
-                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.ALaCartePayableHuf)</MudText></MudItem>
-
-                <MudItem xs="12"><MudDivider Style="border-style:dashed;" /></MudItem>
-
                 <MudItem xs="8"><MudText Typo="Typo.subtitle1">Összesen fizetendő</MudText></MudItem>
                 <MudItem xs="4"><MudText Typo="Typo.h6" Align="Align.Right">@HungarianNumberFormat.Huf(invoice.PayableHuf)</MudText></MudItem>
             </MudGrid>
@@ -86,8 +86,14 @@ else
             @if (invoice.CreditAppliedHuf > 0)
             {
                 <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-3">
-                    @HungarianNumberFormat.Huf(invoice.CreditAppliedHuf) jóváírás került beszámításra — az à la carte
-                    tételt ez nem érinti, az mindig teljes összegben fizetendő.
+                    @HungarianNumberFormat.Huf(invoice.CreditAppliedHuf) jóváírás került beszámításra.
+                </MudAlert>
+            }
+
+            @if (invoice.SequenceNumber > 1)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-3">
+                    Ez kiegészítő számla: a korábbi számlád kiállítása után leadott napokat tartalmazza.
                 </MudAlert>
             }
         </MudPaper>

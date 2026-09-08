@@ -261,16 +261,19 @@ készül (US-4.6 AC 4.6.3).
   - `ConsumesCreditEntryId?` + `PeriodInvoiceId?` → negatív tételeken: **mikor és melyik számlából**
     vonódott le
   - Így a felhasználó ledger-nézete tételesen mutatja: *mit mondott le → mennyi jóváírás keletkezett →
-    mennyi az egyenlege → melyik időszaki számla menürészéből, mikor vonódott le.*
-  - **Minden jóváírás menü-hatókörű** (a `ManualAdjustment` is): a beszámítás kizárólag a számla
-    menütételeit csökkentheti — lásd 3.3.
-- **PeriodInvoice** — `UserId` (FK), **`OrderingPeriodId`** (FK; unique `UserId`+`OrderingPeriodId`),
-  `MenuGrossHuf`, `ALaCarteGrossHuf`, `GrossHuf`, `CreditAppliedHuf`, **`MenuPayableHuf`**,
-  **`ALaCartePayableHuf`**, `PayableHuf`, `IsPaid`, `PaidAtUtc?`, `MarkedPaidByUserId?`, `GeneratedAtUtc`
-  - Invariáns: `CreditAppliedHuf <= MenuGrossHuf`;
-    `MenuPayableHuf = MenuGrossHuf - CreditAppliedHuf`;
-    `ALaCartePayableHuf = ALaCarteGrossHuf`;
-    `PayableHuf = MenuPayableHuf + ALaCartePayableHuf`
+    mennyi az egyenlege → melyik számlából, mikor vonódott le.*
+  - **Minden jóváírás menü-hatókörű** (a `ManualAdjustment` is): à la carte tétel nem kerül számlára,
+    így oda nem is számítható be — lásd 3.3.
+- **PeriodInvoice** — `UserId` (FK), **`OrderingPeriodId`** (FK), **`SequenceNumber`**
+  (unique `UserId`+`OrderingPeriodId`+`SequenceNumber`), `GrossHuf`, `CreditAppliedHuf`, `PayableHuf`,
+  `IsPaid`, `PaidAtUtc?`, `MarkedPaidByUserId?`, `GeneratedAtUtc`
+  - Invariáns: `CreditAppliedHuf <= GrossHuf`; `PayableHuf = GrossHuf - CreditAppliedHuf`
+  - **A számla nem a (felhasználó, időszak) párra szól, hanem egy konkrét rendelés-halmazra**: a hozzá
+    tartozó napokat a `MenuOrder.PeriodInvoiceId` jelöli. Egy dolgozónak egy időszakra több számlája is
+    lehet — `SequenceNumber = 1` az alapszámla (a tömeges leadási határidő után), `2+` a később leadott
+    (B-fázisú) napok kiegészítő számlája. Az egyediséget ezért a hármas index adja, nem a pár; ez fogja
+    meg azt is, ha két párhuzamos generálás ugyanazt a következő sorszámot számolná ki.
+  - Á la carte oszlop **nincs** rajta (lásd 3.3): azt a dolgozó aznap fizeti.
 
 ### Egyéb
 - **UserNotification** — `UserId` (FK), `Type`, `Title`, `Message`, `RelatedDate?`, `RelatedMenuOrderId?`,
@@ -378,32 +381,43 @@ kétszer.
 
 ### 3.3 Jóváírás: egyenleg és beszámítás
 
-**Keletkezés** — sikeres lemondáskor (vagy nap kizárásakor / menü törlésekor):
+**Keletkezés** — sikeres lemondáskor (vagy nap kizárásakor / menü törlésekor), **de kizárólag akkor, ha
+a rendelés már ki volt számlázva** (`order.PeriodInvoiceId != null`):
 ```
 order.Status = Cancelled
 order.CancelledAtUtc / CancelledByUserId / CancellationReason kitöltve
-CreditEntry {
-    AmountHuf         = +order.PriceHuf
-    Kind              = CancellationCredit
-    SourceMenuOrderId = order.Id
-    RemainingHuf      = order.PriceHuf
-}
-értesítés (CreditIssued)
+
+ha order.PeriodInvoiceId != null:
+    CreditEntry {
+        AmountHuf         = +order.PriceHuf
+        Kind              = CancellationCredit
+        SourceMenuOrderId = order.Id
+        RemainingHuf      = order.PriceHuf
+    }
+    értesítés (CreditIssued)
+egyébként:
+    nincs jóváírás, csak lemondás-értesítés (MenuCancelled)
 ```
+
+**Miért feltételes.** Egy ki nem számlázott nap lemondásáért nem jár pénz vissza: azt a dolgozó soha nem
+fizette ki, a delta-számlázás pedig eleve nem fogja rátenni egyetlen számlára sem. Feltétel nélküli
+jóváírással a leggyakoribb forgatókönyv — A-fázisban lerendelek 20 napot, a határidő előtt lemondok 5-öt —
+ingyen jóváírást osztana. A feltétel ezért a `CreditService.IssueCancellationCredit`-ben él és nem a
+hívókban: öt helyről hívjuk (lemondás, nap kizárása, napi menü törlése, variáns-átvezetés), és egy
+kifelejtett ellenőrzés pénzt osztana.
 
 **Egyenleg** — `Balance(user) = Σ CreditEntry.RemainingHuf`. A jóváírás a keletkezés pillanatától
 felhasználható; **nincs `EligibleFrom` várakozási idő**. A felhasználó a felületen egy élő egyenleget lát,
 nem egy „majd jövő hónapban" ígéretet.
 
-**Beszámítás** — a legközelebbi olyan időszaki számlánál, amelyen **van menütétel**
+**Beszámítás** — a legközelebbi olyan számlánál, amelyen **van menütétel**
 (`GeneratePeriodInvoicesCommand(periodId)`):
 ```
-MenuGross     = az időszak aktív MenuOrder-einek PriceHuf összege
-                (WHERE OrderingPeriodId = periodId)
-ALaCarteGross = az időszak a la carte összege
+Gross = a számlára kerülő MenuOrder-ek PriceHuf összege
+        (WHERE OrderingPeriodId = periodId AND Status = Active AND PeriodInvoiceId IS NULL)
 
-elérhető  = CreditEntry-k ahol RemainingHuf > 0, rendezve CreatedAtUtc szerint (FIFO)
-fedezetlen = MenuGross                        // ← kizárólag a menü rész
+elérhető   = CreditEntry-k ahol RemainingHuf > 0, rendezve CreatedAtUtc szerint (FIFO)
+fedezetlen = Gross
 
 minden c ∈ elérhető, amíg fedezetlen > 0:
     fel = min(c.RemainingHuf, fedezetlen)
@@ -411,18 +425,17 @@ minden c ∈ elérhető, amíg fedezetlen > 0:
     CreditEntry { AmountHuf = -fel, Kind = CreditApplied,
                   ConsumesCreditEntryId = c.Id, PeriodInvoiceId = invoice.Id }
 
-invoice.CreditAppliedHuf   = Σ fel
-invoice.MenuPayableHuf     = MenuGross - CreditAppliedHuf
-invoice.ALaCartePayableHuf = ALaCarteGross
-invoice.PayableHuf         = MenuPayableHuf + ALaCartePayableHuf
-értesítés (CreditApplied) a levont tételek felsorolásával
+invoice.CreditAppliedHuf = Σ fel
+invoice.PayableHuf       = Gross - CreditAppliedHuf
+minden bekerült order.PeriodInvoiceId = invoice.Id
+értesítés (CreditApplied) a levont összeggel
 ```
 
-**Miért nem keveredhet a menü és a la carte.** A lemondott menüadag a konyha szempontjából átütemezés:
-az az adag nem készül el, a helyette rendelt *menüadag* váltja ki. Az a la carte külön elszámolás, oda
-a menüből származó jóváírás nem folyhat át. Ezért a beszámítás felső korlátja a `MenuGrossHuf`, és a
-számla két fizetendő sort mutat. Ha az egyenleg meghaladja az időszak menütételeinek összegét, a
-maradék `RemainingHuf`-ban görgetődik tovább a következő olyan **időszakra**, amelyben van menürendelés.
+**Az a la carte nincs a számlán.** Az a la carte kizárólag aznapra vehető, a menüszámla viszont az
+étkezési hónap *kezdete előtt* készül (előre fizetés) — így à la carte tétel a számla kiállításakor
+fogalmilag nem létezhet rajta. Ezt a dolgozó aznap fizeti, külön. A jóváírás emiatt eleve csak menüre
+tud beszámítódni, és a számlán egyetlen fizetendő sor van. Ha az egyenleg meghaladja a számla bruttóját,
+a maradék `RemainingHuf`-ban görgetődik tovább a következő menüszámlára.
 
 **Időzítés.** Mivel nincs `EligibleFrom`, a beszámítás annál a számlánál történik, amelyik előbb
 legenerálódik: ha egy „aug. 5. – szept. 5." időszakon belüli lemondás még ennek az időszaknak a számlája
@@ -550,10 +563,13 @@ Egy rendelés csak akkor áll vissza, ha **mind** teljesül:
 
 1. `CancellationReason == DayExcluded` **és** `CancelledByExcludedDayId == a most visszavont kizárás`
    (a felhasználó saját lemondása tehát **soha** nem éled újra)
-2. a hozzá tartozó `CreditEntry.RemainingHuf == AmountHuf` — érintetlen, nincs rá `CreditApplied` tétel
-3. a rendelés `OrderingPeriodId`-jára még nincs `PeriodInvoice` generálva
-4. a napra nincs `KitchenClosure`
-5. a felhasználónak nincs időközben új aktív rendelése arra a napra
+2. ha keletkezett hozzá jóváírás (`order.PeriodInvoiceId != null` volt a kizáráskor), akkor a
+   `CreditEntry.RemainingHuf == AmountHuf` — érintetlen, nincs rá `CreditApplied` tétel. Ki nem
+   számlázott rendelésnél nincs jóváírás, így nincs is mit visszavonni — a hiányzó `CreditEntry` itt a
+   normális eset, nem kihagyási ok. A rendelés `PeriodInvoiceId`-ja érintetlen marad, tehát ha már ki
+   volt számlázva, a visszaállítás után sem számlázódik újra
+3. a napra nincs `KitchenClosure`
+4. a felhasználónak nincs időközben új aktív rendelése arra a napra
    (különben a szűrt unique index amúgy is elhasalna)
 
 ```
@@ -751,8 +767,9 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetKitchenClosureQuery` **[A]**
 
 ### Billing
-- `GeneratePeriodInvoicesCommand(OrderingPeriodId)` **[A]** — az időszak számláinak generálása +
-  jóváírás FIFO beszámítás **kizárólag a menürészre** (3.3)
+- `GeneratePeriodInvoicesCommand(OrderingPeriodId)` **[A]** — az időszak **még ki nem számlázott**
+  menürendeléseinek kiszámlázása (delta-számlázás) + jóváírás FIFO beszámítás (3.3). Újrafuttatható:
+  másodszorra csak az azóta leadott napokról készít kiegészítő számlát
 - `MarkInvoicePaidCommand` **[A]** — **a kézi fizetés-jelölés**
 - `GetInvoicesQuery` **[A]** (`OrderingPeriodId` + fizetett szűrő), `GetMyInvoicesQuery` **[U]**
 - `GetMyBalanceQuery` **[U]** — az aktuális egyenleg (`Σ RemainingHuf`) a fejlécbe/dashboardra
@@ -985,9 +1002,11 @@ bUnit tesztek.
 1. **MediatR licenc** — a MediatR 13.0-tól kereskedelmi licencű; belső céges használatnál érdemes
    ellenőrizni, kell-e licenckulcs. Ha nem, a use case szerkezet változatlanul átültethető egy egyszerű
    handler-diszpécserre.
-2. **A la carte jóváírás** — jelenleg minden jóváírás menü-hatókörű, mert a la carte lemondás nincs.
-   Ha valaha kell a la carte korrekció (elmaradt adag), a `CreditEntry`-re egy `Scope` mező kerül, és a
-   beszámítás hatóköre szerint válik szét — a `PeriodInvoice` bontása ezt már ma is elbírja. Ezen felül:
+2. **A la carte elszámolás** — az a la carte-ot a dolgozó aznap fizeti, a rendszer csak a rendelést
+   rögzíti; **a tényleges fizetés rögzítésére nincs modul** (nincs pénztár/kassza), így az `ALaCarteOrder`
+   pénzügyi kimutatásként ma nem zárható le. Ha ez kell, önálló kör: fizetés-állapot az `ALaCarteOrder`-en
+   + napi kassza-riport. Kapcsolódóan, ha valaha kell a la carte jóváírás/korrekció (elmaradt adag), a
+   `CreditEntry`-re egy `Scope` mező kerül, mert ma minden jóváírás menü-hatókörű. Ezen felül:
    mivel a Leves ára a Főétel-sor `UnitPriceHuf`-jába van beolvasztva, egy jövőbeli tételes korrekció
    (pl. csak a főételt cserélik, a levest nem) nem vonhatja ki egyszerűen a katalógusárat a
    snapshotból — a bontást a korrekció pillanatában, a két akkori katalógusárból kellene újraszámolni.
