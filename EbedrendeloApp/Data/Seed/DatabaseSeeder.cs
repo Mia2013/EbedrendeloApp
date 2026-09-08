@@ -83,37 +83,56 @@ public static class DatabaseSeeder
         return setting;
     }
 
+    /// <summary>
+    /// A többi Seed*Async metódussal ellentétben ez nem lép ki azonnal, ha a tábla már nem üres, hanem
+    /// <see cref="SeedCatalog.Users"/>-hoz igazítja a meglévő sorokat (<c>UserId</c> szerint párosítva).
+    /// Enélkül egy már seedelt fejlesztői adatbázis sosem kapná meg a katalógus változásait — csak a DB
+    /// eldobásával, ami a kézzel felvitt rendeléseket/számlákat is vinné.
+    ///
+    /// Ezért a névváltozás is átmegy: ha egy <c>UserId</c> mögött a katalógusban más név áll, a meglévő
+    /// felhasználó átnevezésre kerül, és a rendelései/jóváírásai ezután az új néven jelennek meg. Demo-
+    /// adatnál ez a kívánt viselkedés. A katalógusban nem szereplő felhasználókat nem bántjuk, a
+    /// <c>RoleId</c>-t pedig meglévő soron nem írjuk felül (kézi szerepkör-állítás megmarad).
+    /// </summary>
     private static async Task<List<User>> SeedUsersAsync(EbedrendeloDbContext db, Dictionary<string, Role> roles, CancellationToken ct)
     {
-        if (await db.Users.AnyAsync(ct))
-        {
-            return await db.Users.ToListAsync(ct);
-        }
-
         var adminRoleId = roles[AdminRoleName].Id;
         var userRoleId = roles[UserRoleName].Id;
 
-        var users = new List<User>
-        {
-            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Igazgatosag = "Központ", Osztaly = "Informatika", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
-            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Igazgatosag = "Logisztika", Osztaly = "Raktár", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
-            new() { UserId = 1007, UserName = "horvath.k", KeresztNev = "Katalin", VezetekNev = "Horváth", Igazgatosag = "Logisztika", Osztaly = "Szállítás", Rf = "RF-106", SzervKod = "GY03", RoleId = userRoleId },
-            new() { UserId = 1008, UserName = "kiss.z", KeresztNev = "Zoltán", VezetekNev = "Kiss", Igazgatosag = "Pénzügy", Osztaly = "Könyvelés", Rf = "RF-107", SzervKod = "PU01", RoleId = userRoleId },
-            new() { UserId = 1009, UserName = "molnar.r", KeresztNev = "Réka", VezetekNev = "Molnár", Igazgatosag = "Pénzügy", Osztaly = "Kontrolling", Rf = "RF-108", SzervKod = "PU01", RoleId = userRoleId },
-            new() { UserId = 1010, UserName = "farkas.g", KeresztNev = "Gábor", VezetekNev = "Farkas", Igazgatosag = "HR", Osztaly = "Toborzás", Rf = "RF-109", SzervKod = "HR01", RoleId = userRoleId },
-            new() { UserId = 1011, UserName = "papp.zs", KeresztNev = "Zsófia", VezetekNev = "Papp", Igazgatosag = "HR", Osztaly = "Bérszámfejtés", Rf = "RF-110", SzervKod = "HR01", RoleId = userRoleId },
-            new() { UserId = 1012, UserName = "balogh.t", KeresztNev = "Tamás", VezetekNev = "Balogh", Igazgatosag = "Informatika", Osztaly = "Fejlesztés", Rf = "RF-111", SzervKod = "IT01", RoleId = userRoleId },
-            new() { UserId = 1013, UserName = "szucs.n", KeresztNev = "Nóra", VezetekNev = "Szűcs", Igazgatosag = "Informatika", Osztaly = "Üzemeltetés", Rf = "RF-112", SzervKod = "IT01", RoleId = userRoleId },
-            new() { UserId = 1014, UserName = "juhasz.m", KeresztNev = "Márton", VezetekNev = "Juhász", Igazgatosag = "Gyártás", Osztaly = "3. üzem", Rf = "RF-113", SzervKod = "GY04", RoleId = userRoleId },
-        };
+        var existingByUserId = await db.Users.ToDictionaryAsync(u => u.UserId, ct);
 
-        db.Users.AddRange(users);
+        foreach (var seed in SeedCatalog.Users)
+        {
+            if (existingByUserId.TryGetValue(seed.UserId, out var user))
+            {
+                user.UserName = seed.UserName;
+                user.VezetekNev = seed.VezetekNev;
+                user.KeresztNev = seed.KeresztNev;
+                user.Igazgatosag = seed.Igazgatosag;
+                user.Osztaly = seed.Osztaly;
+                user.Rf = seed.Rf;
+                user.SzervKod = seed.SzervKod;
+                continue;
+            }
+
+            db.Users.Add(new User
+            {
+                UserId = seed.UserId,
+                UserName = seed.UserName,
+                VezetekNev = seed.VezetekNev,
+                KeresztNev = seed.KeresztNev,
+                Igazgatosag = seed.Igazgatosag,
+                Osztaly = seed.Osztaly,
+                Rf = seed.Rf,
+                SzervKod = seed.SzervKod,
+                RoleId = seed.IsAdmin ? adminRoleId : userRoleId,
+            });
+        }
+
+        // Változatlan adaton ez nem küld parancsot az adatbázisnak, tehát újrafuttatva no-op.
         await db.SaveChangesAsync(ct);
-        return users;
+
+        return await db.Users.ToListAsync(ct);
     }
 
     /// <summary>

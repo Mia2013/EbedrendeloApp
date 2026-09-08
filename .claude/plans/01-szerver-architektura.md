@@ -93,7 +93,10 @@ Konvenciók: pénz `int` (Ft, nincs tört), naptári nap `DateOnly`, időpillana
 
 `Igazgatosag` és `Osztaly` a felhasználó szöveges igazgatóság/osztály hovatartozását tárolja (pl. „Gyártás"
 / „1. üzem") — a `SzervKod`-tól (rövid szervezeti kód, szemantikája ismeretlen, l. „Nyitott kérdések")
-függetlenül, arra logika nem épül, csak megjelenítési/szűrési adat.
+függetlenül, arra logika nem épül, csak megjelenítési/szűrési adat. Egyetlen kivétel a
+`ResolveColleagueQuery`, ami a névvel együtt **pontos egyezésre** hasonlítja őket — de az is szabad
+szövegként, nem törzsadatként. A fejlesztői seed ezért egyszerűsített értékeket használ (`A`–`D` / `1`–`7`,
+l. „Seed / init adat").
 
 ### Role
 `int Id` (PK) · `string Name` (32, unique — `"Admin"` / `"User"`)
@@ -834,8 +837,19 @@ Connection string (`appsettings.json`):
 `Data/Seed/DatabaseSeeder.cs`, indításkor hívva (`await db.Database.MigrateAsync()` majd idempotens
 feltöltés — minden blokk csak akkor fut, ha az adott tábla/nap még üres):
 
-- **6 felhasználó**: `admin` (Role=`Admin`) + 5 dolgozó (`kovacs.j`, `nagy.a`, `szabo.p`, `toth.e`,
-  `varga.b`), `UserId` 1001–1006, kitöltött `Nev` / `Igazgatosag` / `Osztaly` / `Rf` / `SzervKod`.
+- **14 felhasználó** (`SeedCatalog.Users`): `admin` (Role=`Admin`) + 13 dolgozó, `UserId` 1001–1014,
+  kitöltött `VezetekNev` / `KeresztNev` / `Igazgatosag` / `Osztaly` / `Rf` / `SzervKod`.
+  - A szervezeti egység szándékosan **triviális séma**: igazgatóság `A`–`D`, osztály `1`–`7`
+    (`SzervKod` = a kettő összefűzve, pl. `B3`). A más nevében rendeléshez a kollégát *pontosan* kell
+    azonosítani (`ResolveColleagueQuery`), és valósághű, ékezetes egységneveket böngészőben körülményes
+    begépelni. Mind a 4 igazgatóság és mind a 7 osztály szerepel — az **admin is** kap egységet.
+  - **Két névütközés szándékos**, hogy az azonosítás mindkét éles ága kézzel kipróbálható legyen:
+    „Kovács János" kétszer, *különböző* egységben (A/1 és D/7) → a hármas így is egyértelmű;
+    „Tóth Eszter" kétszer, *ugyanabban* az egységben (B/3) → a handler `matches.Count != 1` ága
+    szándékosan elutasít. Ezt a `SeedCatalogTests` rögzíti.
+  - Ez az egy blokk **nem** lép ki, ha a tábla már nem üres: `UserId` szerint a katalógushoz igazítja a
+    meglévő sorokat, hogy egy már seedelt fejlesztői adatbázis is megkapja a katalógus változásait a DB
+    eldobása nélkül. A katalógusban nem szereplő felhasználókat és a meglévők `RoleId`-ját nem bántja.
 - **OrderingPeriod**: **két, egymáshoz csatlakozó, szándékosan nem naptári időszak** — az aktuális hónap
   5-étől a következő hónap 5-éig, majd onnan az azt követő hónap 5-éig. `OrderDeadline` =
   `StartDate − 10 nap` 10:00, `IsOpen = true`. Így a seed maga demonstrálja, hogy a „hónap" eltolható.

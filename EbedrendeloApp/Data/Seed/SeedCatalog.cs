@@ -5,8 +5,64 @@ namespace EbedrendeloApp.Data.Seed;
 /// (the fixed EU 1169/2011 Annex II numbering), not a site-specific scheme.</summary>
 public sealed record SeedDish(string Name, decimal EnergyKcal, string? Allergens);
 
+/// <summary>One seeded user. A <see cref="SzervKod"/> a szervezeti egységből képződik, nem külön adat —
+/// lásd <see cref="SeedCatalog.Users"/>.</summary>
+public sealed record SeedUser(
+    int UserId,
+    string UserName,
+    string VezetekNev,
+    string KeresztNev,
+    string Igazgatosag,
+    string Osztaly,
+    string Rf,
+    bool IsAdmin = false)
+{
+    public string SzervKod => $"{Igazgatosag}{Osztaly}";
+
+    public string DisplayName => $"{VezetekNev} {KeresztNev}";
+}
+
 public static class SeedCatalog
 {
+    /// <summary>
+    /// A fejlesztői felhasználók. Az igazgatóság/osztály szándékosan egy triviális séma — igazgatóság
+    /// A–D, osztály 1–7 —, mert a más nevében rendeléshez a kollégát <b>pontosan</b> kell azonosítani
+    /// (név + igazgatóság + osztály, lásd <c>ResolveColleagueHandler</c>), és valósághű, ékezetes
+    /// egységneveket böngészőben körülményes begépelni. Élesben ezek az adatok a HR-rendszerből jönnek,
+    /// üzleti logika nem épül rájuk.
+    ///
+    /// Két névütközés <b>szándékos</b>, hogy az azonosítás mindkét éles ága kézzel is kipróbálható legyen:
+    /// <list type="bullet">
+    /// <item>„Kovács János" kétszer, <b>különböző</b> egységben (A/1 és D/7) — az igazgatóság+osztály
+    /// dönti el, melyikről van szó, tehát a hármas így is egyértelmű.</item>
+    /// <item>„Tóth Eszter" kétszer, <b>ugyanabban</b> az egységben (B/3) — a hármas kétértelmű, a handler
+    /// szándékosan elutasítja (nem tippel).</item>
+    /// </list>
+    ///
+    /// A <c>UserId</c> → <c>UserName</c> párosítás szándékosan ugyanaz maradt, mint korábban: a
+    /// <c>DatabaseSeeder</c> egy meglévő adatbázisban is ehhez a listához igazítja a sorokat, és a
+    /// <c>UserName</c> egyedi indexes — egy „körbe-átnevezés" (A neve B-re, miközben B még használja) egy
+    /// köteg-UPDATE közben ütközne. A két új név ezért friss <c>UserName</c>-et kapott, nem cserélt.
+    /// </summary>
+    public static readonly IReadOnlyList<SeedUser> Users =
+    [
+        new(1001, "admin", "Adminisztrátor", "Rendszer", "A", "1", "RF-000", IsAdmin: true),
+        new(1002, "kovacs.j", "Kovács", "János", "A", "1", "RF-101"),
+        new(1003, "nagy.a", "Nagy", "Anna", "A", "2", "RF-102"),
+        new(1004, "szabo.p", "Szabó", "Péter", "A", "4", "RF-103"),
+        new(1005, "toth.e", "Tóth", "Eszter", "B", "3", "RF-104"),
+        new(1006, "varga.b", "Varga", "Balázs", "B", "4", "RF-105"),
+        new(1007, "horvath.k", "Horváth", "Katalin", "C", "5", "RF-106"),
+        new(1008, "kiss.z", "Kiss", "Zoltán", "C", "5", "RF-107"),
+        new(1009, "molnar.r", "Molnár", "Réka", "C", "6", "RF-108"),
+        new(1010, "kovacs.j2", "Kovács", "János", "D", "7", "RF-109"),
+        new(1011, "papp.zs", "Papp", "Zsófia", "D", "7", "RF-110"),
+        new(1012, "toth.e2", "Tóth", "Eszter", "B", "3", "RF-111"),
+        new(1013, "szucs.n", "Szűcs", "Nóra", "A", "4", "RF-112"),
+        new(1014, "juhasz.m", "Juhász", "Márton", "C", "6", "RF-113"),
+    ];
+
+
     public static readonly IReadOnlyList<SeedDish> Soups =
     [
         new("Gulyásleves", 220, "1,9"),
