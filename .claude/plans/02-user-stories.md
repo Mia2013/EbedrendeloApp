@@ -744,9 +744,10 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 
 | Use case | Szerep | User story |
 |---|---|---|
-| `GetUsersQuery` | A/U | US-9.4 |
-| `GetUserByIdQuery` | A/U | US-9.4 |
-| `GetUserByUserNameQuery` | A/U | US-9.4 |
+| `GetUsersQuery` | A | US-9.4 |
+| `GetUserByIdQuery` | A | US-9.4 |
+| `GetUserByUserNameQuery` | A | US-9.4 |
+| `ResolveColleagueQuery` | A/U | US-3.1 (AC 3.1.6) |
 | *dev auth (`/dev-login`, `/dev-logout`, `ICurrentUser`, Admin policy)* | A/U | US-9.1, US-9.2, US-9.3 |
 | `UpsertOrderingPeriodCommand` | A | US-1.1 |
 | `GetOrderingPeriodQuery` | A/U | US-1.4 |
@@ -798,7 +799,8 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
 Minden use case-hez tartozik story és fordítva — a `GetBalancesQuery` az egyetlen kivétel, ez tisztán
-implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A kereszt-metsző követelmények
+implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A `ResolveColleagueQuery` nem
+kapott önálló storyt: az AC 3.1.6 azonosítási lépése, ezért az US-3.1 alatt szerepel. A kereszt-metsző követelmények
 (Epic 10) minden sorra vonatkoznak.
 
 **Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
@@ -820,9 +822,14 @@ kizárása is), UI-val (`KitchenSummary.razor` a `/konyhai-osszesito` alatt, `Cl
 `ReopenDayDialog.razor`, admin-only `NavMenu` "KONYHA" szekció) és teljes teszt-lefedettséggel mind az 5
 handlerre, mind a 3 komponensre.
 
-Az Epic 7–8 (Számlázás, Értesítések — a fenti táblázat `GeneratePeriodInvoicesCommand`-tól
-`MarkAllNotificationsReadCommand`-ig terjedő 11 sorából mind a 7, amelyik nem az Epic 5 Billing
-use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
-`01-szerver-architektura.md` "10. Végrehajtási sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se
-`NavMenu` link ezekhez. Az `INotificationService` továbbra is write-only marad (Epic 8 olvasó oldala még
-nem készült el).
+Az Epic 7 (Számlázás) elkészült: `GeneratePeriodInvoicesCommand`, `MarkInvoicePaidCommand`,
+`GetInvoicesQuery`, `GetMyInvoicesQuery` (`Features/Billing/`), UI-val (`AdminInvoices.razor` a
+`/szamlak`, `MyInvoices.razor` a `/szamlaim` alatt, `GenerateInvoicesDialog.razor`,
+`MarkInvoicePaidDialog.razor`, `NavMenu` linkekkel mindkét ághoz). A számla **nem** a (felhasználó,
+időszak) párra szól, hanem egy konkrét rendelés-halmazra (`MenuOrder.PeriodInvoiceId`), ezért egy
+időszakra több számla is lehet: az újrafuttatás a közben leadott napokról kiegészítő számlát állít ki,
+nem no-op (AC 7.1.6). À la carte tétel nem kerül a periódus-számlára — azt a dolgozó aznap fizeti.
+
+Az Epic 8 (Értesítések) továbbra is csak tervezve van: az `INotificationService` write-only, olvasó
+lekérdezés és UI nincs hozzá, a `MarkNotificationReadCommand` / `MarkAllNotificationsReadCommand` /
+`GetMyNotificationsQuery` sorokhoz nincs se `Features/`, se `NavMenu` link.

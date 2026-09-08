@@ -21,13 +21,16 @@
         }
 
         <MudText Class="mb-3">
-            Minden érintett dolgozóra legenerálódik egy számla erre az időszakra — a felhalmozott jóváírás a
-            menütételek bruttó összegéből kerül levonásra, az à la carte tételek mindig teljes egészében
-            fizetendők maradnak.
+            A számla a <strong>még ki nem számlázott</strong> menürendelésekre készül: minden érintett dolgozó
+            annyit kap, amennyi napja számla nélkül maradt. A felhalmozott jóváírás a menütételek bruttó
+            összegéből kerül levonásra. À la carte tétel nem kerül a számlára — azt a dolgozó aznap fizeti.
         </MudText>
 
-        <MudAlert Severity="Severity.Info">
-            Akinek erre az időszakra már van számlája, az kimarad — a művelet biztonságosan újrafuttatható.
+        @* Fontos, hogy ez ne ígérjen no-opot: a delta-számlázás óta az újrafuttatás nem „kihagyja" a már
+           számlázott dolgozókat, hanem KIEGÉSZÍTŐ számlát állít ki nekik a közben leadott napokról. *@
+        <MudAlert Severity="Severity.Warning">
+            Ez nem üres újrafuttatás: akinek a legutóbbi számlája óta újabb napja lett, az <strong>kiegészítő
+            számlát</strong> kap róluk, és a jóváírása is beszámítódik. Aki óta nem rendelt újat, az kimarad.
         </MudAlert>
     </DialogContent>
     <DialogActions>

@@ -172,14 +172,14 @@ public class UserCalendarTests : MudBunitContext
     }
 
     [Fact]
-    public void Picking_a_colleague_switches_the_calendar_to_theirs_visibly()
+    public async Task Picking_a_colleague_switches_the_calendar_to_theirs_visibly()
     {
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
 
         var cut = Render<UserCalendar>();
         Assert.DoesNotContain("az ő rendelése lesz", cut.Markup);
 
-        PickColleagueAsync(cut, Colleague).GetAwaiter().GetResult();
+        await PickColleagueAsync(cut, Colleague);
 
         Assert.Contains("Kovács Anna", cut.Markup);
         Assert.Contains("az ő rendelése lesz", cut.Markup);

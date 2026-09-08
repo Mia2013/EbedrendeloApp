@@ -8,10 +8,14 @@ namespace EbedrendeloApp.Data.Seed;
 /// <summary>
 /// Demo/dev data. Every date is derived from <c>DateTime.Now</c> at seed time (never a fixed literal),
 /// so a freshly created database always looks "current" — roughly a month of history behind today and a
-/// month of orderable days ahead — no matter when the app is first run. Each Seed*Async method still
-/// short-circuits if its table already has rows (see e.g. <see cref="SeedUsersAsync"/>), so re-running
-/// this against an already-seeded database is a no-op: to get fresh dates again the database itself has
-/// to be recreated first.
+/// month of orderable days ahead — no matter when the app is first run.
+///
+/// Az <b>egy</b> kivétellel minden Seed*Async metódus kilép, ha a saját táblájában már van sor, tehát
+/// újrafuttatva no-op: friss dátumokhoz az adatbázist újra kell hozni. A kivétel a
+/// <see cref="SeedUsersAsync"/>, ami <c>UserId</c> szerint a <see cref="SeedCatalog.Users"/>-hoz igazítja
+/// a meglévő sorokat — enélkül egy már seedelt fejlesztői adatbázis sosem kapná meg a katalógus
+/// változásait. Ez <b>minden induláskor</b> ír, ha a katalógus eltér a DB-től (a <c>Program.cs</c> nem
+/// köti fejlesztői környezethez), és felülírja a nevet is: éles használat előtt ezt kapuzni kell.
 /// </summary>
 public static class DatabaseSeeder
 {
@@ -487,27 +491,44 @@ public static class DatabaseSeeder
         db.MenuOrders.AddRange(orders);
         await db.SaveChangesAsync(ct);
 
+        var admin = users.First(u => u.RoleId == roles[AdminRoleName].Id);
+        await SeedPastPeriodInvoicesAsync(db, orders, periods[0], admin.Id, ct);
+
         // Now that the cancelled orders have real Ids, issue their cancellation credit + notification.
         var notifications = new List<UserNotification>();
         var creditEntries = new List<CreditEntry>();
         foreach (var cancelled in orders.Where(o => o.Status == OrderStatus.Cancelled))
         {
-            creditEntries.Add(new CreditEntry
+            // Jóváírás CSAK kiszámlázott napért jár (ICreditService / AC 3.2.3). A seed sem hozhat létre
+            // „ingyen pénzt": ha ezt a napot soha nem számláztuk ki, a dolgozó ki sem fizette, a
+            // delta-számlázás pedig eleve nem teszi rá egyetlen számlára sem. Enélkül az első éles
+            // számlagenerálás ezekkel a fantom-jóváírásokkal csökkentené a valódi számlákat.
+            var isInvoiced = cancelled.PeriodInvoiceId is not null;
+            if (isInvoiced)
             {
-                UserId = cancelled.UserId,
-                AmountHuf = cancelled.PriceHuf,
-                Kind = CreditEntryKind.CancellationCredit,
-                CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
-                CreatedByUserId = cancelled.CancelledByUserId!.Value,
-                SourceMenuOrderId = cancelled.Id,
-                RemainingHuf = cancelled.PriceHuf,
-            });
+                creditEntries.Add(new CreditEntry
+                {
+                    UserId = cancelled.UserId,
+                    AmountHuf = cancelled.PriceHuf,
+                    Kind = CreditEntryKind.CancellationCredit,
+                    CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
+                    CreatedByUserId = cancelled.CancelledByUserId!.Value,
+                    SourceMenuOrderId = cancelled.Id,
+                    RemainingHuf = cancelled.PriceHuf,
+                });
+            }
 
-            var (type, title, message) = cancelled.CancellationReason == CancellationReason.DayExcluded
-                ? (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
-                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került, a rendelésed jóváírásra került.")
-                : (NotificationType.CreditIssued, "Jóváírás keletkezett",
-                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi lemondásod után {cancelled.PriceHuf} Ft jóváírás került az egyenlegedre.");
+            var (type, title, message) = (cancelled.CancellationReason, isInvoiced) switch
+            {
+                (CancellationReason.DayExcluded, true) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került, a rendelésed jóváírásra került."),
+                (CancellationReason.DayExcluded, false) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."),
+                (_, true) => (NotificationType.CreditIssued, "Jóváírás keletkezett",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi lemondásod után {cancelled.PriceHuf} Ft jóváírás került az egyenlegedre."),
+                _ => (NotificationType.MenuCancelled, "Rendelésed lemondva",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."),
+            };
 
             notifications.Add(new UserNotification
             {
@@ -517,13 +538,12 @@ public static class DatabaseSeeder
                 Message = message,
                 RelatedDate = cancelled.Date,
                 RelatedMenuOrderId = cancelled.Id,
-                CreatedAtUtc = cancelled.CancelledAtUtc.Value,
+                CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
             });
         }
 
         // A little variety beyond auto-generated cancellation credits, so the balances/ledger views show
         // a manual adjustment and a revoked credit too, not just cancellation credits.
-        var admin = users.First(u => u.RoleId == roles[AdminRoleName].Id);
         var creditSubject = workers[0];
 
         var manualCredit = new CreditEntry
@@ -579,6 +599,62 @@ public static class DatabaseSeeder
             Note = "A korrekció tévesen lett kiadva, visszavonva",
             RemainingHuf = 0,
         });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// A lezárt előző időszakot a valóságban már kiszámláztuk, ezért a seed is kiállítja rá a számlákat,
+    /// és rábélyegzi a <see cref="MenuOrder.PeriodInvoiceId"/>-t az összes odatartozó rendelésre (a
+    /// lemondottakra is — azok a lemondás pillanatában még rajta voltak a számlán).
+    ///
+    /// Ez nem kozmetika: a jóváírás keletkezésének feltétele, hogy a nap ki legyen számlázva, tehát
+    /// enélkül a seedelt lemondásokért egyáltalán nem járna jóváírás, és az egyenleg-képernyők üresek
+    /// lennének. A folyó és a következő időszak szándékosan számlázatlan marad — azokon a
+    /// „Számlák generálása" gomb mutatható be.
+    /// </summary>
+    private static async Task SeedPastPeriodInvoicesAsync(
+        EbedrendeloDbContext db, List<MenuOrder> orders, OrderingPeriod pastPeriod, int adminUserId, CancellationToken ct)
+    {
+        var pastOrders = orders.Where(o => o.OrderingPeriodId == pastPeriod.Id).ToList();
+        if (pastOrders.Count == 0)
+        {
+            return;
+        }
+
+        var generatedAtUtc = pastPeriod.OrderDeadline.AddHours(1);
+
+        var invoices = pastOrders
+            .GroupBy(o => o.UserId)
+            .OrderBy(g => g.Key)
+            .Select((g, index) =>
+            {
+                var gross = g.Sum(o => o.PriceHuf);
+                return new PeriodInvoice
+                {
+                    UserId = g.Key,
+                    OrderingPeriodId = pastPeriod.Id,
+                    SequenceNumber = 1,
+                    GrossHuf = gross,
+                    CreditAppliedHuf = 0,
+                    PayableHuf = gross,
+                    // Minden második számla fizetettként, hogy mindkét állapot látszódjon a listában.
+                    IsPaid = index % 2 == 0,
+                    PaidAtUtc = index % 2 == 0 ? generatedAtUtc.AddDays(5) : null,
+                    MarkedPaidByUserId = index % 2 == 0 ? adminUserId : null,
+                    GeneratedAtUtc = generatedAtUtc,
+                };
+            })
+            .ToList();
+
+        db.PeriodInvoices.AddRange(invoices);
+        await db.SaveChangesAsync(ct);
+
+        var invoiceIdByUserId = invoices.ToDictionary(i => i.UserId, i => i.Id);
+        foreach (var order in pastOrders)
+        {
+            order.PeriodInvoiceId = invoiceIdByUserId[order.UserId];
+        }
+
         await db.SaveChangesAsync(ct);
     }
 

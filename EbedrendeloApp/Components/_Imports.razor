@@ -11,3 +11,7 @@
 @using EbedrendeloApp.Common.Formatting
 @using EbedrendeloApp.Components
 @using EbedrendeloApp.Components.Layout
+@* A közös komponensek (PageHeader, PageState, WeekGrid, PeriodSelector) minden oldalnak kellenek.
+   Enélkül a hiányzó @using-ot nem fordítási hiba, hanem néma RZ10012 warning jelzi: a Razor
+   ismeretlen HTML-elemként rendereli a <PageHeader>-t, és az oldal címsora nyomtalanul eltűnik. *@
+@using EbedrendeloApp.Components.Shared

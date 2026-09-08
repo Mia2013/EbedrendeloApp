@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Shared;
@@ -44,7 +44,7 @@ public class ColleaguePickerTests : MudBunitContext
     }
 
     [Fact]
-    public void A_worker_must_give_all_three_fields_before_the_search_is_enabled()
+    public async Task A_worker_must_give_all_three_fields_before_the_search_is_enabled()
     {
         var cut = RenderPicker(isAdmin: false);
         cut.Find("button").Click();
@@ -56,7 +56,7 @@ public class ColleaguePickerTests : MudBunitContext
         Assert.Equal(3, fields.Count);
         foreach (var field in fields)
         {
-            cut.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync("x")).GetAwaiter().GetResult();
+            await cut.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync("x"));
         }
 
         searchButton = cut.FindAll("button").First(b => b.TextContent.Contains("Kolléga keresése"));

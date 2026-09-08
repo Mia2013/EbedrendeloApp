@@ -108,10 +108,19 @@ public sealed class GetOrderableDaysHandler(
 
             if (userOrders.TryGetValue(date, out var order))
             {
-                var cancellable = period.IsOpen && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date));
+                var changeable = period.IsOpen
+                    && workingDayCalculator.CanChange(date, nowLocal, settings, excludedDates, kitchenClosures.Contains(date));
+
+                // Idegen nézetben a lemondás admin-jog (AC 3.2.8), tehát ez a lekérdezés — amit a
+                // 01-szerver-architektura.md §6 „a felület egyetlen igazságforrása"-ként ír le — nem
+                // állíthatja, hogy a nap lemondható. Az OK viszont marad AlreadyOrdered: a nap maga
+                // rendben van, csak a hívónak nincs joga lemondani — nem „lejárt a határidő".
+                var cancellable = changeable && !foreignView;
                 var variant = variants.GetValueOrDefault(order.MenuVariantId);
-                var cancelReason = cancellable ? null : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
-                result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.SoupName, cancellable ? ErrorCodes.AlreadyOrdered : cancelReason, null, settings.MenuPortionHuf));
+                var orderedReason = changeable
+                    ? ErrorCodes.AlreadyOrdered
+                    : (period.IsOpen ? ErrorCodes.DeadlinePassed : ErrorCodes.PeriodClosed);
+                result.Add(new OrderableDayDto(date, false, cancellable, variant?.Code, variant?.SoupName, orderedReason, null, settings.MenuPortionHuf));
                 continue;
             }
 

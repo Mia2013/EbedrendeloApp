@@ -11,7 +11,7 @@
         @ChildContent
     </ChildContent>
     <ErrorContent Context="exception">
-        <MudPaper Elevation="1" Class="pa-6 rounded-lg">
+        <MudPaper Elevation="1" Class="@($"pa-6 rounded-lg {Class}")">
             <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
                 <MudIcon Icon="@IconFor(exception)" Size="Size.Large" Color="@ColorFor(exception)" />
                 <MudStack Spacing="2" Class="flex-grow-1">
@@ -36,6 +36,11 @@
 @code {
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>MudBlazor utility-osztályok a hibakártyán — a dialógusok köré tett példány így tud
+    /// margót kapni, mert az a <c>MudMainContent</c> konténerén kívül renderel.</summary>
+    [Parameter]
+    public string? Class { get; set; }
 
     private ErrorBoundary? boundary;
 

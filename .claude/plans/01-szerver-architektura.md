@@ -1,4 +1,4 @@
-# Ebédrendelő — szerver oldali architektúra és implementációs terv
+﻿# Ebédrendelő — szerver oldali architektúra és implementációs terv
 
 > **Ez a dokumentum egyetlen mérvadó példánya.** Más helyen (home `.claude/plans/`, `docs/`) ne
 > keletkezzen belőle másolat.
@@ -714,9 +714,13 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `DeleteDailyMenuCommand` **[A]** — teljes nap menüjének **soft delete**-je, minden aktív rendelés
   lemondása (`MenuDeleted`) + jóváírás; a menü és minden variánsa `RemovedAtUtc`-t kap,
   `IsPublished = false`
-- `GetDailyMenuQuery` **[A/U]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata;
-  mindkettő a `RemovedAtUtc == null` variánsokat/napokat adja vissza, és az `IncludeUnpublished` flaget
-  a hívó szerepköre szerint kell állítani ([A] = true, [U] = false — AC 2.5.2)
+- `GetDailyMenuQuery` **[A]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata;
+  mindkettő a `RemovedAtUtc == null` variánsokat/napokat adja vissza. Az `IncludeUnpublished` flag
+  admin-jog (AC 2.5.2), de a kettő ezt máshogy éri el: a `GetDailyMenuQuery`-t **csak** admin felület
+  hívja, ezért az egészében `IRequireAdmin`. A `GetPeriodMenuQuery`-t a dolgozói naptár is hívja
+  (`IncludeUnpublished: false`), tehát maga a kérés nyitott, és a **kapcsolót** a handler ellenőrzi
+  (`ForbiddenException`, ha nem admin). Jelölő ezt nem tudná kifejezni: a jelölők a kérés egészére
+  vonatkoznak, nem egy paraméterértékre
 - `GetTodayMenuForUserQuery` **[U]** — **a „napi kiírás"**: mai menü variánsai + a felhasználó aznapi
   választása, vagy explicit „ma nem rendeltél" jelzés + mai a la carte kínálat és a felhasználó a la
   carte rendelése
@@ -869,9 +873,15 @@ feltöltés — minden blokk csak akkor fut, ha az adott tábla/nap még üres):
 - **ALaCarteDailyOffer**: a következő 5 munkanapra, tételenként napi keret — a Leves tételnek is jár
   napi ajánlat (legfeljebb egy/nap), a `Capacity` rá nézve figyelmen kívül hagyott placeholder
   (`int.MaxValue`), mert a leves korlátlan és sosem kerül ellenőrzésre.
-- **Minta forgalom**: néhány aktív `MenuOrder` az **első időszakhoz kötve**, 1 felhasználó által lemondott
-  rendelés (`ByUser`) a hozzá tartozó `CreditEntry`-vel, 1 kizárás miatt lemondott rendelés
-  (`DayExcluded`), 1–2 `UserNotification` — hogy a ledger, az egyenleg és az értesítés nézet ne legyen üres.
+- **Minta forgalom**: `MenuOrder`-ek mindhárom időszakra, a múltban sűrűbben; egy részük `ByUser`
+  lemondott, egy nap pedig kizárás miatt (`DayExcluded`) — a hozzájuk tartozó `UserNotification`-ökkel.
+- **PeriodInvoice**: a **lezárt előző időszakra** felhasználónként egy alapszámla (`SequenceNumber = 1`),
+  a hozzá tartozó rendelésekre rábélyegzett `MenuOrder.PeriodInvoiceId`-vel; minden második fizetettként.
+  Ez nem kozmetika: jóváírás **csak kiszámlázott napért** keletkezhet (`ICreditService`), tehát enélkül a
+  seedelt lemondásokért nem járna `CreditEntry`, és az egyenleg-nézet üres lenne. A folyó és a következő
+  időszak szándékosan számlázatlan marad — azokon mutatható be a „Számlák generálása".
+- **CreditEntry**: a kiszámlázott napok lemondásaiból automatikusan, plusz egy kézi korrekció
+  (`ManualAdjustment`) és egy visszavont jóváírás (`CreditRevoked`), hogy a ledger mindhárom fajtát mutassa.
 
 ---
 

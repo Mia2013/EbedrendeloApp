@@ -1,4 +1,6 @@
 using Bunit;
+using EbedrendeloApp.Common.Time;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EbedrendeloApp.Tests.TestSupport;
 
@@ -12,6 +14,17 @@ namespace EbedrendeloApp.Tests.TestSupport;
 /// </summary>
 public abstract class MudBunitContext : BunitContext
 {
+    protected MudBunitContext()
+    {
+        // A naptár-komponensek a szerverrel közös órából veszik a „ma"-t, nem a gép helyi idejéből
+        // (l. WeekGrid.EffectiveToday). A tesztek a valós mai napot várják, ezért itt az az alapérték;
+        // aki rögzített dátumot akar, felülírja egy saját FixedAppClock-kal.
+        // SpecifyKind kell: a FixedAppClock DateTimeOffset(…, TimeSpan.Zero)-t képez, ami Local Kind-ra
+        // ArgumentException-t dob — a DateTime.Today pedig Local.
+        Services.AddSingleton<IAppClock>(
+            new FixedAppClock(DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Unspecified)));
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)

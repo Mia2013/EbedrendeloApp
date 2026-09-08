@@ -8,7 +8,16 @@
 
 <MudThemeProvider Theme="AppTheme.Default" />
 <MudPopoverProvider />
-<MudDialogProvider CloseButton="true" />
+
+@* A dialógusok tartalmát a MudDialogProvider rendereli, ami a MudLayout TESTVÉRE — vagyis a @Body köré
+   tett hibahatáron KÍVÜL esik. A pénzmozgató műveletek viszont jórészt dialógusból indulnak
+   (számlagenerálás, fizetettnek jelölés, kézi jóváírás, napzárás), és a behaviorök szándékosan kivételt
+   dobnak: enélkül a saját hibahatára nélkül pont ezek döntenék le a circuitot, amit a másik boundary
+   megelőzni hivatott. *@
+<AppErrorBoundary Class="ma-6">
+    <MudDialogProvider CloseButton="true" />
+</AppErrorBoundary>
+
 <MudSnackbarProvider />
 
 <MudLayout>

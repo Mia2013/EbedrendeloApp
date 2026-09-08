@@ -1,3 +1,6 @@
+﻿@using EbedrendeloApp.Common.Time
+@inject IAppClock Clock
+
 @* Hétfő–péntek rács egy rendelési időszak napjaira. Korábban ez négy oldalon (UserCalendar, MyOrders,
    AdminOrders, DailyMenuEditor) volt lemásolva külön BEM-prefixszel és külön BuildWeeks() metódussal —
    négy helyen kellett kézzel szinkronban tartani ugyanazt a rácsot, cellastílust és töréspontot.
@@ -26,7 +29,7 @@
             }
             else
             {
-                <MudPaper Elevation="1" Class="@($"week-grid__cell rounded-lg pa-2 {(HighlightToday && date == Today ? "week-grid__cell--today" : null)}")">
+                <MudPaper Elevation="1" Class="@($"week-grid__cell rounded-lg pa-2 {(HighlightToday && date == EffectiveToday ? "week-grid__cell--today" : null)}")">
                     @CellContent(date.Value)
                 </MudPaper>
             }
@@ -44,8 +47,13 @@
     [Parameter, EditorRequired]
     public RenderFragment<DateOnly> CellContent { get; set; } = default!;
 
+    /// <summary>Ha a hívó nem adja meg, az <c>IAppClock</c> Europe/Budapest szerinti mai napja — nem a
+    /// gép helyi ideje. Konténerben a host jellemzően UTC-n jár, és éjfél után a kettő egy napot
+    /// térhet el, ami a „ma" kiemelést rossz cellára tenné.</summary>
     [Parameter]
-    public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    public DateOnly? Today { get; set; }
+
+    private DateOnly EffectiveToday => Today ?? Clock.Today;
 
     [Parameter]
     public bool HighlightToday { get; set; } = true;

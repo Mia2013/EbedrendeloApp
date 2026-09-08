@@ -1,4 +1,5 @@
-using EbedrendeloApp.Common.Results;
+﻿using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Menus.GetPeriodMenu;
@@ -10,11 +11,14 @@ namespace EbedrendeloApp.Tests.Features.Menus;
 public class GetPeriodMenuHandlerTests : IDisposable
 {
     private readonly SqliteDbContextFactory dbFactory = new();
+
+    // A meglévő tesztek IncludeUnpublished: true-val hívnak, ami admin-jog (AC 2.5.2) — a fixture
+    // ezért admin. A dolgozói elutasítást külön teszt fedi lent.
     private readonly GetPeriodMenuHandler sut;
 
     public GetPeriodMenuHandlerTests()
     {
-        sut = new GetPeriodMenuHandler(dbFactory);
+        sut = new GetPeriodMenuHandler(dbFactory, new FakeCurrentUser(1, "Teszt Admin", isAdmin: true));
     }
 
     public void Dispose() => dbFactory.Dispose();
@@ -54,6 +58,34 @@ public class GetPeriodMenuHandlerTests : IDisposable
         Assert.True(result.IsSuccess);
         var day = Assert.Single(result.Value!);
         Assert.Equal(new DateOnly(2026, 8, 10), day.Date);
+    }
+
+    [Fact]
+    public async Task A_worker_cannot_ask_for_unpublished_menus()
+    {
+        // A kérés maga nyitott (a dolgozói naptár is hívja), de az IncludeUnpublished kapcsoló
+        // admin-jog (AC 2.5.2) — jelölővel ez nem fejezhető ki, ezért a handler őrzi.
+        var workerSut = new GetPeriodMenuHandler(dbFactory, new FakeCurrentUser(2, "Teszt Dolgozó", isAdmin: false));
+        var periodId = await SeedPeriodAsync(new DateOnly(2026, 8, 17), new DateOnly(2026, 8, 21));
+        await SeedMenuAsync(new DateOnly(2026, 8, 17), isPublished: false);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => workerSut.Handle(new GetPeriodMenuQuery(periodId, IncludeUnpublished: true), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_worker_may_read_the_published_menus()
+    {
+        var workerSut = new GetPeriodMenuHandler(dbFactory, new FakeCurrentUser(2, "Teszt Dolgozó", isAdmin: false));
+        var periodId = await SeedPeriodAsync(new DateOnly(2026, 8, 17), new DateOnly(2026, 8, 21));
+        await SeedMenuAsync(new DateOnly(2026, 8, 17), isPublished: true);
+        await SeedMenuAsync(new DateOnly(2026, 8, 18), isPublished: false);
+
+        var result = await workerSut.Handle(new GetPeriodMenuQuery(periodId, IncludeUnpublished: false), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var day = Assert.Single(result.Value!);
+        Assert.Equal(new DateOnly(2026, 8, 17), day.Date);
     }
 
     private async Task<int> SeedPeriodAsync(DateOnly start, DateOnly end)

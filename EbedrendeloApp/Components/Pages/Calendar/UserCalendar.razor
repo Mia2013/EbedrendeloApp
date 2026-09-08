@@ -1,6 +1,7 @@
 ﻿@page "/naptar"
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Common.Time
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Billing.GetMyBalance
 @using EbedrendeloApp.Features.Calendar
@@ -16,6 +17,7 @@
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
+@inject IAppClock Clock
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -38,7 +40,10 @@
     </Filters>
     <ChildContent>
 
-        @if (myBalanceHuf is > 0)
+        @* A saját jóváírásodról szól, ezért a kolléga naptárán nem jelenhet meg: ott minden pipa az ŐT
+           terheli, és az ő egyenlege számítódik be — a szöveg („levonódik a következő számládból")
+           ilyenkor félrevezető lenne. *@
+        @if (myBalanceHuf is > 0 && targetUser is null)
         {
             <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
                 Van fel nem használt jóváírásod a korábbi lemondásokból: <strong>@HungarianNumberFormat.Huf(myBalanceHuf)</strong> — ez nem térül vissza készpénzben, hanem automatikusan levonódik a következő számládból, amikor menüt rendelsz. <MudLink Href="egyenlegem">Részletek</MudLink>
@@ -178,7 +183,7 @@ else
                 <MudText Typo="Typo.subtitle2" Class="mt-4 mb-n2">@section.Period.Name</MudText>
             }
 
-            <WeekGrid StartDate="section.From" EndDate="section.Period.EndDate" Today="today" Class="mt-4">
+            <WeekGrid StartDate="section.From" EndDate="section.Period.EndDate" Today="TodayLocal" Class="mt-4">
                 <CellContent Context="date">
                     @if (section.Days.FirstOrDefault(d => d.Date == date) is { } cell)
                     {
@@ -196,8 +201,8 @@ else
     @<MudStack Spacing="1" Style="height:100%;">
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
             <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="flex-shrink-0">
-                <MudText Typo="Typo.subtitle2" Color="@(cell.Date < today ? Color.Default : Color.Primary)" Style="font-weight:700;">@cell.Date.ToString("MM.dd.")</MudText>
-                @if (cell.Date == today)
+                <MudText Typo="Typo.subtitle2" Color="@(cell.Date < TodayLocal ? Color.Default : Color.Primary)" Style="font-weight:700;">@cell.Date.ToString("MM.dd.")</MudText>
+                @if (cell.Date == TodayLocal)
                 {
                     <MudBadge Content="@("Ma")" Color="Color.Primary" />
                 }
@@ -296,7 +301,11 @@ else
     /// helyén a <c>WeekGrid</c> ugyanolyan üres cellát rajzol, mint az időszakon kívüli napokén.</summary>
     private sealed record CalendarSection(OrderingPeriodDto Period, DateOnly From, List<OrderDayCell> Days);
 
-    private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+    /// <summary>A szerver Europe/Budapest szerint szeleteli ezt a naptárat (<c>IAppClock</c>), ezért a
+    /// felület sem számolhat a gép helyi idejéből: konténerben az UTC és Budapest között éjfél után
+    /// egy nap eltérés van, és a kolléga-nézet épp erre a dátumra vágja a rácsot. Property, nem
+    /// readonly mező — egy éjszakán át nyitva hagyott circuit különben másnap is tegnapot mutatná.</summary>
+    private DateOnly TodayLocal => Clock.Today;
 
     private List<OrderingPeriodDto> periods = [];
     private int selectedPeriodId;
@@ -328,7 +337,7 @@ else
         myBalanceHuf = (await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId))).Value;
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
-        var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();
+        var current = periods.FirstOrDefault(p => p.StartDate <= TodayLocal && p.EndDate >= TodayLocal) ?? periods.FirstOrDefault();
 
         if (current is not null)
         {
@@ -370,9 +379,9 @@ else
         if (IsColleagueOrderingView)
         {
             return periods
-                .Where(p => p.IsOpen && p.EndDate >= today)
+                .Where(p => p.IsOpen && p.EndDate >= TodayLocal)
                 .OrderBy(p => p.StartDate)
-                .Select(p => (p, p.StartDate > today ? p.StartDate : today))
+                .Select(p => (p, p.StartDate > TodayLocal ? p.StartDate : TodayLocal))
                 .ToList();
         }
 
@@ -454,40 +463,58 @@ else
 
         var succeeded = new List<DayResult>();
         var skipped = new List<DaySkip>();
+        var submittedDates = new List<DateOnly>();
+        string? failure = null;
 
         foreach (var section in sections ?? [])
         {
-            var requestDays = pendingSelections
-                .Where(kvp => section.Days.Any(d => d.Date == kvp.Key))
-                .Select(kvp => new DayOrderRequest(kvp.Key, kvp.Value))
-                .ToList();
-            if (requestDays.Count == 0)
+            var sectionDates = pendingSelections.Keys.Where(d => section.Days.Any(day => day.Date == d)).ToList();
+            if (sectionDates.Count == 0)
             {
                 continue;
             }
 
             var result = await Mediator.Send(new PlacePeriodOrderCommand(
-                EffectiveTargetUserId, CurrentUser.UserId, section.Period.Id, requestDays));
+                EffectiveTargetUserId, CurrentUser.UserId, section.Period.Id,
+                sectionDates.Select(d => new DayOrderRequest(d, pendingSelections[d])).ToList()));
 
             if (!result.IsSuccess)
             {
-                isSubmitting = false;
-                errorMessage = result.ErrorMessage;
-                Snackbar.Add(result.ErrorMessage ?? "Nem sikerült leadni a rendelést.", Severity.Error);
-                return;
+                // A korábbi szakaszok MÁR commitoltak (időszakonként külön tranzakció) — az eredményüket
+                // nem dobhatjuk el, és az oldalt sem cserélhetjük hibasávra (`errorMessage`), mert akkor
+                // a felhasználó nem látná, mi ment át, és újraküldene mindent.
+                failure = result.ErrorMessage ?? "Nem sikerült leadni a rendelést.";
+                break;
             }
 
             succeeded.AddRange(result.Value!.Succeeded);
             skipped.AddRange(result.Value.Skipped);
+            submittedDates.AddRange(sectionDates);
         }
 
         isSubmitting = false;
-        pendingSelections.Clear();
+
+        // Csak a ténylegesen beküldött napokat vesszük ki a kijelölésből; a meghiúsult szakasz pipái
+        // maradnak, hogy újra lehessen próbálni anélkül, hogy elölről kellene kattintani.
+        foreach (var date in submittedDates)
+        {
+            pendingSelections.Remove(date);
+        }
+
         await LoadDaysAsync();
 
-        if (skipped.Count == 0)
+        if (failure is not null)
+        {
+            Snackbar.Add(failure, Severity.Error);
+        }
+        else if (skipped.Count == 0)
         {
             Snackbar.Add($"{succeeded.Count} nap sikeresen megrendelve.", Severity.Success);
+            return;
+        }
+
+        if (succeeded.Count == 0 && skipped.Count == 0)
+        {
             return;
         }
 
