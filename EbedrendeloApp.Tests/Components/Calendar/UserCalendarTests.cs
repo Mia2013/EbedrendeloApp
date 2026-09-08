@@ -236,7 +236,7 @@ public class UserCalendarTests : MudBunitContext
         var cut = Render<UserCalendar>();
 
         Assert.Contains("A menü — Gulyásleves", cut.Markup);
-        var checkboxes = cut.FindAll(".order-calendar__cell input[type=checkbox]");
+        var checkboxes = cut.FindAll(".week-grid__cell input[type=checkbox]");
         var checkbox = Assert.Single(checkboxes); // only the read-only "active order" checkbox
         Assert.True(checkbox.HasAttribute("disabled"));
         Assert.NotNull(cut.Find("button[title='Lemondásra jelölés']"));
@@ -253,7 +253,7 @@ public class UserCalendarTests : MudBunitContext
         var cut = Render<UserCalendar>();
 
         Assert.Contains("A módosítási határidő lejárt", cut.Markup);
-        Assert.Single(cut.FindAll(".order-calendar__cell input[type=checkbox]"));
+        Assert.Single(cut.FindAll(".week-grid__cell input[type=checkbox]"));
     }
 
     [Fact]

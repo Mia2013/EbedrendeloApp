@@ -14,37 +14,25 @@
 
 <PageTitle>Rendelések</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.ListAlt" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Rendelések</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Naponkénti, variánsonkénti összesítő — ez alapján tudja a konyha, hány adagot kell főznie. Reklamáció esetén
-                a lenti részletes listában kereshetsz konkrét rendelésre.
-            </MudText>
-
-            @if (periods is { Count: > 0 })
-            {
-                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                           Class="mt-4 panel-narrow-surface">
-                    @foreach (var period in periods)
-                    {
-                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
-                    }
-                </MudSelect>
-            }
-        </MudStack>
-    </MudStack>
-</MudPaper>
+<PageHeader Icon="@Icons.Material.Filled.ListAlt" Title="Rendelések">
+    <Description>
+        Naponkénti, variánsonkénti összesítő — ez alapján tudja a konyha, hány adagot kell főznie. Reklamáció esetén
+        a lenti részletes listában kereshetsz konkrét rendelésre.
+    </Description>
+    <Filters>
+        @if (periods is { Count: > 0 })
+        {
+            <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
+        }
+    </Filters>
+</PageHeader>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
     <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
 }
 
-@if (orders is not null)
+@if (orders is not null && SelectedPeriod is { } period)
 {
     <MudText Typo="Typo.h6" Class="mt-6 mb-1">
         <MudIcon Icon="@Icons.Material.Filled.GridView" Color="Color.Primary" Class="mr-1" Style="vertical-align:middle;" />
@@ -52,26 +40,7 @@
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Csak az aktív (le nem mondott) rendelések számítanak bele.</MudText>
 
-    <WeekdayHeaderRow />
-
-    <div class="admin-orders-calendar mt-3">
-        @foreach (var week in BuildWeeks())
-        {
-            @foreach (var date in week)
-            {
-                @if (date is null)
-                {
-                    <div class="admin-orders-calendar__cell admin-orders-calendar__cell--empty"></div>
-                }
-                else
-                {
-                    <div class="admin-orders-calendar__cell">
-                        @SummaryCell(date.Value)
-                    </div>
-                }
-            }
-        }
-    </div>
+    <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" CellContent="SummaryCell" />
 }
 
 <MudText Typo="Typo.h6" Class="mt-8 mb-1">
@@ -158,7 +127,7 @@
                     <MudText Typo="Typo.body1" Color="Color.Primary" Style="font-weight:700;">@orderCount</MudText>
                 </MudStack>
             }
-            <MudStack Row Justify="Justify.SpaceBetween" Class="admin-orders-calendar__total mt-1 pt-1">
+            <MudStack Row Justify="Justify.SpaceBetween" Class="border-t border-solid mud-border-lines-default mt-1 pt-1">
                 <MudText Typo="Typo.caption">Összesen</MudText>
                 <MudText Typo="Typo.caption" Style="font-weight:700;">@variantCounts.Sum(v => v.Count) adag</MudText>
             </MudStack>
@@ -252,36 +221,5 @@
                       .ToList());
     }
 
-    private List<DateOnly?[]> BuildWeeks()
-    {
-        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
-        if (period is null)
-        {
-            return [];
-        }
-
-        var weeks = new List<DateOnly?[]>();
-        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
-        {
-            var week = new DateOnly?[5];
-            for (var i = 0; i < 5; i++)
-            {
-                var date = weekStart.AddDays(i);
-                week[i] = date >= period.StartDate && date <= period.EndDate ? date : null;
-            }
-
-            weeks.Add(week);
-        }
-
-        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
-        {
-            weeks.RemoveAt(0);
-        }
-
-        return weeks;
-    }
-
-    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
-
-    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+    private OrderingPeriodDto? SelectedPeriod => periods.FirstOrDefault(p => p.Id == selectedPeriodId);
 }

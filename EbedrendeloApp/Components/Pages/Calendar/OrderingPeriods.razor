@@ -11,20 +11,16 @@
 
 <PageTitle>Rendelési időszakok</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Rendelési időszakok</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
-            </MudText>
-        </MudStack>
+<PageHeader Icon="@Icons.Material.Filled.DateRange" Title="Rendelési időszakok" Class="mb-4">
+    <Description>
+        Nem naptári hónapokhoz kötött rendelési ciklusok. Átfedés nem engedélyezett, rés megengedett.
+    </Description>
+    <Actions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialogAsync">
             Új időszak
         </MudButton>
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 <MudAlert Severity="Severity.Info" Class="my-4">
     Ha egy időszakhoz már tartozik rendelés, a kezdő-, záró- és leadási határidő nem módosítható — csak a

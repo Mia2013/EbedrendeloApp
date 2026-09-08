@@ -1,0 +1,28 @@
+/* Csak a rács geometriája marad kézi CSS-ben — a cellák megjelenését (háttér, lekerekítés, árnyék,
+   szaggatott keret) a MudPaper és a MudBlazor border-utility osztályai adják.
+
+   Az oszlopszám és a térköz az app.css-ben lévő --week-grid-* változókból jön, hogy a
+   WeekdayHeaderRow fejlécsora és ez a rács ne tudjon elcsúszni egymástól. */
+.week-grid {
+    display: grid;
+    grid-template-columns: var(--week-grid-columns);
+    column-gap: var(--week-grid-column-gap);
+    row-gap: 14px;
+    margin-top: 12px;
+}
+
+/* ::deep kell: a cellák MudPaper-ek, azaz gyerekkomponens által renderelt elemek, amikre a
+   CSS-izoláció b-xxx attribútuma NEM kerül rá — nélküle ezek a szabályok némán nem érvényesülnének. */
+.week-grid ::deep .week-grid__cell {
+    min-height: 90px;
+}
+
+.week-grid ::deep .week-grid__cell--today {
+    background: var(--mud-palette-primary-hover);
+}
+
+@media (max-width: 1279px) {
+    .week-grid {
+        grid-template-columns: 1fr;
+    }
+}

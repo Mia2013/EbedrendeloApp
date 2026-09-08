@@ -13,21 +13,17 @@
 
 <PageTitle>À la carte ételek</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">À la carte ételek</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Az à la carte törzsadat — itt vehetsz fel új tételt, vagy szerkesztheted/vezetheted ki a meglévőket. A
-                napi kínálatot a "Napi kínálat" oldalon állíthatod be.
-            </MudText>
-        </MudStack>
+<PageHeader Icon="@Icons.Material.Filled.Fastfood" Title="À la carte ételek">
+    <Description>
+        Az à la carte törzsadat — itt vehetsz fel új tételt, vagy szerkesztheted/vezetheted ki a meglévőket. A
+        napi kínálatot a "Napi kínálat" oldalon állíthatod be.
+    </Description>
+    <Actions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddItemAsync">
             Új tétel
         </MudButton>
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 <MudStack Spacing="3" Class="mt-4 mb-3" Row Wrap="Wrap.Wrap" Justify="Justify.SpaceBetween">
     <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">

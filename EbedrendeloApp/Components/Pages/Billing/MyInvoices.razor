@@ -1,5 +1,6 @@
 @page "/szamlaim"
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Billing.GetMyInvoices
 @using MediatR
 @inject IMediator Mediator
@@ -7,30 +8,17 @@
 
 <PageTitle>Számláim</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Számláim</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Az időszaki menüszámláid, és hogy a jóváírásaidat valóban beszámították-e. Az à la carte tételeket
-                aznap fizeted, azok nem kerülnek ide.
-            </MudText>
-        </MudStack>
-    </MudStack>
-</MudPaper>
+<PageHeader Icon="@Icons.Material.Filled.ReceiptLong" Title="Számláim">
+    <Description>
+        Az időszaki menüszámláid, és hogy a jóváírásaidat valóban beszámították-e. Az à la carte tételeket
+        aznap fizeted, azok nem kerülnek ide.
+    </Description>
+</PageHeader>
 
-@if (invoices is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else if (invoices.Count == 0)
-{
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">Még nincs számlád.</MudText>
-}
-else
-{
-    @foreach (var invoice in invoices)
+<PageState IsLoading="@(invoices is null && errorMessage is null)" ErrorMessage="@errorMessage"
+           IsEmpty="@(invoices is { Count: 0 })" EmptyText="Még nincs számlád."
+           EmptyIcon="@Icons.Material.Filled.ReceiptLong">
+    @foreach (var invoice in invoices ?? [])
     {
         <MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Spacing="3">
@@ -98,16 +86,24 @@ else
             }
         </MudPaper>
     }
-}
+</PageState>
 
 @code {
     private List<MyInvoiceDto>? invoices;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         await CurrentUser.EnsureLoadedAsync();
 
         var result = await Mediator.Send(new GetMyInvoicesQuery(CurrentUser.UserId));
-        invoices = result.Value!.ToList();
+        if (result.IsSuccess)
+        {
+            invoices = result.Value!.ToList();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage ?? "Nem sikerült betölteni a számláidat.";
+        }
     }
 }

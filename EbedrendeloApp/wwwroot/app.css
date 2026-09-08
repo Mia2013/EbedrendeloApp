@@ -1,6 +1,13 @@
 /* A tipográfiát, gombokat és form-stílusokat a MudBlazor adja.
    Itt csak az marad, ami nem MudBlazor komponensekre vonatkozik. */
 
+/* A hét-rács geometriája. Két komponens osztozik rajta — a WeekdayHeaderRow fejlécsora és a WeekGrid
+   napcellái —, és ha a kettő elcsúszik, a fejléc nem a saját oszlopa fölött áll. Ezért egy helyen. */
+:root {
+    --week-grid-columns: repeat(5, minmax(0, 1fr));
+    --week-grid-column-gap: 12px;
+}
+
 h1:focus {
     outline: none;
 }

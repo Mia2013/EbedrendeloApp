@@ -21,58 +21,45 @@
 
 <PageTitle>Rendelés</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Rendelés</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Pipáld ki, melyik napra melyik menüt kéred — így egy pillantással átlátod, mit rendeltél már és mi még hiányzik.
-            </MudText>
-
-            <MudStack Row Spacing="3" Wrap="Wrap.Wrap" Class="mt-4">
-                @if (periods is { Count: > 0 })
+<PageHeader Icon="@Icons.Material.Filled.AddShoppingCart" Title="Rendelés">
+    <Description>
+        Pipáld ki, melyik napra melyik menüt kéred — így egy pillantással átlátod, mit rendeltél már és mi még hiányzik.
+    </Description>
+    <Filters>
+        @if (periods is { Count: > 0 })
+        {
+            <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
+        }
+        @* Más nevében rendelni csak admin tud — a szerveroldali kaput az IActsOnBehalfOf
+           jelölő + AuthorizationBehavior adja, ez itt csak a felület kényelme. *@
+        @if (CurrentUser.IsAdmin)
+        {
+            <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       Class="panel-narrow-surface">
+                <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
+                @foreach (var colleague in colleagues)
                 {
-                    <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                               Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                               Class="panel-narrow-surface">
-                        @foreach (var period in periods)
-                        {
-                            <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
-                        }
-                    </MudSelect>
+                    <MudSelectItem Value="@((int?)colleague.Id)">@colleague.DisplayName</MudSelectItem>
                 }
-                @* Más nevében rendelni csak admin tud — a szerveroldali kaput az IActsOnBehalfOf
-                   jelölő + AuthorizationBehavior adja, ez itt csak a felület kényelme. *@
-                @if (CurrentUser.IsAdmin)
-                {
-                    <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
-                               Class="panel-narrow-surface">
-                        <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
-                        @foreach (var colleague in colleagues)
-                        {
-                            <MudSelectItem Value="@((int?)colleague.Id)">@colleague.DisplayName</MudSelectItem>
-                        }
-                    </MudSelect>
-                }
-            </MudStack>
+            </MudSelect>
+        }
+    </Filters>
+    <ChildContent>
+        @if (targetUserId is not null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                @colleagues.First(c => c.Id == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
+            </MudAlert>
+        }
 
-            @if (targetUserId is not null)
-            {
-                <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
-                    @colleagues.First(c => c.Id == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
-                </MudAlert>
-            }
-
-            @if (myBalanceHuf is > 0)
-            {
-                <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
-                    Van fel nem használt jóváírásod a korábbi lemondásokból: <strong>@HungarianNumberFormat.Huf(myBalanceHuf)</strong> — ez nem térül vissza készpénzben, hanem automatikusan levonódik a következő számládból, amikor menüt rendelsz. <MudLink Href="egyenlegem">Részletek</MudLink>
-                </MudAlert>
-            }
-        </MudStack>
-    </MudStack>
-</MudPaper>
+        @if (myBalanceHuf is > 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                Van fel nem használt jóváírásod a korábbi lemondásokból: <strong>@HungarianNumberFormat.Huf(myBalanceHuf)</strong> — ez nem térül vissza készpénzben, hanem automatikusan levonódik a következő számládból, amikor menüt rendelsz. <MudLink Href="egyenlegem">Részletek</MudLink>
+            </MudAlert>
+        }
+    </ChildContent>
+</PageHeader>
 
 @if (days is null)
 {
@@ -82,7 +69,7 @@ else if (!string.IsNullOrEmpty(errorMessage))
 {
     <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
 }
-else
+else if (SelectedPeriod is { } period)
 {
     <MudStack Row Spacing="6" Class="mt-4" Wrap="Wrap.Wrap">
         <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
@@ -103,27 +90,14 @@ else
         </MudStack>
     </MudStack>
 
-    <div class="mt-4">
-        <WeekdayHeaderRow />
-    </div>
-    <div class="order-calendar mt-3">
-        @foreach (var week in BuildWeeks())
-        {
-            @foreach (var cell in week)
+    <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today" Class="mt-4">
+        <CellContent Context="date">
+            @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
             {
-                @if (cell is null)
-                {
-                    <div class="order-calendar__cell order-calendar__cell--empty"></div>
-                }
-                else
-                {
-                    <div class="order-calendar__cell @(cell.Date == today ? "order-calendar__cell--today" : null)">
-                        @DayCell(cell)
-                    </div>
-                }
+                @DayCell(cell)
             }
-        }
-    </div>
+        </CellContent>
+    </WeekGrid>
 
     @* A két összesítő sáv szándékosan a rács UTÁN, nem előtte jelenik meg — így egy pipálás nem tolja
        lejjebb a rácsot (ahol épp kattintott a felhasználó), csak a rács alatti terület nő. *@
@@ -180,24 +154,24 @@ else
     /// se rendelhetőség).</summary>
     private RenderFragment<OrderDayCell> DayCell => cell =>
     @<MudStack Spacing="1" Style="height:100%;">
-        <div class="order-calendar__cell-header">
-            <div class="order-calendar__cell-header-left">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="flex-shrink-0">
                 <MudText Typo="Typo.subtitle2" Color="@(cell.Date < today ? Color.Default : Color.Primary)" Style="font-weight:700;">@cell.Date.ToString("MM.dd.")</MudText>
                 @if (cell.Date == today)
                 {
                     <MudBadge Content="@("Ma")" Color="Color.Primary" />
                 }
-            </div>
+            </MudStack>
 
             @if (cell.ActiveVariantCode is not null && cell.Cancellable)
             {
                 var marked = pendingCancellations.Contains(cell.Date);
-                <MudIconButton Icon="@(marked ? Icons.Material.Filled.RestoreFromTrash : Icons.Material.Filled.DeleteForever)"
+                <MudIconButton Class="pa-1" Icon="@(marked ? Icons.Material.Filled.RestoreFromTrash : Icons.Material.Filled.DeleteForever)"
                                Color="@(marked ? Color.Error : Color.Default)" Variant="Variant.Text" Size="Size.Small"
                                title="@(marked ? "Lemondás visszavonása" : "Lemondásra jelölés")"
                                OnClick="() => ToggleCancellation(cell.Date)" />
             }
-        </div>
+        </MudStack>
 
         @if (cell.ActiveVariantCode is { } activeCode)
         {
@@ -353,41 +327,10 @@ else
             .ToList();
     }
 
-    /// <summary>Hétfő-Péntek oszlopos naptár-rács hetes sorokba rendezve — a `days` (`GetOrderableDaysQuery`)
-    /// eleve csak munkanapokat ad vissza, a hétvégék így sosem jelennek meg oszlopként (ugyanaz a minta,
-    /// mint a `DailyMenuEditor.razor`-ban).</summary>
-    private List<OrderDayCell?[]> BuildWeeks()
-    {
-        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
-        if (period is null || days is null)
-        {
-            return [];
-        }
-
-        var weeks = new List<OrderDayCell?[]>();
-        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
-        {
-            var week = new OrderDayCell?[5];
-            for (var i = 0; i < 5; i++)
-            {
-                var date = weekStart.AddDays(i);
-                week[i] = days.FirstOrDefault(d => d.Date == date);
-            }
-
-            weeks.Add(week);
-        }
-
-        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
-        {
-            weeks.RemoveAt(0);
-        }
-
-        return weeks;
-    }
-
-    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
-
-    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+    /// <summary>A hétfő–péntek rácsot a közös `WeekGrid` építi az időszak dátumtartományából; a
+    /// `days` (`GetOrderableDaysQuery`) eleve csak munkanapokra ad sort, így a cella-sablon egyszerűen
+    /// dátum szerint keresi ki a sajátját.</summary>
+    private OrderingPeriodDto? SelectedPeriod => periods.FirstOrDefault(p => p.Id == selectedPeriodId);
 
     private void TogglePending(OrderDayCell cell, string variantCode)
     {

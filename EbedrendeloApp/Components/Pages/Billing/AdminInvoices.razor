@@ -1,5 +1,6 @@
 @page "/szamlak"
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Billing.GeneratePeriodInvoices
 @using EbedrendeloApp.Features.Billing.GetInvoices
 @using EbedrendeloApp.Features.Calendar
@@ -13,35 +14,23 @@
 
 <PageTitle>Számlák</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
-        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Számlák</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                A számla a rendelési időszak tömeges leadási határidejének leteltével generálható, és csak a
-                menürendeléseket tartalmazza — az à la carte tételeket a dolgozó aznap fizeti. Újrafuttatva csak
-                az azóta leadott napokról készít kiegészítő számlát, a korábban kiszámlázottakat nem érinti.
-            </MudText>
-        </MudStack>
-
+<PageHeader Icon="@Icons.Material.Filled.ReceiptLong" Title="Számlák">
+    <Description>
+        A számla a rendelési időszak tömeges leadási határidejének leteltével generálható, és csak a
+        menürendeléseket tartalmazza — az à la carte tételeket a dolgozó aznap fizeti. Újrafuttatva csak
+        az azóta leadott napokról készít kiegészítő számlát, a korábban kiszámlázottakat nem érinti.
+    </Description>
+    <Actions>
         @if (periods.Count > 0)
         {
-            <MudStack Row Spacing="2" AlignItems="AlignItems.End">
-                <MudSelect T="int" Label="Időszak" Value="generatePeriodId" ValueChanged="@(v => generatePeriodId = v)"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:220px;">
-                    @foreach (var period in periods)
-                    {
-                        <MudSelectItem Value="@period.Id">@period.Name</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="GenerateAsync">
-                    Számlák generálása
-                </MudButton>
-            </MudStack>
+            <PeriodSelector Periods="periods" Value="generatePeriodId" ValueChanged="@(v => generatePeriodId = v)"
+                            Label="Időszak" ShowDateRange="false" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="GenerateAsync">
+                Számlák generálása
+            </MudButton>
         }
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 @if (generationSummary is not null)
 {
@@ -70,6 +59,11 @@
         }
     </MudSelect>
 </MudStack>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+}
 
 <MudTable Items="invoices" Loading="@(invoices is null)" Hover="true" Elevation="1" Dense="true">
     <HeaderContent>
@@ -148,6 +142,7 @@
     private string statusFilter = "Mind";
     private List<InvoiceDto>? invoices;
     private string? generationSummary;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -180,7 +175,16 @@
         };
 
         var result = await Mediator.Send(new GetInvoicesQuery(filterPeriodId, isPaid));
-        invoices = result.Value!.ToList();
+        if (result.IsSuccess)
+        {
+            invoices = result.Value!.ToList();
+            errorMessage = null;
+        }
+        else
+        {
+            invoices = [];
+            errorMessage = result.ErrorMessage ?? "Nem sikerült betölteni a számlákat.";
+        }
     }
 
     private async Task SetStatusFilterAsync(string option)

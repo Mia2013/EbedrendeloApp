@@ -192,7 +192,7 @@ public class DailyMenuEditorTests : MudBunitContext
         // a fennmaradó 2 a heti sorban üres cella dátum/hétnap felirat nélkül.
         var noMenuCount = cut.Markup.Split("Nincs még menü erre a napra.", StringSplitOptions.None).Length - 1;
         Assert.Equal(3, noMenuCount);
-        Assert.Equal(2, cut.FindAll(".menu-calendar__cell--empty").Count);
+        Assert.Equal(2, cut.FindAll(".week-grid__cell--empty").Count);
     }
 
     [Fact]
@@ -210,8 +210,8 @@ public class DailyMenuEditorTests : MudBunitContext
 
         var cut = Render<DailyMenuEditor>((ComponentParameterCollectionBuilder<DailyMenuEditor> _) => { });
 
-        Assert.Equal(5, cut.FindAll(".menu-calendar__cell").Count);
-        Assert.Empty(cut.FindAll(".menu-calendar__cell--empty"));
+        Assert.Equal(5, cut.FindAll(".week-grid__cell").Count);
+        Assert.Empty(cut.FindAll(".week-grid__cell--empty"));
     }
 
     [Fact]

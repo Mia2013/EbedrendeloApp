@@ -1,0 +1,88 @@
+@* Hétfő–péntek rács egy rendelési időszak napjaira. Korábban ez négy oldalon (UserCalendar, MyOrders,
+   AdminOrders, DailyMenuEditor) volt lemásolva külön BEM-prefixszel és külön BuildWeeks() metódussal —
+   négy helyen kellett kézzel szinkronban tartani ugyanazt a rácsot, cellastílust és töréspontot.
+
+   A cella tartalmát a hívó adja `CellContent`-ben; az időszakon kívülre eső napok (a vezető/záró
+   részhetek) üres, szaggatott cellát kapnak. *@
+
+@if (ShowHeader)
+{
+    <WeekdayHeaderRow />
+}
+
+@* A cellák MudPaper-ek: a háttér, a lekerekítés és az árnyék onnan jön, a szaggatott keret pedig a
+   MudBlazor border-utility osztályaiból — a saját CSS-ben csak a rács geometriája marad, amire nincs
+   MudBlazor megoldás (a MudGrid 12 oszlopos flex, nem tud a fejlécsorral együtt mozgó 5 oszlopot). *@
+<div class="week-grid @Class">
+    @foreach (var week in BuildWeeks())
+    {
+        @foreach (var date in week)
+        {
+            @if (date is null)
+            {
+                @* A --empty osztályhoz nem tartozik CSS-szabály (a szegélyt a border-utility-k adják) —
+                   szemantikai jelölő, hogy az üres cella azonosítható legyen. *@
+                <MudPaper Elevation="0" Class="week-grid__cell week-grid__cell--empty border-dashed border-2 mud-border-lines-default rounded-lg" Style="background:transparent;" />
+            }
+            else
+            {
+                <MudPaper Elevation="1" Class="@($"week-grid__cell rounded-lg pa-2 {(HighlightToday && date == Today ? "week-grid__cell--today" : null)}")">
+                    @CellContent(date.Value)
+                </MudPaper>
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public DateOnly StartDate { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly EndDate { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment<DateOnly> CellContent { get; set; } = default!;
+
+    [Parameter]
+    public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    [Parameter]
+    public bool HighlightToday { get; set; } = true;
+
+    /// <summary>A hét napjait mutató fejlécsor. Csak akkor kapcsold ki, ha a hívó maga rendereli.</summary>
+    [Parameter]
+    public bool ShowHeader { get; set; } = true;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+
+    private List<DateOnly?[]> BuildWeeks()
+    {
+        var weeks = new List<DateOnly?[]>();
+
+        for (var weekStart = MondayOf(StartDate); weekStart <= MondayOf(EndDate); weekStart = weekStart.AddDays(7))
+        {
+            var week = new DateOnly?[5];
+            for (var i = 0; i < 5; i++)
+            {
+                var date = weekStart.AddDays(i);
+                week[i] = date >= StartDate && date <= EndDate ? date : null;
+            }
+
+            weeks.Add(week);
+        }
+
+        // Ha az időszak hétvégén kezdődik, a MondayOf visszaugrik egy olyan hétre, amelyben egyetlen
+        // nap sincs még az időszakban — ez a vezető hét csupa null cellából állna, ezért levágjuk.
+        // Csak elölről: a záró hét soha nem lehet teljesen üres, mert az EndDate maga benne van.
+        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
+        {
+            weeks.RemoveAt(0);
+        }
+
+        return weeks;
+    }
+}
