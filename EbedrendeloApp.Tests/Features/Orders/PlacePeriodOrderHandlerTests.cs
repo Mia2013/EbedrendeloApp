@@ -144,6 +144,36 @@ public class PlacePeriodOrderHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Rejects_placing_an_order_when_the_period_is_already_invoiced()
+    {
+        await SeedAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.PeriodInvoices.Add(new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = periodId,
+                MenuGrossHuf = 0,
+                ALaCarteGrossHuf = 0,
+                GrossHuf = 0,
+                CreditAppliedHuf = 0,
+                MenuPayableHuf = 0,
+                ALaCartePayableHuf = 0,
+                PayableHuf = 0,
+                GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 10, 9, 0, 0)); // Phase A, otherwise fully orderable
+        var result = await sut.Handle(new PlacePeriodOrderCommand(userId, userId, periodId, [new DayOrderRequest(Mon, "A")]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var skip = Assert.Single(result.Value!.Skipped);
+        Assert.Equal(ErrorCodes.AlreadyInvoiced, skip.Reason);
+    }
+
+    [Fact]
     public async Task Rejects_a_date_outside_the_period()
     {
         await SeedAsync();

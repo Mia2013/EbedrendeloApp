@@ -29,11 +29,13 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.Contains("À la carte ételek", cut.Markup);
         Assert.Contains("À la carte napi kínálat", cut.Markup);
         Assert.Contains("À la carte konyhai lista", cut.Markup);
+        Assert.Contains("Számlák", cut.Markup);
 
         // The admin should be able to order for themselves too — every worker-facing link must also appear.
         Assert.Contains("Naptár", cut.Markup);
         Assert.Contains("Rendeléseim", cut.Markup);
         Assert.Contains("Mai menü", cut.Markup);
+        Assert.Contains("Számláim", cut.Markup);
     }
 
     [Fact]
@@ -45,8 +47,10 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 
         Assert.Contains("Naptár", cut.Markup);
         Assert.Contains("Rendeléseim", cut.Markup);
+        Assert.Contains("Számláim", cut.Markup);
         Assert.DoesNotContain("Rendelési időszakok", cut.Markup);
         Assert.DoesNotContain("Nem rendelhető napok", cut.Markup);
         Assert.DoesNotContain("Rendelések<", cut.Markup);
+        Assert.DoesNotContain("Számlák<", cut.Markup);
     }
 }

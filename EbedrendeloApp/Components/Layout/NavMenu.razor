@@ -49,6 +49,11 @@
             Egyenlegek
         </MudNavLink>
 
+        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">SZÁMLÁZÁS</MudText>
+        <MudNavLink Href="szamlak" Icon="@Icons.Material.Filled.ReceiptLong">
+            Számlák
+        </MudNavLink>
+
         <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">SAJÁT RENDELÉS</MudText>
         <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
             Naptár
@@ -61,6 +66,9 @@
         </MudNavLink>
         <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
             Egyenlegem
+        </MudNavLink>
+        <MudNavLink Href="szamlaim" Icon="@Icons.Material.Filled.ReceiptLong">
+            Számláim
         </MudNavLink>
     }
     else if (CurrentUser.IsLoaded)
@@ -76,6 +84,9 @@
         </MudNavLink>
         <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
             Egyenlegem
+        </MudNavLink>
+        <MudNavLink Href="szamlaim" Icon="@Icons.Material.Filled.ReceiptLong">
+            Számláim
         </MudNavLink>
     }
 </MudNavMenu>

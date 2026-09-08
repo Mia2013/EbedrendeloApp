@@ -46,6 +46,8 @@ public sealed class CancelMenuOrdersHandler(
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
         var excludedDates = await db.ExcludedDays.Select(e => e.Date).ToHashSetAsync(cancellationToken);
         var kitchenClosures = await KitchenClosureQueries.GetClosedDatesAsync(db, dates.Min(), dates.Max(), cancellationToken);
+        var invoicedUserPeriods = await PeriodInvoiceQueries.GetInvoicedUserPeriodsAsync(
+            db, [request.TargetUserId], periodIds, cancellationToken);
 
         var nowLocal = clock.LocalNow;
         var nowUtc = clock.UtcNow.UtcDateTime;
@@ -72,6 +74,16 @@ public sealed class CancelMenuOrdersHandler(
             if (kitchenClosures.Contains(date))
             {
                 skipped.Add(new DaySkip(date, ErrorCodes.DayClosed));
+                continue;
+            }
+
+            // Epic 7 — once the user's period is invoiced (PeriodInvoice exists for it), cancellation of
+            // that period's orders is blocked outright, as a deliberate business rule (not a data-
+            // integrity necessity — a post-invoice cancellation's credit would harmlessly roll into the
+            // next invoiced period per 3.3's "görgetés", since the invoice itself is a frozen snapshot).
+            if (invoicedUserPeriods.Contains((request.TargetUserId, order.OrderingPeriodId)))
+            {
+                skipped.Add(new DaySkip(date, ErrorCodes.AlreadyInvoiced));
                 continue;
             }
 

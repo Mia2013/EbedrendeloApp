@@ -96,12 +96,7 @@ public sealed class RemoveExcludedDayHandler(
                     ?? g.OrderByDescending(c => c.Id).First();
             });
 
-        var invoicedUserPeriods = (await db.PeriodInvoices
-            .Where(i => userIds.Contains(i.UserId) && periodIds.Contains(i.OrderingPeriodId))
-            .Select(i => new { i.UserId, i.OrderingPeriodId })
-            .ToListAsync(cancellationToken))
-            .Select(i => (i.UserId, i.OrderingPeriodId))
-            .ToHashSet();
+        var invoicedUserPeriods = await PeriodInvoiceQueries.GetInvoicedUserPeriodsAsync(db, userIds, periodIds, cancellationToken);
 
         var activeOrdersOnCandidateDates = await db.MenuOrders
             .Where(o => o.Status == OrderStatus.Active && userIds.Contains(o.UserId) && candidateDates.Contains(o.Date))

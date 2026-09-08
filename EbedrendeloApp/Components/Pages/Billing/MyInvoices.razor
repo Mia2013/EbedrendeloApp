@@ -1,0 +1,107 @@
+@page "/szamlaim"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.GetMyInvoices
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<PageTitle>Számláim</PageTitle>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Large" Color="Color.Primary" />
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">Számláim</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Az időszaki számláid, és hogy a jóváírásaidat valóban beszámították-e.
+            </MudText>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+@if (invoices is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mt-4" />
+}
+else if (invoices.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">Még nincs számlád.</MudText>
+}
+else
+{
+    @foreach (var invoice in invoices)
+    {
+        <MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Spacing="3">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.subtitle1"><b>@invoice.PeriodName</b></MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @invoice.PeriodStartDate.ToString("yyyy.MM.dd.") &ndash; @invoice.PeriodEndDate.ToString("yyyy.MM.dd.")
+                    </MudText>
+                </MudStack>
+                <MudChip T="string" Color="@(invoice.IsPaid ? Color.Success : Color.Warning)"
+                         Variant="@(invoice.IsPaid ? Variant.Filled : Variant.Outlined)">
+                    @(invoice.IsPaid ? "Fizetve" : "Fizetetlen")
+                </MudChip>
+            </MudStack>
+
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                Kiállítva: @invoice.GeneratedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")
+                @if (invoice.PaidAtUtc is { } paidAtUtc)
+                {
+                    <text> &middot; Fizetve: @paidAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")</text>
+                }
+            </MudText>
+
+            <MudDivider Class="my-3" />
+
+            <MudGrid Spacing="1">
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó menü</MudText></MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.MenuGrossHuf)</MudText></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó à la carte</MudText></MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.ALaCarteGrossHuf)</MudText></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Beszámított jóváírás</MudText></MudItem>
+                <MudItem xs="4">
+                    <MudText Align="Align.Right" Color="@(invoice.CreditAppliedHuf > 0 ? Color.Success : Color.Default)">
+                        @(invoice.CreditAppliedHuf > 0 ? "−" : "")@HungarianNumberFormat.Huf(invoice.CreditAppliedHuf)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12"><MudDivider Style="border-style:dashed;" /></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Fizetendő (menü)</MudText></MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.MenuPayableHuf)</MudText></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Fizetendő (à la carte)</MudText></MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.ALaCartePayableHuf)</MudText></MudItem>
+
+                <MudItem xs="12"><MudDivider Style="border-style:dashed;" /></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.subtitle1">Összesen fizetendő</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.h6" Align="Align.Right">@HungarianNumberFormat.Huf(invoice.PayableHuf)</MudText></MudItem>
+            </MudGrid>
+
+            @if (invoice.CreditAppliedHuf > 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-3">
+                    @HungarianNumberFormat.Huf(invoice.CreditAppliedHuf) jóváírás került beszámításra — az à la carte
+                    tételt ez nem érinti, az mindig teljes összegben fizetendő.
+                </MudAlert>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private List<MyInvoiceDto>? invoices;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+
+        var result = await Mediator.Send(new GetMyInvoicesQuery(CurrentUser.UserId));
+        invoices = result.Value!.ToList();
+    }
+}

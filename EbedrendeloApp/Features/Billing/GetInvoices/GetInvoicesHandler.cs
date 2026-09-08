@@ -1,0 +1,61 @@
+using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Data;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace EbedrendeloApp.Features.Billing.GetInvoices;
+
+public sealed class GetInvoicesHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
+    : IRequestHandler<GetInvoicesQuery, Result<IReadOnlyList<InvoiceDto>>>
+{
+    public async Task<Result<IReadOnlyList<InvoiceDto>>> Handle(GetInvoicesQuery request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+
+        var query = db.PeriodInvoices.AsQueryable();
+        if (request.OrderingPeriodId is { } periodId)
+        {
+            query = query.Where(i => i.OrderingPeriodId == periodId);
+        }
+
+        if (request.IsPaid is { } isPaid)
+        {
+            query = query.Where(i => i.IsPaid == isPaid);
+        }
+
+        var invoices = await query
+            .OrderByDescending(i => i.GeneratedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var userIds = invoices.Select(i => i.UserId).Distinct().ToList();
+        var userNames = await db.Users
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => $"{u.VezetekNev} {u.KeresztNev}".Trim(), cancellationToken);
+
+        var periodIds = invoices.Select(i => i.OrderingPeriodId).Distinct().ToList();
+        var periodNames = await db.OrderingPeriods
+            .Where(p => periodIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken);
+
+        var result = invoices
+            .Select(i => new InvoiceDto(
+                i.Id,
+                i.UserId,
+                userNames.GetValueOrDefault(i.UserId, "Ismeretlen felhasználó"),
+                i.OrderingPeriodId,
+                periodNames.GetValueOrDefault(i.OrderingPeriodId, "Ismeretlen időszak"),
+                i.MenuGrossHuf,
+                i.ALaCarteGrossHuf,
+                i.GrossHuf,
+                i.CreditAppliedHuf,
+                i.MenuPayableHuf,
+                i.ALaCartePayableHuf,
+                i.PayableHuf,
+                i.IsPaid,
+                i.PaidAtUtc,
+                i.GeneratedAtUtc))
+            .ToList();
+
+        return Result.Success<IReadOnlyList<InvoiceDto>>(result);
+    }
+}

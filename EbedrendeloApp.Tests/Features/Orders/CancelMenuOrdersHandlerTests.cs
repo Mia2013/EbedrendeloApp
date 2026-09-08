@@ -253,6 +253,37 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Rejects_cancellation_when_the_period_is_already_invoiced()
+    {
+        await SeedAsync();
+        await SeedActiveOrderAsync(Thu);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.PeriodInvoices.Add(new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = periodId,
+                MenuGrossHuf = 1400,
+                ALaCarteGrossHuf = 0,
+                GrossHuf = 1400,
+                CreditAppliedHuf = 0,
+                MenuPayableHuf = 1400,
+                ALaCartePayableHuf = 0,
+                PayableHuf = 1400,
+                GeneratedAtUtc = new DateTime(2026, 8, 15, 9, 0, 0),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0)); // well within the deadline otherwise
+        var result = await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var skip = Assert.Single(result.Value!.Skipped);
+        Assert.Equal(ErrorCodes.AlreadyInvoiced, skip.Reason);
+    }
+
+    [Fact]
     public async Task Succeeds_with_empty_results_when_no_dates_are_given()
     {
         await SeedAsync();

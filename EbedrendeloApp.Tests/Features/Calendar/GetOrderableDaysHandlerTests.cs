@@ -141,6 +141,40 @@ public class GetOrderableDaysHandlerTests : IDisposable
         Assert.True(reopenedDay.Orderable);
     }
 
+    [Fact]
+    public async Task An_invoiced_period_is_never_orderable_or_cancellable()
+    {
+        await SeedAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.PeriodInvoices.Add(new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = periodId,
+                MenuGrossHuf = 1400,
+                ALaCarteGrossHuf = 0,
+                GrossHuf = 1400,
+                CreditAppliedHuf = 0,
+                MenuPayableHuf = 1400,
+                ALaCartePayableHuf = 0,
+                PayableHuf = 1400,
+                GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await sut.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
+        var days = result.Value!.ToDictionary(d => d.Date);
+
+        var alreadyOrdered = days[AlreadyOrderedDay];
+        Assert.False(alreadyOrdered.Cancellable);
+        Assert.Equal(ErrorCodes.AlreadyInvoiced, alreadyOrdered.Reason);
+
+        var orderable = days[OrderableDay];
+        Assert.False(orderable.Orderable);
+        Assert.Equal(ErrorCodes.AlreadyInvoiced, orderable.Reason);
+    }
+
     private async Task SeedAsync()
     {
         await using var db = dbFactory.CreateDbContext();

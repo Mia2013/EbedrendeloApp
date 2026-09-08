@@ -1,0 +1,81 @@
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Features.Billing.GeneratePeriodInvoices
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Color="Color.Primary" Size="Size.Large" />
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">Számlák generálása</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@PeriodName</MudText>
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+        }
+
+        <MudText Class="mb-3">
+            Minden érintett dolgozóra legenerálódik egy számla erre az időszakra — a felhalmozott jóváírás a
+            menütételek bruttó összegéből kerül levonásra, az à la carte tételek mindig teljes egészében
+            fizetendők maradnak.
+        </MudText>
+
+        <MudAlert Severity="Severity.Info">
+            Akinek erre az időszakra már van számlája, az kimarad — a művelet biztonságosan újrafuttatható.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@(isSaving ? null : Icons.Material.Filled.FactCheck)" OnClick="ConfirmAsync" Disabled="isSaving">
+            @if (isSaving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Generálás...</MudText>
+            }
+            else
+            {
+                <MudText>Generálás</MudText>
+            }
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" OnClick="Cancel" Disabled="isSaving">Mégse</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public int PeriodId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string PeriodName { get; set; } = default!;
+
+    private bool isSaving;
+    private string? errorMessage;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task ConfirmAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await Mediator.Send(new GeneratePeriodInvoicesCommand(PeriodId, CurrentUser.UserId));
+        isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage;
+        }
+    }
+}
