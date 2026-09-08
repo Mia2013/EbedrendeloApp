@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Domain.Entities;
@@ -103,7 +103,7 @@ public class OrderabilityConsistencyTests : IDisposable
         await SeedActiveOrderAsync(Thu); // still within the deadline at Now
         await SeedActiveOrderAsync(Tue); // deadline already passed at Now
 
-        var queryHandler = new GetOrderableDaysHandler(dbFactory, new FixedAppClock(Now), new WorkingDayCalculator());
+        var queryHandler = new GetOrderableDaysHandler(dbFactory, new FixedAppClock(Now), new WorkingDayCalculator(), new FakeCurrentUser(userId, "Teszt", isAdmin: false));
         var queryResult = await queryHandler.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
         var byDate = queryResult.Value!.ToDictionary(d => d.Date);
 
@@ -127,7 +127,7 @@ public class OrderabilityConsistencyTests : IDisposable
         await SeedAsync();
         // No existing orders: Fri is still within its deadline at Now, Wed's deadline already passed.
 
-        var queryHandler = new GetOrderableDaysHandler(dbFactory, new FixedAppClock(Now), new WorkingDayCalculator());
+        var queryHandler = new GetOrderableDaysHandler(dbFactory, new FixedAppClock(Now), new WorkingDayCalculator(), new FakeCurrentUser(userId, "Teszt", isAdmin: false));
         var queryResult = await queryHandler.Handle(new GetOrderableDaysQuery(periodId, userId), CancellationToken.None);
         var byDate = queryResult.Value!.ToDictionary(d => d.Date);
 

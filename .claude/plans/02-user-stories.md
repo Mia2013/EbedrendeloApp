@@ -1,4 +1,4 @@
-# Ebédrendelő Alkalmazás — User Storyk és Elfogadási Kritériumok
+﻿# Ebédrendelő Alkalmazás — User Storyk és Elfogadási Kritériumok
 
 > **Ez a dokumentum egyetlen mérvadó példánya.** Más helyen (home `.claude/plans/`, `docs/`) ne
 > keletkezzen belőle másolat.
@@ -260,9 +260,10 @@ Azért, hogy egyszerűen biztosítsam az ebédet az egész időszakra vagy a pó
 * **AC 3.1.3 (Részleges siker és kötegelés):** A leadott dátumlista feldolgozása nem "mindent vagy semmit" alapon működik. A sikeres napok egy tranzakcióban mentődnek (`Succeeded`), az elutasított napok pedig pontos hibakóddal a `Skipped` listába kerülnek.
 * **AC 3.1.4 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a művelet nem jelezhető tisztán sikeresnek a felületen; a kimaradt napokat és az okokat kötelező megjeleníteni.
 * **AC 3.1.5 (Napi 1 adag limit):** Egy felhasználónak egy napra legfeljebb 1 aktív menürendelése lehet (szűrt unique index `(UserId, Date) WHERE Status = 0`).
-* **AC 3.1.6 (Más nevében rendelés):** Rendelés leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`). A címzettet **azonosítani kell**: a dolgozó a nevével + igazgatóságával + osztályával keresi meg (`ResolveColleagueQuery`), és csak **pontos egyezésre** kap találatot — nincs böngészhető névsor, nincs részleges keresés, és a sikertelen keresés egyetlen semleges üzenetet ad, ami nem árulja el, melyik mező volt hibás. Az adminisztrátor — akinek amúgy is joga van a teljes névsorhoz (AC 9.4.1) — autocomplete-et kap helyette.
-* **AC 3.1.7 (A funkció nincs felkínálva):** A más nevében rendelés a dolgozói felületen **nem kiemelt funkció**: nincs rá hívogató felirat, csak egy visszafogott, felirat nélküli ikon, és az azonosító űrlap addig meg sem jelenik a DOM-ban, amíg valaki rá nem nyit. Ha van kiválasztott kolléga, a naptár **láthatóan az övére vált** (kerettel és a nevét tartalmazó felirattal), hogy egy pillanatra se lehessen összetéveszteni a sajátunkkal.
+* **AC 3.1.6 (Más nevében rendelés):** **Rendelés** leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`). Ez kizárólag a leadásra vonatkozik: lemondani más naptárában csak adminisztrátor tud (AC 3.2.8), és a kolléga naptára sem böngészhető (AC 3.1.9). A címzettet **azonosítani kell**: a dolgozó a nevével + igazgatóságával + osztályával keresi meg (`ResolveColleagueQuery`), és csak **pontos egyezésre** kap találatot — nincs böngészhető névsor, nincs részleges keresés, és a sikertelen keresés egyetlen semleges üzenetet ad, ami nem árulja el, melyik mező volt hibás. Az adminisztrátor — akinek amúgy is joga van a teljes névsorhoz (AC 9.4.1) — autocomplete-et kap helyette.
 * **AC 3.1.7 (Időszakhoz kötés):** Minden rendelt dátumnak az időszak `[StartDate, EndDate]` tartományába kell esnie (`OutsidePeriod` egyébként), és a létrejövő rendelésre rákerül az `OrderingPeriodId` — így a későbbi határmódosítás nem sodorja át a rendelést másik számlára.
+* **AC 3.1.8 (A funkció nincs felkínálva):** A más nevében rendelés a dolgozói felületen **nem kiemelt funkció**: nincs rá hívogató felirat, csak egy visszafogott, felirat nélküli ikon, és az azonosító űrlap addig meg sem jelenik a DOM-ban, amíg valaki rá nem nyit. Ha van kiválasztott kolléga, a naptár **láthatóan az övére vált** (kerettel és a nevét tartalmazó felirattal), hogy egy pillanatra se lehessen összetéveszteni a sajátunkkal.
+* **AC 3.1.9 (A kolléga naptára rendelőlap, nem történet):** Ha egy **dolgozó** kollégát választ, a naptára nem böngészhető: **nincs időszakváltó**, és csak a nyitott, még tartó időszakok jelennek meg egymás alatt, **a mai naptól előre**. A múltbeli napok helyén ugyanaz az üres cella áll, mint az időszakon kívüli napokén — a szerver ezeket a sorokat **vissza sem adja** (`GetOrderableDaysQuery` idegen felhasználóra minimalizál, lezárt időszakra pedig `PeriodClosed` hibát ad), tehát a kolléga korábbi rendeléseiről semmi nem hagyja el a szervert. A megjelenő napok közül a nem rendelhetők **letiltott** jelölővel látszanak, a már leadottak pedig a menü nevével és szintén letiltva — így nem lehet duplán rendelni és módosítani sem. Adminra ez a szűkítés nem vonatkozik, ő a teljes naptárat kapja.
 
 **Technikai hivatkozás:** `PlacePeriodOrderCommand`, `Result<BatchOrderResult>`, `GetOrderableDaysQuery`
 
@@ -282,6 +283,7 @@ Azért, hogy a távollétem idejére ne készüljön feleslegesen étel és az �
 * **AC 3.2.4 (Köteges lemondás részleges sikerrel):** A parancs **dátumlistát** fogad, és ugyanúgy `Result<BatchOrderResult>` értéket ad vissza, mint a rendelés: a sikeres napok egy tranzakcióban mentődnek (`Succeeded`), a kihagyottak a `Skipped` listába kerülnek `DeadlinePassed` / `DayClosed` / `NoActiveOrder` okkal. Egyetlen nap lemondása ennek az egyelemű esete — nincs rá külön parancs.
 * **AC 3.2.5 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a lemondás nem jelezhető tisztán sikeresnek; a kimaradt napokat és az okukat kötelező megjeleníteni (ugyanaz a szabály, mint AC 3.1.4). Ellenkező esetben a dolgozó abban a hitben marad, hogy lemondta az ebédjét, miközben az elkészül és kiszámlázásra kerül.
 * **AC 3.2.6 (A bulk ablak nem ad kedvezményt):** A lemondásra mindkét rendelési fázisban ugyanaz a `ChangeDeadline` szabály vonatkozik — az `OrderDeadline` előtti időszak sem enged közelebbi napot lemondani.
+* **AC 3.2.8 (Idegen naptárban a lemondás admin-jog):** A más nevében rendelés (AC 3.1.6) **nem szimmetrikus**: leadni bárki tud a kolléga nevében, **lemondani viszont csak adminisztrátor**. Rendelést leadni a kollégának szívesség, lemondani kárt okoz — elveszi az ebédjét, és a nap számlázottságától függően pénzügyi hatása is van. A `CancelMenuOrdersCommand` ezért `IActsOnBehalfOf` (idegen `TargetUserId` → `ForbiddenException`), nem `IAuditedOnBehalfOf`, mint a párja. A felület ennek megfelelően a kolléga naptárában dolgozónak meg sem jeleníti a lemondás-vezérlőket. **Vállalt következmény:** a tévesen leadott rendelést a leadó nem tudja maga visszavonni — a kolléga a saját naptárában lemondhatja, vagy adminhoz kell fordulni.
 
 **Technikai hivatkozás:** `CancelMenuOrdersCommand`, `IWorkingDayCalculator`, `Result<BatchOrderResult>`
 
@@ -642,7 +644,7 @@ Azért, hogy egy dolgozó ne tudjon menüt szerkeszteni, napot kizárni vagy sz�
 
 **Elfogadási Kritériumok:**
 * **AC 9.2.1 (Policy):** Az `[A]` jelölésű use case-eket az `"Admin"` policy védi; `User` szerepkörrel a hívás elutasításra kerül.
-* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) és a címzett azonosítási kötelezettsége adja, nem a jogosultság. A kódban ezt az `IAuditedOnBehalfOf` jelölő teszi láthatóvá: a `PlacePeriodOrderCommand`, `CancelMenuOrdersCommand`, `GetOrderableDaysQuery` és `GetMyPeriodOrderQuery` szándékosan nyitva marad. Ez **nem** vonatkozik a pénzügyi lekérdezésekre: az egyenleg, a jóváírás-történet és a számlák (`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `GetMyInvoicesQuery`) idegen felhasználóra továbbra is admin-jogot kívánnak (`IActsOnBehalfOf`), mert azok nem kellenek a rendelés leadásához.
+* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) és a címzett azonosítási kötelezettsége adja, nem a jogosultság. A kódban ezt az `IAuditedOnBehalfOf` jelölő teszi láthatóvá, és a lista szándékosan **szűk**: csak a `PlacePeriodOrderCommand` és a `GetOrderableDaysQuery` marad nyitva — pontosan az, ami a leadáshoz kell. Minden más idegen felhasználóra admin-jogot kíván (`IActsOnBehalfOf`): a lemondás (`CancelMenuOrdersCommand`, AC 3.2.8), a rendeléstörténet (`GetMyPeriodOrderQuery`, AC 3.1.9) és a pénzügyi lekérdezések (`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `GetMyInvoicesQuery`) — ezek egyike sem kell a rendelés leadásához. A `GetOrderableDaysQuery` nyitva marad, de a handler idegen felhasználóra minimalizálja a választ (AC 3.1.9).
 * **AC 9.2.3 (Saját adat hatóköre):** A `[U]` jelölésű lekérdezések (egyenleg, ledger, saját rendelések, saját számlák, értesítések) mindig a bejelentkezett felhasználó adatait adják vissza, más felhasználóét nem.
 
 **Technikai hivatkozás:** `AddAuthorizationBuilder()`, `"Admin"` policy, `ICurrentUser`
@@ -765,8 +767,8 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetPeriodMenuQuery` | A/U | US-2.5 |
 | `GetTodayMenuForUserQuery` | U | US-2.6 |
 | `PlacePeriodOrderCommand` | U | US-3.1 |
-| `CancelMenuOrdersCommand` | U | US-3.2 |
-| `GetMyPeriodOrderQuery` | U | US-3.3 |
+| `CancelMenuOrdersCommand` | U (idegenre A) | US-3.2 |
+| `GetMyPeriodOrderQuery` | U (idegenre A) | US-3.3 |
 | `GetUserOrdersQuery` | A | US-3.4 |
 | `UpsertALaCarteItemCommand` | A | US-4.3 |
 | `SetALaCarteItemActiveCommand` | A | US-4.3 |

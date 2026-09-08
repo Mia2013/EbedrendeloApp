@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Calendar;
@@ -393,8 +393,10 @@ public class UserCalendarTests : MudBunitContext
     }
 
     [Fact]
-    public async Task Picking_a_colleague_and_cancelling_sends_their_id_as_TargetUserId_and_keeps_the_real_canceller_as_CancelledByUserId()
+    public async Task Picking_a_colleague_and_cancelling_as_an_admin_sends_their_id_as_TargetUserId_and_keeps_the_real_canceller_as_CancelledByUserId()
     {
+        // A fixture felhasználója ADMIN, és ez itt már lényeges: idegen naptárban a lemondás
+        // admin-jog (AC 3.2.8). A dolgozói ág külön tesztben van, ott a gomb létre sem jön.
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
         [
             new OrderableDayDto(Today, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
@@ -421,6 +423,133 @@ public class UserCalendarTests : MudBunitContext
         Assert.NotNull(sentCommand);
         Assert.Equal(2, sentCommand!.TargetUserId);
         Assert.Equal(1, sentCommand.CancelledByUserId);
+    }
+
+    // --- Kolléga-nézet dolgozóként: csak rendelés, csak előre (AC 3.1.9 / 3.2.7) ---
+
+    private static readonly OrderingPeriodDto NextPeriod =
+        new(2, "Következő időszak", Today.AddDays(31), Today.AddDays(60), DateTime.Today.AddDays(20), true, false);
+
+    private static readonly OrderingPeriodDto ClosedPeriod =
+        new(3, "Lezárt időszak", Today.AddDays(-90), Today.AddDays(-61), DateTime.Today.AddDays(-100), false, true);
+
+    /// <summary>Dolgozó + a fixture három időszaka (kettő nyitott, egy lezárt).</summary>
+    private void UseWorkerWithTwoOpenPeriods()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Teszt Dolgozó", isAdmin: false));
+        mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period, NextPeriod, ClosedPeriod]);
+    }
+
+    [Fact]
+    public async Task A_worker_in_a_colleagues_calendar_gets_no_period_selector_and_no_way_to_cancel()
+    {
+        UseWorkerWithTwoOpenPeriods();
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>(
+        [
+            new OrderableDayDto(Today, false, true, "A", "Gulyásleves", ErrorCodes.AlreadyOrdered, null),
+        ]));
+
+        var cut = Render<UserCalendar>();
+        Assert.NotNull(cut.FindComponent<PeriodSelector>());
+        Assert.NotEmpty(cut.FindAll("button[title='Lemondásra jelölés']"));
+
+        await PickColleagueAsync(cut, Colleague);
+
+        Assert.Empty(cut.FindComponents<PeriodSelector>());
+        Assert.Empty(cut.FindAll("button[title='Lemondásra jelölés']"));
+        Assert.DoesNotContain("Lemondásra jelölve", cut.Markup);
+        Assert.DoesNotContain("vagy lemondasz", cut.Markup);
+        Assert.Contains("csak rendelést adhatsz le", cut.Markup);
+    }
+
+    [Fact]
+    public async Task A_worker_in_a_colleagues_calendar_loads_every_open_period_and_skips_the_closed_one()
+    {
+        UseWorkerWithTwoOpenPeriods();
+        var requestedPeriodIds = new List<int>();
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(q =>
+        {
+            requestedPeriodIds.Add(q.OrderingPeriodId);
+            return Result.Success<IReadOnlyList<OrderableDayDto>>([]);
+        });
+
+        var cut = Render<UserCalendar>();
+        Assert.Equal([Period.Id], requestedPeriodIds);
+
+        requestedPeriodIds.Clear();
+        await PickColleagueAsync(cut, Colleague);
+
+        // Az időszakváltó helyett minden NYITOTT, még tartó időszak betöltődik egymás alá; a lezárt
+        // időszak nem — abból a szerver úgysem adna vissza semmit.
+        Assert.Equal([Period.Id, NextPeriod.Id], requestedPeriodIds);
+        Assert.Contains(NextPeriod.Name, cut.Markup);
+    }
+
+    [Fact]
+    public async Task A_worker_sees_a_non_orderable_day_in_a_colleagues_calendar_as_disabled_checkboxes()
+    {
+        UseWorkerWithTwoOpenPeriods();
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(q =>
+            Result.Success<IReadOnlyList<OrderableDayDto>>(q.OrderingPeriodId == Period.Id
+                ? [new OrderableDayDto(Today, false, false, null, null, ErrorCodes.DeadlinePassed, null)]
+                : []));
+        mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>(
+        [
+            new DailyMenuDto(Today, true, null, [new MenuVariantDto("A", "Gulyásleves", "Csirkepaprikás", 0)]),
+        ]));
+
+        var cut = Render<UserCalendar>();
+        await PickColleagueAsync(cut, Colleague);
+
+        // A nap létezik és látszik, mi lenne rajta — de nem lehet rákattintani.
+        Assert.Contains("A menü — Gulyásleves", cut.Markup);
+        Assert.Contains("A módosítási határidő lejárt", cut.Markup);
+        var checkbox = Assert.Single(cut.FindAll(".week-grid__cell input[type=checkbox]"));
+        Assert.True(checkbox.HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public async Task Days_picked_across_two_periods_are_sent_as_one_command_per_period()
+    {
+        UseWorkerWithTwoOpenPeriods();
+        var dayInNextPeriod = NextPeriod.StartDate;
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(q =>
+            Result.Success<IReadOnlyList<OrderableDayDto>>(q.OrderingPeriodId == Period.Id
+                ? [new OrderableDayDto(NextWeekday(Today), true, false, null, null, ErrorCodes.NoActiveOrder, null, MenuPortionHuf: 1400)]
+                : [new OrderableDayDto(NextWeekday(dayInNextPeriod), true, false, null, null, ErrorCodes.NoActiveOrder, null, MenuPortionHuf: 1400)]));
+        mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>(
+        [
+            new DailyMenuDto(NextWeekday(Today), true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0)]),
+            new DailyMenuDto(NextWeekday(dayInNextPeriod), true, null, [new MenuVariantDto("A", "Gulyásleves", null, 0)]),
+        ]));
+
+        var sentCommands = new List<PlacePeriodOrderCommand>();
+        mediator.Register<PlacePeriodOrderCommand, Result<BatchOrderResult>>(cmd =>
+        {
+            sentCommands.Add(cmd);
+            return Result.Success(new BatchOrderResult([new DayResult(cmd.Days[0].Date, "A")], []));
+        });
+
+        Render<MudDialogProvider>();
+        var snackbarProvider = Render<MudSnackbarProvider>();
+        var cut = Render<UserCalendar>();
+        await PickColleagueAsync(cut, Colleague);
+
+        foreach (var checkbox in cut.FindAll("input[type=checkbox]:not([disabled])"))
+        {
+            checkbox.Change(true);
+        }
+
+        var submitButton = cut.FindAll("button").First(b => b.TextContent.Contains("Rendelés leadása"));
+        await cut.InvokeAsync(() => submitButton.Click());
+
+        // A PlacePeriodOrderCommand egy időszakra szól, a kijelölés viszont kettőt érint — ezért megy
+        // két parancs, és az eredményeik egyetlen összesítésbe fűződnek.
+        Assert.Equal(2, sentCommands.Count);
+        Assert.Equal([Period.Id, NextPeriod.Id], sentCommands.Select(c => c.OrderingPeriodId));
+        Assert.All(sentCommands, c => Assert.Equal(Colleague.Id, c.TargetUserId));
+        Assert.All(sentCommands, c => Assert.Equal(1, c.PlacedByUserId));
+        Assert.Contains("2 nap sikeresen megrendelve", snackbarProvider.Markup);
     }
 
     [Fact]

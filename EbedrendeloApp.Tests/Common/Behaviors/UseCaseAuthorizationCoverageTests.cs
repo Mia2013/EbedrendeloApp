@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using EbedrendeloApp.Common.Security;
 using MediatR;
 
@@ -83,13 +83,11 @@ public class UseCaseAuthorizationCoverageTests
     {
         // AC 3.1.6 / AC 9.2.2: a kollégának is le lehet adni a rendelését, a védelmet az audit adja.
         // Ha valaki ezekre IRequireAdmin-t tenne, azzal némán megszűnne egy szándékos funkció —
-        // pontosan ez történt egyszer már.
+        // pontosan ez történt egyszer már. Ez a lista SZŰK: csak az van rajta, ami a leadáshoz kell.
         string[] mustStayOpen =
         [
             "PlacePeriodOrderCommand",
-            "CancelMenuOrdersCommand",
             "GetOrderableDaysQuery",
-            "GetMyPeriodOrderQuery",
         ];
 
         var byName = AllRequestTypes().ToDictionary(t => t.Name, t => t);
@@ -100,6 +98,32 @@ public class UseCaseAuthorizationCoverageTests
             Assert.True(
                 typeof(IAuditedOnBehalfOf).IsAssignableFrom(byName[name]),
                 $"{name} nem IAuditedOnBehalfOf — a más nevében rendelés bárkinek engedett (AC 9.2.2).");
+        }
+    }
+
+    [Fact]
+    public void Cancelling_and_reading_someone_elses_orders_require_admin()
+    {
+        // A más nevében rendelés párja NEM szimmetrikus: leadni szívesség, lemondani kárt okoz
+        // (AC 3.2.8), a rendeléstörténet lekérdezése pedig épp az, amit a kolléga nem láthat
+        // (AC 3.1.9). Mindkettő IActsOnBehalfOf: sajáton szabad, idegenen csak adminnak.
+        string[] mustRequireAdminForOthers =
+        [
+            "CancelMenuOrdersCommand",
+            "GetMyPeriodOrderQuery",
+        ];
+
+        var byName = AllRequestTypes().ToDictionary(t => t.Name, t => t);
+
+        foreach (var name in mustRequireAdminForOthers)
+        {
+            Assert.True(byName.ContainsKey(name), $"Nincs ilyen use case: {name}");
+            Assert.True(
+                typeof(IActsOnBehalfOf).IsAssignableFrom(byName[name]),
+                $"{name} nem IActsOnBehalfOf — idegen felhasználóra admin-jogot kell kívánnia.");
+            Assert.False(
+                typeof(IAuditedOnBehalfOf).IsAssignableFrom(byName[name]),
+                $"{name} IAuditedOnBehalfOf lett — ezzel bárki elvégezhetné bárki nevében (AC 3.2.8 / 3.1.9).");
         }
     }
 }

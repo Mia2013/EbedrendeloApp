@@ -1,4 +1,4 @@
-@page "/naptar"
+﻿@page "/naptar"
 @using EbedrendeloApp.Common.Results
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
@@ -26,7 +26,9 @@
         Pipáld ki, melyik napra melyik menüt kéred — így egy pillantással átlátod, mit rendeltél már és mi még hiányzik.
     </Description>
     <Filters>
-        @if (periods is { Count: > 0 })
+        @* Kolléga nevében rendeléskor nincs időszakváltó: a naptára nem böngészhető történet, hanem
+           rendelőlap a nyitott időszakokra (AC 3.1.9). Adminnál marad a teljes navigáció. *@
+        @if (periods is { Count: > 0 } && !IsColleagueOrderingView)
         {
             <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
         }
@@ -45,7 +47,7 @@
     </ChildContent>
 </PageHeader>
 
-@if (days is null)
+@if (sections is null)
 {
     <MudProgressCircular Indeterminate="true" Class="mt-4" />
 }
@@ -53,7 +55,15 @@ else if (!string.IsNullOrEmpty(errorMessage))
 {
     <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
 }
-else if (SelectedPeriod is { } period)
+else if (sections.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        @(IsColleagueOrderingView && targetUser is { } noneTarget
+            ? $"Most nincs olyan nyitott rendelési időszak, amire {noneTarget.DisplayName} nevében rendelhetnél."
+            : "Nincs még rendelési időszak.")
+    </MudAlert>
+}
+else
 {
     <MudStack Row Spacing="6" Class="mt-4" Wrap="Wrap.Wrap">
         <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
@@ -68,10 +78,13 @@ else if (SelectedPeriod is { } period)
             <MudCheckBox T="bool" Value="false" Disabled="true" Dense="true" ReadOnly="true" />
             <MudText Typo="Typo.caption">Rendelhető, még nincs kiválasztva</MudText>
         </MudStack>
-        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-            <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Size="Size.Small" />
-            <MudText Typo="Typo.caption">Lemondásra jelölve, még nincs elküldve</MudText>
-        </MudStack>
+        @if (CanCancel)
+        {
+            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Size="Size.Small" />
+                <MudText Typo="Typo.caption">Lemondásra jelölve, még nincs elküldve</MudText>
+            </MudStack>
+        }
     </MudStack>
 
     @* Kolléga nevében rendeléskor a naptár láthatóan az övére vált: kerettel és névvel ellátott
@@ -79,34 +92,27 @@ else if (SelectedPeriod is { } period)
     @if (targetUser is { } target)
     {
         <MudPaper Elevation="0" Class="border-2 border-solid mud-border-secondary rounded-lg pa-3 mt-4">
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
                 <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Secondary" />
                 <MudText Typo="Typo.subtitle1"><b>@target.DisplayName</b> naptára</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                    Amit itt leadsz vagy lemondasz, az az ő rendelése lesz — a rendszer rögzíti, hogy te intézted.
+                    @if (CanCancel)
+                    {
+                        @("Amit itt leadsz vagy lemondasz, az az ő rendelése lesz — a rendszer rögzíti, hogy te intézted.")
+                    }
+                    else
+                    {
+                        @("Itt csak rendelést adhatsz le a nevében, a mai naptól előre — a rendszer rögzíti, hogy te intézted. Lemondani a saját naptárában tud, vagy adminisztrátor.")
+                    }
                 </MudText>
             </MudStack>
 
-            <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today">
-                <CellContent Context="date">
-                    @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
-                    {
-                        @DayCell(cell)
-                    }
-                </CellContent>
-            </WeekGrid>
+            @SectionGrids
         </MudPaper>
     }
     else
     {
-        <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today" Class="mt-4">
-            <CellContent Context="date">
-                @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
-                {
-                    @DayCell(cell)
-                }
-            </CellContent>
-        </WeekGrid>
+        @SectionGrids
     }
 
     @* A két összesítő sáv szándékosan a rács UTÁN, nem előtte jelenik meg — így egy pipálás nem tolja
@@ -136,7 +142,7 @@ else if (SelectedPeriod is { } period)
         </MudPaper>
     }
 
-    @if (pendingCancellations.Count > 0)
+    @if (pendingCancellations.Count > 0 && CanCancel)
     {
         <MudPaper Elevation="1" Class="pa-3 mt-4 rounded-lg order-calendar__submit-bar">
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
@@ -159,9 +165,33 @@ else if (SelectedPeriod is { } period)
 }
 
 @code {
+    /// <summary>Időszakonként egy rács. Saját/admin nézetben pontosan egy szakasz van (a kiválasztott
+    /// időszak), ezért ott felirat sem kell — a naptár képe változatlan. Kolléga-nézetben minden nyitott
+    /// időszak megjelenik egymás alatt, a mai naptól kezdve; a szakaszcím helyettesíti az időszakváltót,
+    /// amit ott szándékosan nem adunk (AC 3.1.9).</summary>
+    private RenderFragment SectionGrids => __builder =>
+    {
+        @foreach (var section in sections!)
+        {
+            if (sections.Count > 1)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-n2">@section.Period.Name</MudText>
+            }
+
+            <WeekGrid StartDate="section.From" EndDate="section.Period.EndDate" Today="today" Class="mt-4">
+                <CellContent Context="date">
+                    @if (section.Days.FirstOrDefault(d => d.Date == date) is { } cell)
+                    {
+                        @DayCell(cell)
+                    }
+                </CellContent>
+            </WeekGrid>
+        }
+    };
+
     /// <summary>Egyetlen sablon minden naptár-cellához: leadott rendelés (pipa, kilakatolva + Lemondás),
-    /// pipálható variáns-lista (még nincs rendelés, rendelhető), vagy csak indoklás szöveg (se rendelés,
-    /// se rendelhetőség).</summary>
+    /// pipálható variáns-lista (még nincs rendelés, rendelhető), letiltott variáns-lista (kolléga-nézet
+    /// nem rendelhető napja), vagy csak indoklás szöveg.</summary>
     private RenderFragment<OrderDayCell> DayCell => cell =>
     @<MudStack Spacing="1" Style="height:100%;">
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
@@ -173,7 +203,7 @@ else if (SelectedPeriod is { } period)
                 }
             </MudStack>
 
-            @if (cell.ActiveVariantCode is not null && cell.Cancellable)
+            @if (cell.ActiveVariantCode is not null && cell.Cancellable && CanCancel)
             {
                 var marked = pendingCancellations.Contains(cell.Date);
                 <MudIconButton Class="pa-1" Icon="@(marked ? Icons.Material.Filled.RestoreFromTrash : Icons.Material.Filled.DeleteForever)"
@@ -197,7 +227,9 @@ else if (SelectedPeriod is { } period)
                 </MudStack>
             </MudStack>
 
-            @if (!cell.Cancellable)
+            @* A „miért nem mondható le" indoklás csak ott értelmes, ahol a lemondás egyáltalán szóba
+               jön — kolléga-nézetben nincs lemondás, tehát az oka sem érdekes. *@
+            @if (!cell.Cancellable && CanCancel)
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@Describe(cell.Reason)</MudText>
             }
@@ -220,6 +252,26 @@ else if (SelectedPeriod is { } period)
                 </MudStack>
             }
         }
+        else if (IsColleagueOrderingView && cell.Variants.Count > 0)
+        {
+            @* Kolléga-nézetben a nem rendelhető nap is kirajzolódik, de LETILTOTT jelölőkkel: látszik,
+               hogy a nap létezik és mi lenne rajta, csak nem lehet rákattintani. A saját naptárban ez a
+               nap továbbra is csak az indoklás szövegét kapja (lásd az utolsó ágat). *@
+            @foreach (var variant in cell.Variants)
+            {
+                <MudStack Row Spacing="1" AlignItems="AlignItems.Start">
+                    <MudCheckBox T="bool" Value="false" Disabled="true" Dense="true" ReadOnly="true" />
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.body2" Class="mud-text-disabled">@variant.Code menü — @variant.SoupName</MudText>
+                        @if (!string.IsNullOrEmpty(variant.MainCourseName))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-disabled">@variant.MainCourseName</MudText>
+                        }
+                    </MudStack>
+                </MudStack>
+            }
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@Describe(cell.Reason)</MudText>
+        }
         else
         {
             <MudText Typo="Typo.body2" Class="mud-text-secondary">@Describe(cell.Reason)</MudText>
@@ -239,13 +291,18 @@ else if (SelectedPeriod is { } period)
         public List<MenuVariantDto> Variants { get; init; } = [];
     }
 
+    /// <summary>Egy időszak megjelenített napjai. A <paramref name="From"/> azért külön mező, mert
+    /// kolléga-nézetben a rács nem az időszak elején, hanem a mai napon kezdődik — az azelőtti napok
+    /// helyén a <c>WeekGrid</c> ugyanolyan üres cellát rajzol, mint az időszakon kívüli napokén.</summary>
+    private sealed record CalendarSection(OrderingPeriodDto Period, DateOnly From, List<OrderDayCell> Days);
+
     private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
 
     private List<OrderingPeriodDto> periods = [];
     private int selectedPeriodId;
     private UserOptionDto? targetUser;
     private int? myBalanceHuf;
-    private List<OrderDayCell>? days;
+    private List<CalendarSection>? sections;
     private readonly Dictionary<DateOnly, string> pendingSelections = [];
     private readonly HashSet<DateOnly> pendingCancellations = [];
     private string? errorMessage;
@@ -256,6 +313,13 @@ else if (SelectedPeriod is { } period)
     private int EffectiveTargetUserId => targetUser?.Id ?? CurrentUser.UserId;
 
     private int PendingTotalHuf => pendingSelections.Count * menuPortionHuf;
+
+    /// <summary>A dolgozó a kolléga naptárát csak rendelésre nyithatja meg: nincs időszakváltó, nincs
+    /// múlt, nincs lemondás (AC 3.1.9). Adminnál a teljes naptár marad, ő idegen naptárban is lemondhat
+    /// (AC 3.2.8).</summary>
+    private bool IsColleagueOrderingView => targetUser is not null && !CurrentUser.IsAdmin;
+
+    private bool CanCancel => !IsColleagueOrderingView;
 
     protected override async Task OnInitializedAsync()
     {
@@ -269,68 +333,94 @@ else if (SelectedPeriod is { } period)
         if (current is not null)
         {
             selectedPeriodId = current.Id;
-            await LoadDaysAsync();
         }
-        else
-        {
-            days = [];
-            errorMessage = "Nincs még rendelési időszak.";
-        }
+
+        await LoadDaysAsync();
     }
 
     private async Task OnPeriodSelectedAsync(int periodId)
     {
         selectedPeriodId = periodId;
-        pendingSelections.Clear();
-        pendingCancellations.Clear();
-        days = null;
-        StateHasChanged();
-        await LoadDaysAsync();
+        await ReloadAsync();
     }
 
     private async Task OnTargetUserSelectedAsync(UserOptionDto? colleague)
     {
         targetUser = colleague;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
         pendingSelections.Clear();
         pendingCancellations.Clear();
-        days = null;
+        sections = null;
         StateHasChanged();
         await LoadDaysAsync();
     }
 
-    private async Task LoadDaysAsync()
+    /// <summary>
+    /// Saját és admin nézetben egyetlen szakasz van: a kiválasztott időszak a maga teljes hosszában —
+    /// ez a korábbi viselkedés változatlanul. Kolléga-nézetben nincs időszakváltó, ezért minden nyitott,
+    /// még tartó időszak betöltődik egymás alá, a mai naptól kezdve (AC 3.1.9); a szerver ilyenkor a
+    /// múltbeli napokat eleve nem is adja vissza (<c>GetOrderableDaysHandler</c>).
+    /// </summary>
+    private List<(OrderingPeriodDto Period, DateOnly From)> PeriodsToLoad()
     {
-        var orderableResult = await Mediator.Send(new GetOrderableDaysQuery(selectedPeriodId, EffectiveTargetUserId));
-        if (!orderableResult.IsSuccess)
+        if (IsColleagueOrderingView)
         {
-            days = [];
-            errorMessage = orderableResult.ErrorMessage;
-            return;
+            return periods
+                .Where(p => p.IsOpen && p.EndDate >= today)
+                .OrderBy(p => p.StartDate)
+                .Select(p => (p, p.StartDate > today ? p.StartDate : today))
+                .ToList();
         }
 
-        var menuResult = await Mediator.Send(new GetPeriodMenuQuery(selectedPeriodId, IncludeUnpublished: false));
-        var variantsByDate = menuResult.IsSuccess
-            ? menuResult.Value!.ToDictionary(m => m.Date, m => m.Variants.ToList())
-            : [];
-
-        errorMessage = null;
-        menuPortionHuf = orderableResult.Value!.FirstOrDefault()?.MenuPortionHuf ?? 0;
-        days = orderableResult.Value!
-            .Select(d => new OrderDayCell
-            {
-                Date = d.Date,
-                Orderable = d.Orderable,
-                Cancellable = d.Cancellable,
-                ActiveVariantCode = d.VariantCode,
-                ActiveVariantName = d.VariantName,
-                Reason = d.Reason,
-                Variants = variantsByDate.GetValueOrDefault(d.Date, []),
-            })
-            .ToList();
+        return SelectedPeriod is { } selected ? [(selected, selected.StartDate)] : [];
     }
 
-    /// <summary>A hétfő–péntek rácsot a közös `WeekGrid` építi az időszak dátumtartományából; a
-    /// `days` (`GetOrderableDaysQuery`) eleve csak munkanapokra ad sort, így a cella-sablon egyszerűen
+    private async Task LoadDaysAsync()
+    {
+        var loaded = new List<CalendarSection>();
+        menuPortionHuf = 0;
+
+        foreach (var (period, from) in PeriodsToLoad())
+        {
+            var orderableResult = await Mediator.Send(new GetOrderableDaysQuery(period.Id, EffectiveTargetUserId));
+            if (!orderableResult.IsSuccess)
+            {
+                sections = [];
+                errorMessage = orderableResult.ErrorMessage;
+                return;
+            }
+
+            var menuResult = await Mediator.Send(new GetPeriodMenuQuery(period.Id, IncludeUnpublished: false));
+            var variantsByDate = menuResult.IsSuccess
+                ? menuResult.Value!.ToDictionary(m => m.Date, m => m.Variants.ToList())
+                : [];
+
+            menuPortionHuf = orderableResult.Value!.FirstOrDefault()?.MenuPortionHuf ?? menuPortionHuf;
+
+            loaded.Add(new CalendarSection(period, from, orderableResult.Value!
+                .Select(d => new OrderDayCell
+                {
+                    Date = d.Date,
+                    Orderable = d.Orderable,
+                    Cancellable = d.Cancellable,
+                    ActiveVariantCode = d.VariantCode,
+                    ActiveVariantName = d.VariantName,
+                    Reason = d.Reason,
+                    Variants = variantsByDate.GetValueOrDefault(d.Date, []),
+                })
+                .ToList()));
+        }
+
+        errorMessage = null;
+        sections = loaded;
+    }
+
+    /// <summary>A hétfő–péntek rácsot a közös `WeekGrid` építi a szakasz dátumtartományából; a napok
+    /// (`GetOrderableDaysQuery`) eleve csak munkanapokra adnak sort, így a cella-sablon egyszerűen
     /// dátum szerint keresi ki a sajátját.</summary>
     private OrderingPeriodDto? SelectedPeriod => periods.FirstOrDefault(p => p.Id == selectedPeriodId);
 
@@ -354,32 +444,57 @@ else if (SelectedPeriod is { } period)
         }
     }
 
+    /// <summary>A kijelölés több időszakot is érinthet (kolléga-nézetben egyszerre látszik az aktuális
+    /// és a következő hónap), a <c>PlacePeriodOrderCommand</c> viszont egy időszakra szól — ezért
+    /// időszakonként megy egy parancs, és az eredményeik egyetlen összesítésbe fűződnek. Egy szakasznál
+    /// ez pontosan a korábbi, egyetlen hívás.</summary>
     private async Task SubmitOrdersAsync()
     {
         isSubmitting = true;
 
-        var requestDays = pendingSelections.Select(kvp => new DayOrderRequest(kvp.Key, kvp.Value)).ToList();
-        var result = await Mediator.Send(new PlacePeriodOrderCommand(EffectiveTargetUserId, CurrentUser.UserId, selectedPeriodId, requestDays));
+        var succeeded = new List<DayResult>();
+        var skipped = new List<DaySkip>();
 
-        isSubmitting = false;
-
-        if (!result.IsSuccess)
+        foreach (var section in sections ?? [])
         {
-            errorMessage = result.ErrorMessage;
-            Snackbar.Add(result.ErrorMessage ?? "Nem sikerült leadni a rendelést.", Severity.Error);
-            return;
+            var requestDays = pendingSelections
+                .Where(kvp => section.Days.Any(d => d.Date == kvp.Key))
+                .Select(kvp => new DayOrderRequest(kvp.Key, kvp.Value))
+                .ToList();
+            if (requestDays.Count == 0)
+            {
+                continue;
+            }
+
+            var result = await Mediator.Send(new PlacePeriodOrderCommand(
+                EffectiveTargetUserId, CurrentUser.UserId, section.Period.Id, requestDays));
+
+            if (!result.IsSuccess)
+            {
+                isSubmitting = false;
+                errorMessage = result.ErrorMessage;
+                Snackbar.Add(result.ErrorMessage ?? "Nem sikerült leadni a rendelést.", Severity.Error);
+                return;
+            }
+
+            succeeded.AddRange(result.Value!.Succeeded);
+            skipped.AddRange(result.Value.Skipped);
         }
 
+        isSubmitting = false;
         pendingSelections.Clear();
         await LoadDaysAsync();
 
-        if (result.Value!.Skipped.Count == 0)
+        if (skipped.Count == 0)
         {
-            Snackbar.Add($"{result.Value.Succeeded.Count} nap sikeresen megrendelve.", Severity.Success);
+            Snackbar.Add($"{succeeded.Count} nap sikeresen megrendelve.", Severity.Success);
             return;
         }
 
-        var parameters = new DialogParameters<PlaceOrderResultDialog> { { x => x.Result, result.Value! } };
+        var parameters = new DialogParameters<PlaceOrderResultDialog>
+        {
+            { x => x.Result, new BatchOrderResult(succeeded, skipped) },
+        };
         await DialogService.ShowAsync<PlaceOrderResultDialog>("Rendelés eredménye", parameters, DefaultDialogOptions);
     }
 

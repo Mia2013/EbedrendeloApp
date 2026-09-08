@@ -24,7 +24,7 @@ jön — a sablonoldalak (`Counter`, `Weather`, `Home`) csak akkor törlődnek.
 | Rendelési időszak | **Nem naptári hónap**, hanem az admin által megnyitott `[StartDate, EndDate]` tartomány (pl. aug. 5. – szept. 5.). Átfedés tilos, rés megengedett |
 | Rendelési ablak | **Kétfázisú**: az `OrderDeadline`-ig bármely időszaki napra; utána a 3 munkanapos szabály szerintiekre, akár egyszerre az összesre. Több nap egy hívásban, részleges sikerrel |
 | Értesítés | **In-app értesítés tábla** |
-| Más nevében rendelés | **Bárki bárki nevében**, de a címzettet azonosítani kell (név + igazgatóság + osztály, pontos egyezés), és naplózzuk, ki adta le (`PlacedByUserId`) |
+| Más nevében rendelés | **Rendelést bárki bárki nevében**, de a címzettet azonosítani kell (név + igazgatóság + osztály, pontos egyezés), és naplózzuk, ki adta le (`PlacedByUserId`). **Lemondani** más naptárában **csak admin** tud, és a kolléga naptára a dolgozónak nem böngészhető történet: csak a nyitott időszakok, csak a mai naptól előre |
 | Jóváírás | **Egyenleg-könyvelés (ledger)**, azonnal felhasználható egyenlegként, automatikus beszámítás |
 | Jóváírás hatóköre | **Csak menürendelésre számítható be** — a menü és a la carte pénzügy nem keveredik |
 | Lemondás időhorizontja | **Aznapi lemondás nincs** — sem menüre, sem a la carte-ra |
@@ -695,7 +695,11 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetOrderableDaysQuery` **[U]** — **a felület egyetlen igazságforrása**: az időszak minden napjára
   megmondja, hogy *rendelhető-e*, *lemondható-e*, és ha nem, **miért** (ugyanaz az `ErrorCodes` készlet,
   amit a köteges parancsok `Skipped` listája használ). Így a felület előre le tudja tiltani a nem
-  választható napokat, és a parancs eredménye megerősítés, nem meglepetés
+  választható napokat, és a parancs eredménye megerősítés, nem meglepetés.
+  **Idegen felhasználóra a válasz szűkül** (`IAuditedOnBehalfOf` marad, de a handler minimalizál): a
+  dolgozó lezárt időszakra `PeriodClosed` hibát kap, nyitottra pedig csak a mai naptól kezdődő napokat.
+  A múltbeli napok nem a felületen tűnnek el, hanem be sem kerülnek a válaszba — a kolléga korábbi
+  rendeléseiről semmi nem hagyja el a szervert. Adminra a teljes időszak jön (AC 3.1.9)
 
 ### Menus
 - `UpsertDailyMenuCommand` **[A]** — nap menüjének létrehozása/módosítása variánsokkal; a kikerült
@@ -731,10 +735,14 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   `OrderingPeriodId`. A fázistól függően a 3.5 A vagy B sorát érvényesíti napokra bontva, és
   `Result<BatchOrderResult>`-ot ad vissza a `Skipped` listával. A más nevében rendelést a
   `TargetUserId ≠ CurrentUser` eset fedi, `PlacedByUserId` mindig az aktuális felhasználó.
-- `CancelMenuOrdersCommand` **[U]** — `TargetUserId` + **dátumlista**; naponként `CanChange` (3.1),
-  `CancellationReason = ByUser`, jóváírás létrehozása, értesítés. Szintén `Result<BatchOrderResult>`.
-  Egyetlen nap lemondása ennek az egyelemű esete — nincs külön parancs rá.
-- `GetMyPeriodOrderQuery` **[U]**, `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
+- `CancelMenuOrdersCommand` **[U / idegenre A]** — `TargetUserId` + **dátumlista**; naponként `CanChange`
+  (3.1), `CancellationReason = ByUser`, jóváírás létrehozása, értesítés. Szintén
+  `Result<BatchOrderResult>`. Egyetlen nap lemondása ennek az egyelemű esete — nincs külön parancs rá.
+  A párjával (`PlacePeriodOrderCommand`) ellentétben `IActsOnBehalfOf`, **nem** `IAuditedOnBehalfOf`:
+  rendelést leadni a kollégának szívesség, lemondani kárt okoz, ezért idegen `TargetUserId` admin-jog.
+- `GetMyPeriodOrderQuery` **[U / idegenre A]** — egy időszak teljes rendeléstörténete egy felhasználóra;
+  pontosan az, amit a más nevében rendelő dolgozó nem láthat, ezért `IActsOnBehalfOf`.
+  `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
 
 ### ALaCarte
 - `UpsertALaCarteItemCommand` **[A]**, `SetALaCarteItemActiveCommand` **[A]** (kétirányú — kivezetés

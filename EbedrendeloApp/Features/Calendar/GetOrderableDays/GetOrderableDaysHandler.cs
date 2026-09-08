@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
@@ -13,7 +14,8 @@ namespace EbedrendeloApp.Features.Calendar.GetOrderableDays;
 public sealed class GetOrderableDaysHandler(
     IDbContextFactory<EbedrendeloDbContext> dbFactory,
     IAppClock clock,
-    IWorkingDayCalculator workingDayCalculator)
+    IWorkingDayCalculator workingDayCalculator,
+    ICurrentUser currentUser)
     : IRequestHandler<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>
 {
     public async Task<Result<IReadOnlyList<OrderableDayDto>>> Handle(GetOrderableDaysQuery request, CancellationToken cancellationToken)
@@ -24,6 +26,18 @@ public sealed class GetOrderableDaysHandler(
         if (period is null)
         {
             return Result.Failure<IReadOnlyList<OrderableDayDto>>(ErrorCodes.NotFound, "Az időszak nem található.");
+        }
+
+        // Idegen felhasználó naptára nem böngészhető történet (AC 3.1.9): a dolgozó csak azt kapja meg,
+        // amire még rendelhet a nevében. Ez szerveroldali szabály és nem felületi, mert a lekérdezés
+        // közvetlenül is hívható — a naptár elrejtett időszakválasztója önmagában semmit nem védene.
+        await currentUser.EnsureLoadedAsync(cancellationToken);
+        var foreignView = request.UserId != currentUser.UserId && !currentUser.IsAdmin;
+
+        if (foreignView && !period.IsOpen)
+        {
+            return Result.Failure<IReadOnlyList<OrderableDayDto>>(
+                ErrorCodes.PeriodClosed, "Ez az időszak már lezárult, más nevében nem rendelhetsz rá.");
         }
 
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
@@ -59,7 +73,11 @@ public sealed class GetOrderableDaysHandler(
 
         var result = new List<OrderableDayDto>();
 
-        for (var date = period.StartDate; date <= period.EndDate; date = date.AddDays(1))
+        // Idegen nézetben a mai nap az első: a múltbeli napok nem „el vannak rejtve", hanem be sem
+        // kerülnek a válaszba, tehát a kolléga korábbi rendeléseiről semmi nem hagyja el a szervert.
+        var firstDate = foreignView && clock.Today > period.StartDate ? clock.Today : period.StartDate;
+
+        for (var date = firstDate; date <= period.EndDate; date = date.AddDays(1))
         {
             // Weekend and "explicitly excluded" are checked separately (not via a single
             // IsWorkingDay(date, excludedDates) call) because this loop needs to tell them apart —
