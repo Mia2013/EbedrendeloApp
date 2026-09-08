@@ -35,25 +35,36 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       `ManualCreditDialog`) — sikertelen `Result` esetén NRE. Az `ErrorBoundary` már elkapja, de a
       helyes megoldás a `Result` ellenőrzése (közös állapot-komponenssel, lásd lent).
 
-### UI egységesítés (a „szétesett" érzés konkrét okai)
-- [ ] **Az oldalfejléc 13× kimásolva** — lásd a lenti, régebbi „UI / komponensek" tételt is. Driftel:
-      `mb-4` van/nincs, `flex-grow-1` van/nincs, a szűrő hol a fejlécben, hol alatta.
-- [ ] **Ugyanaz a naptárrács 4× lemásolva** más BEM-prefixszel (`order-calendar`, `menu-calendar`,
-      `admin-orders-calendar`, `my-orders-calendar`) — azonos grid, cella, radius, shadow, 1279px
-      breakpoint, ~180 sor CSS; a `BuildWeeks()` hét-bontó logika szintén 4 példányban. Kell egy közös
-      `WeekGrid` komponens a meglévő `WeekdayHeaderRow` párjaként.
-- [ ] **Az időszak-választó 5 oldalon újraírva** (`UserCalendar`, `MyOrders`, `AdminOrders`,
-      `DailyMenuEditor`, `AdminInvoices`) — saját `periods` mező, saját betöltés, saját
-      `OnPeriodSelectedAsync`, eltérő `Margin`/`Class`. Kell egy `PeriodSelector`.
-- [ ] **Keverednek a visszajelzés-minták**: Snackbar (8 oldal), inline elutasítható `MudAlert`
-      (`AdminInvoices`), dialóguson belüli `errorMessage`, és néma elnyelés; a betöltésjelzés is
-      háromféle. Rögzítendő konvenció + közös üres/betöltés/hiba állapot-komponens.
-- [ ] **A `/` kezdőlap tartalma gyakorlatilag egy dev eszköz** — egy gomb + a felhasználóváltó kártya.
-      A dolgozónak nincs áttekintője (mai menü, egyenleg, fizetetlen számla).
+### UI egységesítés — nagyrészt elkészült (Fázis 3)
+- [x] **`PageHeader`** — az ikon+cím+leírás fejléc 13 oldalról egy komponensbe (`Description`,
+      `Filters`, `Actions`, `ChildContent` slotokkal). A régi backlog-tétel („UI / komponensek"
+      szekció) ezzel lezárva.
+- [x] **`WeekGrid`** — a négyszer lemásolt hétfő–péntek rács (`order-`, `menu-`, `admin-orders-`,
+      `my-orders-calendar`) és a négy `BuildWeeks()` egy komponensbe. A cellák `MudPaper`-ek, a
+      szaggatott üres cella MudBlazor border-utility osztályokból. Az oszlopszám/térköz `app.css`-beli
+      CSS-változóban, közösen a `WeekdayHeaderRow`-val, hogy ne csúszhassanak el.
+- [x] **`PeriodSelector`** — az öt oldalon újraírt időszak-választó egy komponensbe.
+- [x] **`PageState`** — közös betöltés / üres / hiba állapot.
+- [x] **Kézi CSS: nettó −165 sor**, két `.razor.css` teljesen törölve. Ami maradt: a rács geometriája
+      (MudGrid 12 oszlopos rendszere nem tudja), a beküldő sáv `position: sticky`-je, és a korábban is
+      jogos kivételek (`ReconnectModal`, `#blazor-error-ui`, `DecimalStepperField`).
+      **Tanulság:** a `MudPaper` gyerekkomponens, ezért a CSS-izoláció `b-xxx` attribútuma nem kerül rá
+      — a rá vonatkozó szabályokhoz `::deep` kell, különben némán nem érvényesülnek (böngészőben,
+      computed style-lal derült ki).
+
+### UI — még nyitott
+- [ ] **`result.Value!` a maradék ~12 helyen** (`AdminBalances`, `MyBalance`, `UserCalendar`,
+      `AdminOrders`, `MyOrders`, `DailyMenuEditor`, `ManualCreditDialog`) — az `AdminInvoices` és a
+      `MyInvoices` már `PageState`-tel, ellenőrzött `Result`-tal megy, a többit is át kell vezetni.
+- [ ] **A `/` kezdőlap tartalma gyakorlatilag egy dev eszköz** — egy gomb + a felhasználóváltó kártya
+      (ez utóbbi már csak fejlesztői környezetben). A dolgozónak nincs áttekintője (mai menü, egyenleg,
+      fizetetlen számla, gyorslinkek).
 - [ ] **A sötét paletta halott** — `AppTheme.PaletteDark` definiálva, de a `MudThemeProvider` nincs
       `IsDarkMode`-hoz kötve és nincs kapcsoló. Vagy kössük be, vagy töröljük.
-- [ ] 83 inline `Style="…"` (sűrűsödve `AdminInvoices`, `AdminALaCarteDailyOffer` körül), szemben a
-      „MudBlazor komponens a kézi CSS helyett" elvvel.
+- [ ] **Visszajelzés-konvenció rögzítése** a `CLAUDE.md`-be: mutáció eredménye → Snackbar; oldal-szintű
+      állapot → inline `MudAlert`; dialóguson belüli szerverhiba → dialóguson belüli alert. Ma keverednek.
+- [ ] Inline `Style="…"` maradékok átnézése (sűrűsödve `AdminInvoices`, `AdminALaCarteDailyOffer`
+      körül), szemben a „MudBlazor komponens/utility a kézi CSS helyett" elvvel.
 
 ### Hiányzó / halott funkciók
 - [ ] **`UserNotification`: 8 írási hely, 0 olvasási.** Minden értesítés a táblába megy, de nincs se
@@ -89,9 +100,11 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
 
 - [ ] Design-referencia: https://happyetterem.hu/fooldal — a designja nagyon tetszett, érdemes
       majd megnézni, mit lehetne belőle átvenni.
-- [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
+- [x] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
       pl. select) legyen kiemelve önálló, újrafelhasználható komponensbe, és vezessük át az összes
-      oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek).
+      oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek) — megoldva a
+      Fázis 3-ban: `Components/Shared/PageHeader.razor`, `Description`/`Filters`/`Actions`/
+      `ChildContent` slotokkal, mind a 13 oldalon átvezetve.
 - [x] A `MudAutocomplete` (leves/főétel név) a napi menü szerkesztő 3-oszlopos elrendezésében a
       hosszabb ételnevek miatt levágódott — megoldva a dialógus szélesítésével
       (`DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true }`,
