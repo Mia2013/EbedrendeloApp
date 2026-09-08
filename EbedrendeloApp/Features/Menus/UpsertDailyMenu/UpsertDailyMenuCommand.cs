@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
@@ -29,4 +30,4 @@ public sealed record UpsertDailyMenuCommand(
     DateOnly Date,
     string? Note,
     IReadOnlyList<MenuVariantInput> Variants,
-    int PerformedByUserId) : IRequest<Result<int>>;
+    int PerformedByUserId) : IRequest<Result<int>>, IRequireAdmin;

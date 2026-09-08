@@ -1,9 +1,10 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.ALaCarte.GetALaCarteMonthlySummary;
 
-public sealed record GetALaCarteMonthlySummaryQuery(int Year, int Month) : IRequest<ALaCarteMonthlySummaryDto>;
+public sealed record GetALaCarteMonthlySummaryQuery(int Year, int Month) : IRequest<ALaCarteMonthlySummaryDto>, IRequireAdmin;
 
 /// <summary>Napi bontású sor — a havi konyhai lista dátum × tétel mátrixot épít belőle
 /// (lásd AdminALaCarteKitchenSummary.razor), ezért itt (a napi összesítővel, <see cref="EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary.ALaCarteSummaryLineDto"/>-vel

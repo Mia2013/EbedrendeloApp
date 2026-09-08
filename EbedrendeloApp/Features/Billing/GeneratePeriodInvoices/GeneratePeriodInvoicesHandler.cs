@@ -14,7 +14,8 @@ public sealed class GeneratePeriodInvoicesHandler(
     IDbContextFactory<EbedrendeloDbContext> dbFactory,
     IAppClock clock,
     ICreditService creditService,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    ILogger<GeneratePeriodInvoicesHandler> logger)
     : IRequestHandler<GeneratePeriodInvoicesCommand, Result<BatchInvoiceResult>>
 {
     public async Task<Result<BatchInvoiceResult>> Handle(GeneratePeriodInvoicesCommand request, CancellationToken cancellationToken)
@@ -136,6 +137,13 @@ public sealed class GeneratePeriodInvoicesHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Számlagenerálás kész: időszak {PeriodId} ({PeriodName}), {InvoiceCount} számla, {DayCount} nap, " +
+            "{PayableHuf} Ft fizetendő, {CreditHuf} Ft beszámított jóváírás; generálta: {GeneratedByUserId}",
+            request.OrderingPeriodId, period.Name, invoicesByUser.Count, uninvoicedOrders.Count,
+            invoicesByUser.Values.Sum(i => i.PayableHuf), invoicesByUser.Values.Sum(i => i.CreditAppliedHuf),
+            request.GeneratedByUserId);
 
         var generated = invoicesByUser
             .Select(pair => new GeneratedInvoiceDto(

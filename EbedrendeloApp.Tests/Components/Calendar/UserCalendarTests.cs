@@ -11,6 +11,7 @@ using EbedrendeloApp.Features.Menus.GetPeriodMenu;
 using EbedrendeloApp.Features.Orders;
 using EbedrendeloApp.Features.Orders.CancelMenuOrders;
 using EbedrendeloApp.Features.Orders.PlacePeriodOrder;
+using EbedrendeloApp.Features.Users.GetUsers;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +26,10 @@ public class UserCalendarTests : MudBunitContext
     private static readonly OrderingPeriodDto Period = new(1, "Teszt időszak", Today.AddDays(-30), Today.AddDays(30), DateTime.Today.AddDays(-40), true, false);
 
     private readonly FakeMediator mediator = new();
-    private readonly FakeCurrentUser currentUser = new(1, "Teszt Dolgozó", isAdmin: false, colleagues: [new DevUserOption(2, "Kovács Anna", "User")]);
+
+    // Más nevében rendelni csak admin tud, ezért a fixture felhasználója admin — így a „kinek rendelek"
+    // választót érintő tesztek egyáltalán találnak választót. A dolgozói eset külön tesztben.
+    private readonly FakeCurrentUser currentUser = new(1, "Teszt Admin", isAdmin: true);
 
     public UserCalendarTests()
     {
@@ -37,6 +41,11 @@ public class UserCalendarTests : MudBunitContext
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
         mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>([]));
         mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
+        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>(
+        [
+            new UserOptionDto(1, "admin", 1, "Teszt Admin", "Admin", null, null),
+            new UserOptionDto(2, "kanna", 2, "Kovács Anna", "User", null, null),
+        ]));
         Services.AddSingleton<IMediator>(mediator);
     }
 
@@ -145,6 +154,19 @@ public class UserCalendarTests : MudBunitContext
 
         Assert.Contains("Kinek rendelek", cut.Markup);
         Assert.Contains("Magamnak", cut.Markup);
+    }
+
+    [Fact]
+    public void Hides_the_target_user_picker_from_a_non_admin()
+    {
+        // Más nevében rendelni csak admin tud; a szerveroldali kaput az IActsOnBehalfOf +
+        // AuthorizationBehavior adja, ez itt a felület oldala ugyanannak.
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(2, "Teszt Dolgozó", isAdmin: false));
+        mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
+
+        var cut = Render<UserCalendar>();
+
+        Assert.DoesNotContain("Kinek rendelek", cut.Markup);
     }
 
     [Fact]

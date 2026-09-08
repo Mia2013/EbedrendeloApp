@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Domain.Entities;
@@ -22,7 +23,7 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     private GeneratePeriodInvoicesHandler CreateHandler(DateTime nowLocal)
-        => new(dbFactory, new FixedAppClock(nowLocal), new CreditService(), new NotificationService());
+        => new(dbFactory, new FixedAppClock(nowLocal), new CreditService(), new NotificationService(), NullLogger<GeneratePeriodInvoicesHandler>.Instance);
 
     private async Task SeedPeriodAsync(DateTime orderDeadline)
     {

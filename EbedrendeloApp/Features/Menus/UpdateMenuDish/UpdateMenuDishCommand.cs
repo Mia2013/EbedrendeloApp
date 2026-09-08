@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions;
 using MediatR;
@@ -14,4 +15,4 @@ public sealed record UpdateMenuDishCommand(
     decimal? CarbohydrateGrams = null,
     decimal? SugarGrams = null,
     decimal? ProteinGrams = null,
-    decimal? SaltGrams = null) : IRequest<Result<MenuDishDto>>;
+    decimal? SaltGrams = null) : IRequest<Result<MenuDishDto>>, IRequireAdmin;

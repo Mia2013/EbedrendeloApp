@@ -15,7 +15,8 @@ public sealed class CancelMenuOrdersHandler(
     IAppClock clock,
     IWorkingDayCalculator workingDayCalculator,
     ICreditService creditService,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    ILogger<CancelMenuOrdersHandler> logger)
     : IRequestHandler<CancelMenuOrdersCommand, Result<BatchOrderResult>>
 {
     public async Task<Result<BatchOrderResult>> Handle(CancelMenuOrdersCommand request, CancellationToken cancellationToken)
@@ -117,6 +118,10 @@ public sealed class CancelMenuOrdersHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Lemondás: {TargetUserId} dolgozó {SucceededCount} napja lemondva, {SkippedCount} kihagyva; kérte: {CancelledByUserId}",
+            request.TargetUserId, succeeded.Count, skipped.Count, request.CancelledByUserId);
 
         return Result.Success(new BatchOrderResult(succeeded, skipped));
     }

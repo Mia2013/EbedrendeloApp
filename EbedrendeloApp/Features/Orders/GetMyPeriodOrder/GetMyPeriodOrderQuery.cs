@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
@@ -5,7 +6,10 @@ using MediatR;
 namespace EbedrendeloApp.Features.Orders.GetMyPeriodOrder;
 
 public sealed record GetMyPeriodOrderQuery(int UserId, int OrderingPeriodId)
-    : IRequest<Result<IReadOnlyList<MyPeriodOrderDto>>>;
+    : IRequest<Result<IReadOnlyList<MyPeriodOrderDto>>>, IActsOnBehalfOf
+{
+    int IActsOnBehalfOf.TargetUserId => UserId;
+}
 
 public sealed record MyPeriodOrderDto(
     DateOnly Date,

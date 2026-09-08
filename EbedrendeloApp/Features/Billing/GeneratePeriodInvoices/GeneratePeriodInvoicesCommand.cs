@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
@@ -9,7 +10,7 @@ namespace EbedrendeloApp.Features.Billing.GeneratePeriodInvoices;
 /// számlát, a korábban kiszámlázott napokat nem érinti.
 /// </summary>
 public sealed record GeneratePeriodInvoicesCommand(int OrderingPeriodId, int GeneratedByUserId)
-    : IRequest<Result<BatchInvoiceResult>>;
+    : IRequest<Result<BatchInvoiceResult>>, IRequireAdmin;
 
 public sealed record BatchInvoiceResult(IReadOnlyList<GeneratedInvoiceDto> Generated);
 

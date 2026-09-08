@@ -6,10 +6,10 @@
 @using EbedrendeloApp.Features.Calendar
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
 @using EbedrendeloApp.Features.Orders.GetUserOrders
+@using EbedrendeloApp.Features.Users.GetUsers
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
-@inject IDevUserSwitcher DevUserSwitcher
 @inject NavigationManager NavigationManager
 
 <PageTitle>Rendelések</PageTitle>
@@ -84,7 +84,7 @@
     <MudSelect T="int?" Label="Dolgozó" Value="selectedUserId" ValueChanged="OnUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width:240px;">
         @foreach (var user in users)
         {
-            <MudSelectItem Value="@((int?)user.UserId)">@user.DisplayName</MudSelectItem>
+            <MudSelectItem Value="@((int?)user.Id)">@user.DisplayName</MudSelectItem>
         }
     </MudSelect>
 
@@ -169,7 +169,7 @@
 
     private List<OrderingPeriodDto> periods = [];
     private int selectedPeriodId;
-    private IReadOnlyList<EbedrendeloApp.Common.Security.DevUserOption> users = [];
+    private IReadOnlyList<UserOptionDto> users = [];
     private int? selectedUserId;
     private string statusFilter = "Mind";
     private List<UserOrderDto>? orders;
@@ -194,7 +194,7 @@
             return;
         }
 
-        users = await DevUserSwitcher.GetUsersAsync();
+        users = (await Mediator.Send(new GetUsersQuery())).Value ?? [];
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
         var today = DateOnly.FromDateTime(DateTime.Today);

@@ -1,9 +1,10 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Calendar.ExcludeDay;
 
-public sealed record ExcludeDayCommand(DateOnly Date, string Reason, int CreatedByUserId) : IRequest<Result>
+public sealed record ExcludeDayCommand(DateOnly Date, string Reason, int CreatedByUserId) : IRequest<Result>, IRequireAdmin
 {
     /// <summary>
     /// Single source of truth for the Reason field's max length — referenced by ExcludeDayValidator's

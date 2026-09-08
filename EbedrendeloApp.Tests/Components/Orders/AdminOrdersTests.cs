@@ -7,6 +7,7 @@ using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Calendar;
 using EbedrendeloApp.Features.Calendar.GetOrderingPeriods;
 using EbedrendeloApp.Features.Orders.GetUserOrders;
+using EbedrendeloApp.Features.Users.GetUsers;
 using EbedrendeloApp.Tests.TestSupport;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -29,6 +30,11 @@ public class AdminOrdersTests : MudBunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
+        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>(
+        [
+            new UserOptionDto(2, "kjanos", 2, "Kovács János", "User", null, null),
+            new UserOptionDto(3, "nanna", 3, "Nagy Anna", "User", null, null),
+        ]));
         Services.AddSingleton<IMediator>(mediator);
     }
 

@@ -1,10 +1,11 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Calendar.RemoveExcludedDay;
 
 public sealed record RemoveExcludedDayCommand(DateOnly Date, bool RestoreCancelledOrders, int PerformedByUserId)
-    : IRequest<Result<RemoveExcludedDayResult>>;
+    : IRequest<Result<RemoveExcludedDayResult>>, IRequireAdmin;
 
 public sealed record RemoveExcludedDayResult(int RestoredCount, int SkippedCount, IReadOnlyList<SkippedOrderInfo> SkippedDetails);
 

@@ -1,0 +1,78 @@
+@using EbedrendeloApp.Common.Security
+@using FluentValidation
+@inject NavigationManager NavigationManager
+
+@* A ValidationBehavior és az AuthorizationBehavior szándékosan kivételt dob (NFR-2): ezek nem üzleti
+   kimenetek, hanem hiba vagy visszaélés. Enélkül a határ nélkül bármelyikük — és bármilyen váratlan
+   DbUpdateException — ledöntené a SignalR circuitot, és a felhasználó a natív sárga
+   "An unhandled error has occurred" sávot kapná az oldal helyett. *@
+<ErrorBoundary @ref="boundary">
+    <ChildContent>
+        @ChildContent
+    </ChildContent>
+    <ErrorContent Context="exception">
+        <MudPaper Elevation="1" Class="pa-6 rounded-lg">
+            <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
+                <MudIcon Icon="@IconFor(exception)" Size="Size.Large" Color="@ColorFor(exception)" />
+                <MudStack Spacing="2" Class="flex-grow-1">
+                    <MudText Typo="Typo.h5">@TitleFor(exception)</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@MessageFor(exception)</MudText>
+                    <MudStack Row Spacing="2" Class="mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="Recover">
+                            Újrapróbálom
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                   StartIcon="@Icons.Material.Filled.Home" OnClick="GoHome">
+                            Kezdőlap
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private ErrorBoundary? boundary;
+
+    private static string IconFor(Exception exception) => exception switch
+    {
+        ForbiddenException => Icons.Material.Filled.Lock,
+        ValidationException => Icons.Material.Filled.Rule,
+        _ => Icons.Material.Filled.ErrorOutline,
+    };
+
+    private static Color ColorFor(Exception exception) => exception switch
+    {
+        ForbiddenException => Color.Warning,
+        _ => Color.Error,
+    };
+
+    private static string TitleFor(Exception exception) => exception switch
+    {
+        ForbiddenException => "Nincs jogosultságod ehhez",
+        ValidationException => "Hibás adat",
+        _ => "Valami hiba történt",
+    };
+
+    // A ForbiddenException és a ValidationException üzenete a mi szövegünk, megmutatható. Minden más
+    // kivétel üzenete tartalmazhat belső részletet (SQL, útvonal), ezért csak általános szöveget adunk.
+    private static string MessageFor(Exception exception) => exception switch
+    {
+        ForbiddenException forbidden => forbidden.Message,
+        ValidationException validation => string.Join(" ", validation.Errors.Select(e => e.ErrorMessage)),
+        _ => "A művelet nem fejeződött be. Próbáld újra, és ha ismétlődik, szólj az adminisztrátornak.",
+    };
+
+    private void Recover() => boundary?.Recover();
+
+    private void GoHome()
+    {
+        boundary?.Recover();
+        NavigationManager.NavigateTo("");
+    }
+}

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Features.Billing.MarkInvoicePaid;
@@ -14,7 +15,7 @@ public class MarkInvoicePaidHandlerTests : IDisposable
 
     private int adminId;
 
-    public MarkInvoicePaidHandlerTests() => sut = new MarkInvoicePaidHandler(dbFactory, clock);
+    public MarkInvoicePaidHandlerTests() => sut = new MarkInvoicePaidHandler(dbFactory, clock, NullLogger<MarkInvoicePaidHandler>.Instance);
 
     public void Dispose() => dbFactory.Dispose();
 

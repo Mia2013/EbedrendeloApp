@@ -8,7 +8,9 @@ namespace EbedrendeloApp.Common.Behaviors;
 /// 01-szerver-architektura.md) — expected business outcomes are <c>Result</c>/<c>Result&lt;T&gt;</c>,
 /// a validation failure is a genuine input-shape bug.
 /// </summary>
-public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
+public sealed class ValidationBehavior<TRequest, TResponse>(
+    IEnumerable<IValidator<TRequest>> validators,
+    ILogger<ValidationBehavior<TRequest, TResponse>> logger)
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
@@ -27,6 +29,9 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
 
         if (failures.Count != 0)
         {
+            logger.LogWarning(
+                "Validációs hiba: {RequestType} — {Errors}",
+                typeof(TRequest).Name, string.Join(" | ", failures.Select(f => f.ErrorMessage)));
             throw new ValidationException(failures);
         }
 

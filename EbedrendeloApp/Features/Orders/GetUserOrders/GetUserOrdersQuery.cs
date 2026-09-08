@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
@@ -5,7 +6,7 @@ using MediatR;
 namespace EbedrendeloApp.Features.Orders.GetUserOrders;
 
 public sealed record GetUserOrdersQuery(int? OrderingPeriodId, int? UserId, OrderStatus? Status)
-    : IRequest<Result<IReadOnlyList<UserOrderDto>>>;
+    : IRequest<Result<IReadOnlyList<UserOrderDto>>>, IRequireAdmin;
 
 public sealed record UserOrderDto(
     int OrderId,

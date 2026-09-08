@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
@@ -25,7 +26,7 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     private CancelMenuOrdersHandler CreateHandler(DateTime nowLocal)
-        => new(dbFactory, new FixedAppClock(nowLocal), new WorkingDayCalculator(), new CreditService(), new NotificationService());
+        => new(dbFactory, new FixedAppClock(nowLocal), new WorkingDayCalculator(), new CreditService(), new NotificationService(), NullLogger<CancelMenuOrdersHandler>.Instance);
 
     private async Task SeedAsync(bool periodIsOpen = true, int changeDeadlineWorkingDays = 3)
     {

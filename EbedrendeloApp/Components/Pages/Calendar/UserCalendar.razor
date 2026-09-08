@@ -11,12 +11,12 @@
 @using EbedrendeloApp.Features.Orders
 @using EbedrendeloApp.Features.Orders.PlacePeriodOrder
 @using EbedrendeloApp.Features.Orders.CancelMenuOrders
+@using EbedrendeloApp.Features.Users.GetUsers
 @using EbedrendeloApp.Components.Pages.Orders
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
 @inject IDialogService DialogService
-@inject IDevUserSwitcher DevUserSwitcher
 @inject ISnackbar Snackbar
 
 <PageTitle>Rendelés</PageTitle>
@@ -42,20 +42,25 @@
                         }
                     </MudSelect>
                 }
-                <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
-                           Class="panel-narrow-surface">
-                    <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
-                    @foreach (var colleague in colleagues)
-                    {
-                        <MudSelectItem Value="@((int?)colleague.UserId)">@colleague.DisplayName</MudSelectItem>
-                    }
-                </MudSelect>
+                @* Más nevében rendelni csak admin tud — a szerveroldali kaput az IActsOnBehalfOf
+                   jelölő + AuthorizationBehavior adja, ez itt csak a felület kényelme. *@
+                @if (CurrentUser.IsAdmin)
+                {
+                    <MudSelect T="int?" Label="Kinek rendelek" Value="targetUserId" ValueChanged="OnTargetUserSelectedAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Class="panel-narrow-surface">
+                        <MudSelectItem Value="@((int?)null)">Magamnak</MudSelectItem>
+                        @foreach (var colleague in colleagues)
+                        {
+                            <MudSelectItem Value="@((int?)colleague.Id)">@colleague.DisplayName</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
             </MudStack>
 
             @if (targetUserId is not null)
             {
                 <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
-                    @colleagues.First(c => c.UserId == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
+                    @colleagues.First(c => c.Id == targetUserId).DisplayName nevében rendelsz/mondasz le — nem a saját naptáradat látod.
                 </MudAlert>
             }
 
@@ -254,7 +259,7 @@ else
 
     private List<OrderingPeriodDto> periods = [];
     private int selectedPeriodId;
-    private IReadOnlyList<DevUserOption> colleagues = [];
+    private IReadOnlyList<UserOptionDto> colleagues = [];
     private int? targetUserId;
     private int? myBalanceHuf;
     private List<OrderDayCell>? days;
@@ -273,7 +278,13 @@ else
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        colleagues = (await DevUserSwitcher.GetUsersAsync()).Where(u => u.UserId != CurrentUser.UserId).ToList();
+        if (CurrentUser.IsAdmin)
+        {
+            var users = await Mediator.Send(new GetUsersQuery());
+            colleagues = users.IsSuccess
+                ? users.Value!.Where(u => u.Id != CurrentUser.UserId).ToList()
+                : [];
+        }
         myBalanceHuf = (await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId))).Value;
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();

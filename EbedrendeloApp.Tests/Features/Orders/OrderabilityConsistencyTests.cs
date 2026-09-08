@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Domain.Entities;
@@ -111,7 +112,7 @@ public class OrderabilityConsistencyTests : IDisposable
 
         var cancelHandler = new CancelMenuOrdersHandler(
             dbFactory, new FixedAppClock(Now), new WorkingDayCalculator(),
-            new CreditService(), new NotificationService());
+            new CreditService(), new NotificationService(), NullLogger<CancelMenuOrdersHandler>.Instance);
         var cancelResult = await cancelHandler.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu, Tue]), CancellationToken.None);
 
         Assert.Contains(cancelResult.Value!.Succeeded, s => s.Date == Thu);

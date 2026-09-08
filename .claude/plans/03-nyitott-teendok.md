@@ -11,33 +11,29 @@
 
 ## Epic 1–7 átvilágítás (2026-09-08) — még nyitott tételek
 
-A teljes átvilágítás megállapításai; a Fázis 1 (számlázási modell + jóváírás-szabály) elkészült, az
-alábbiak maradtak.
+A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számlázási modell + jóváírás-szabály),
+**Fázis 2** (szerveroldali jogosultság, `ErrorBoundary`, naplózás). Az alábbiak maradtak.
 
-### Biztonság (Epic 9 előfeltétele)
-- [ ] **Nincs szerveroldali jogosultság-ellenőrzés.** 17 admin use case egyetlen védelme egy
-      kliens-oldali `if (!CurrentUser.IsAdmin) NavigationManager.NavigateTo(...)` az oldal
-      `OnInitializedAsync`-jében; a handlerek a `PerformedByUserId` / `GeneratedByUserId` paramétert
-      elhiszik. Megoldás: `AuthorizationBehavior` MediatR pipeline behavior `IRequireAdmin` markerrel,
-      a `ValidationBehavior` mintájára.
-- [ ] **Bárki rendelhet/lemondhat bárki nevében.** A `/naptar` „Kinek rendelek" választója minden
-      dolgozónak látszik (`UserCalendar.razor`), és a `TargetUserId` szerveroldalon ellenőrizetlen
-      (`PlacePeriodOrderCommand`, `CancelMenuOrdersCommand`). Ugyanez a saját-adat lekérdezéseknél:
-      `GetMyBalanceQuery`, `GetMyInvoicesQuery`, `GetMyPeriodOrderQuery`, `GetMyCreditLedgerQuery`.
-      Megoldás: `IActsOnBehalfOf` marker + ugyanaz a behavior; a választó csak adminnak jelenjen meg.
-- [ ] **`IDevUserSwitcher` (dev impersonation) 3 éles oldalon** — `Home`, `UserCalendar`,
-      `AdminOrders`. Van rendes `GetUsersQuery`, de azt csak a `ManualCreditDialog` használja.
-      A `Home` dev-kártyája kerüljön `IsDevelopment()` mögé.
-- [ ] **Nulla naplózás** — egyetlen `ILogger` sincs az appban. Legalább a behaviorok és a pénzmozgató
-      handlerek (`GeneratePeriodInvoices`, `MarkInvoicePaid`, `AddManualCredit`, `CancelMenuOrders`).
+### Biztonság — elkészült (Fázis 2)
+- [x] **Szerveroldali jogosultság-ellenőrzés** — `AuthorizationBehavior` MediatR pipeline behavior
+      (`ValidationBehavior` ELŐTT fut), `IRequireAdmin` és `IActsOnBehalfOf` jelölőkkel; 32 admin és
+      10 saját-adat use case megjelölve. A `UseCaseAuthorizationCoverageTests` architektúra-teszt
+      elbukik, ha új use case jelöletlenül csúszik be, így a védelem nem tud csendben lyukassá válni.
+- [x] **Idegen nevében végzett műveletek** — a `TargetUserId` ellenőrzött, idegen id csak adminnak;
+      a `/naptar` „Kinek rendelek" választója szintén csak adminnak jelenik meg.
+- [x] **`IDevUserSwitcher` kivezetése** — a `UserCalendar` és az `AdminOrders` a rendes
+      `GetUsersQuery`-t használja; a `Home` dev-kártyája `IsDevelopment()` mögé került.
+- [x] **Naplózás** — a két behavior és a pénzmozgató handlerek (`GeneratePeriodInvoices`,
+      `MarkInvoicePaid`, `AddManualCredit`, `CancelMenuOrders`) `ILogger`-t kaptak.
 
 ### Hibatűrés
-- [ ] **Nincs `ErrorBoundary` sehol.** A `ValidationBehavior` szándékosan `ValidationException`-t dob
-      (NFR-2), és `DbUpdateException` is felszállhat — bármelyik ledönti a SignalR circuitot a natív
-      sárga „An unhandled error has occurred" sávra. Kell egy `ErrorBoundary` a `MainLayout`-ba.
+- [x] **`AppErrorBoundary`** a `MainLayout`-ban — a `ForbiddenException` és a `ValidationException`
+      barátságos kártyát kap (a váratlan kivételek üzenete elrejtve), a natív sárga sáv és a ledőlt
+      circuit helyett. Útvonalra kulcsolva, hogy a hiba ne ragadjon be a következő oldalon.
 - [ ] **16 helyen `result.Value!`** ellenőrzés nélkül (`AdminInvoices`, `MyInvoices`, `MyBalance`,
       `AdminBalances`, `UserCalendar`, `MyOrders`, `AdminOrders`, `DailyMenuEditor`,
-      `ManualCreditDialog`) — sikertelen `Result` esetén NRE.
+      `ManualCreditDialog`) — sikertelen `Result` esetén NRE. Az `ErrorBoundary` már elkapja, de a
+      helyes megoldás a `Result` ellenőrzése (közös állapot-komponenssel, lásd lent).
 
 ### UI egységesítés (a „szétesett" érzés konkrét okai)
 - [ ] **Az oldalfejléc 13× kimásolva** — lásd a lenti, régebbi „UI / komponensek" tételt is. Driftel:
@@ -174,9 +170,10 @@ alábbiak maradtak.
       validáció (pl. "már le van zárva" / "nincs érvényben lévő zárás") inline `if` a
       `CloseDayHandler`/`ReopenDayHandler`-ben van, eltérően a többi feature konvenciójától.
       Funkcionálisan helyes, csak konzisztencia kérdés.
-- [ ] `KitchenSummary.razor` admin-jogosultság ellenőrzése kliens-oldali redirect
-      (`OnInitializedAsync`-ben, nem-adminra `mai-menu`-re navigál), nem route-szintű `[Authorize]`.
-      Ha ez eltér az app többi admin-oldalának mintájától, érdemes egységesíteni.
+- [x] `KitchenSummary.razor` (és a többi admin oldal) kliens-oldali redirectje — megoldva a Fázis 2-ben:
+      a valódi kapu az `AuthorizationBehavior` a szerveren, az oldal `OnInitializedAsync`-jében lévő
+      átirányítás onnantól csak kényelmi elem (ne a hibakártyát lássa, aki rossz linkre téved).
+      Route-szintű `[Authorize]` az Epic 9 valódi hitelesítésével jön.
 
 ---
 

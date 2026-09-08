@@ -1,10 +1,14 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Billing.GetMyCreditLedger;
 
-public sealed record GetMyCreditLedgerQuery(int UserId) : IRequest<Result<IReadOnlyList<CreditLedgerEntryDto>>>;
+public sealed record GetMyCreditLedgerQuery(int UserId) : IRequest<Result<IReadOnlyList<CreditLedgerEntryDto>>>, IActsOnBehalfOf
+{
+    int IActsOnBehalfOf.TargetUserId => UserId;
+}
 
 /// <summary>AC 5.3.1-5.3.3 — one row per append-only <c>CreditEntry</c>. <see cref="SourceOrderDate"/>/
 /// <see cref="SourceOrderVariantCode"/> are resolved from <see cref="SourceMenuOrderId"/> ("mi lett

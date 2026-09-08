@@ -1,7 +1,9 @@
 @inherits LayoutComponentBase
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Theme
 @inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <MudThemeProvider Theme="AppTheme.Default" />
@@ -37,7 +39,11 @@
 
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-6">
-            @Body
+            @* @key az útvonalra: navigáláskor új ErrorBoundary példány jön létre, így egy korábbi
+               oldalon elkapott hiba nem ragad be a következő oldalon. *@
+            <AppErrorBoundary @key="NavigationManager.Uri">
+                @Body
+            </AppErrorBoundary>
         </MudContainer>
     </MudMainContent>
 

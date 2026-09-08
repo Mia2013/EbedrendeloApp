@@ -12,7 +12,8 @@ public sealed class AddManualCreditHandler(
     IDbContextFactory<EbedrendeloDbContext> dbFactory,
     IAppClock clock,
     ICreditService creditService,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    ILogger<AddManualCreditHandler> logger)
     : IRequestHandler<AddManualCreditCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(AddManualCreditCommand request, CancellationToken cancellationToken)
@@ -40,6 +41,10 @@ public sealed class AddManualCreditHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Kézi jóváírás: {AmountHuf} Ft a(z) {TargetUserId} dolgozónak (tétel {EntryId}); rögzítette: {PerformedByUserId}",
+            request.AmountHuf, request.TargetUserId, entry.Id, request.PerformedByUserId);
 
         return Result.Success(entry.Id);
     }

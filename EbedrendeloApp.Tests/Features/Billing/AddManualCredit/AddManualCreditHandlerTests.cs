@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Domain.Entities;
@@ -15,7 +16,7 @@ public class AddManualCreditHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     private AddManualCreditHandler CreateHandler(DateTime nowLocal)
-        => new(dbFactory, new FixedAppClock(nowLocal), new CreditService(), new NotificationService());
+        => new(dbFactory, new FixedAppClock(nowLocal), new CreditService(), new NotificationService(), NullLogger<AddManualCreditHandler>.Instance);
 
     private async Task<int> SeedUserAsync(int userNumber)
     {
