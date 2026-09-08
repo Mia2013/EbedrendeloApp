@@ -214,8 +214,12 @@ else
         closure = null;
         StateHasChanged();
 
-        summary = await Mediator.Send(new GetKitchenSummaryQuery(selectedDate));
-        closure = await Mediator.Send(new GetKitchenClosureQuery(selectedDate));
+        var summaryTask = Mediator.Send(new GetKitchenSummaryQuery(selectedDate));
+        var closureTask = Mediator.Send(new GetKitchenClosureQuery(selectedDate));
+        await Task.WhenAll(summaryTask, closureTask);
+
+        summary = await summaryTask;
+        closure = await closureTask;
     }
 
     private async Task LoadRangeAsync()
