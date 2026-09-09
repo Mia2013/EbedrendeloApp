@@ -1,4 +1,4 @@
-@page "/szamlak"
+﻿@page "/szamlak"
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Billing.GeneratePeriodInvoices
@@ -59,11 +59,6 @@
         }
     </MudSelect>
 </MudStack>
-
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
-}
 
 <MudTable Items="invoices" Loading="@(invoices is null)" Hover="true" Elevation="1" Dense="true">
     <HeaderContent>
@@ -142,7 +137,6 @@
     private string statusFilter = "Mind";
     private List<InvoiceDto>? invoices;
     private string? generationSummary;
-    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -174,17 +168,7 @@
             _ => null,
         };
 
-        var result = await Mediator.Send(new GetInvoicesQuery(filterPeriodId, isPaid));
-        if (result.IsSuccess)
-        {
-            invoices = result.Value!.ToList();
-            errorMessage = null;
-        }
-        else
-        {
-            invoices = [];
-            errorMessage = result.ErrorMessage ?? "Nem sikerült betölteni a számlákat.";
-        }
+        invoices = (await Mediator.Send(new GetInvoicesQuery(filterPeriodId, isPaid))).ToList();
     }
 
     private async Task SetStatusFilterAsync(string option)

@@ -1,4 +1,4 @@
-@page "/egyenlegek"
+﻿@page "/egyenlegek"
 @using EbedrendeloApp.Common.Billing
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Billing.GetBalances
@@ -147,7 +147,7 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).Value!.ToList();
+    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).ToList();
 
     private bool IsHistoryExpanded(int userId) => expandedUserIds.Contains(userId);
 
@@ -161,8 +161,7 @@
 
         if (!historyByUserId.ContainsKey(userId))
         {
-            var result = await Mediator.Send(new GetMyCreditLedgerQuery(userId));
-            historyByUserId[userId] = result.Value!.ToList();
+            historyByUserId[userId] = (await Mediator.Send(new GetMyCreditLedgerQuery(userId))).ToList();
         }
     }
 

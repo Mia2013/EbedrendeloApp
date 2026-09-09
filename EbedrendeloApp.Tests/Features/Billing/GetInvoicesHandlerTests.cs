@@ -79,10 +79,10 @@ public class GetInvoicesHandlerTests : IDisposable
         var (_, period2Id, user1Id, user2Id) = await SeedAsync();
 
         var all = await sut.Handle(new GetInvoicesQuery(null, null), CancellationToken.None);
-        Assert.Equal(2, all.Value!.Count);
+        Assert.Equal(2, all.Count);
 
         var period2Only = await sut.Handle(new GetInvoicesQuery(period2Id, null), CancellationToken.None);
-        var period2Invoice = Assert.Single(period2Only.Value!);
+        var period2Invoice = Assert.Single(period2Only);
         Assert.Equal(user2Id, period2Invoice.UserId);
         Assert.Equal("Nagy Béla", period2Invoice.UserDisplayName);
         Assert.Equal("Szeptember", period2Invoice.PeriodName);
@@ -93,9 +93,9 @@ public class GetInvoicesHandlerTests : IDisposable
         Assert.Equal(2500, period2Invoice.PayableHuf);
 
         var unpaidOnly = await sut.Handle(new GetInvoicesQuery(null, false), CancellationToken.None);
-        Assert.Equal(user2Id, Assert.Single(unpaidOnly.Value!).UserId);
+        Assert.Equal(user2Id, Assert.Single(unpaidOnly).UserId);
 
         var paidOnly = await sut.Handle(new GetInvoicesQuery(null, true), CancellationToken.None);
-        Assert.Equal(user1Id, Assert.Single(paidOnly.Value!).UserId);
+        Assert.Equal(user1Id, Assert.Single(paidOnly).UserId);
     }
 }

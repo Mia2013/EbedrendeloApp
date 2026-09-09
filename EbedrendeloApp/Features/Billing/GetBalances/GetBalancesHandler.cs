@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Billing.GetBalances;
 
 public sealed class GetBalancesHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>
+    : IRequestHandler<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>
 {
-    public async Task<Result<IReadOnlyList<UserBalanceDto>>> Handle(GetBalancesQuery request, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<UserBalanceDto>> Handle(GetBalancesQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -35,6 +34,6 @@ public sealed class GetBalancesHandler(IDbContextFactory<EbedrendeloDbContext> d
             .OrderBy(d => d.DisplayName, StringComparer.Ordinal)
             .ToList();
 
-        return Result.Success<IReadOnlyList<UserBalanceDto>>(result);
+        return result;
     }
 }

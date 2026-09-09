@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Billing;
@@ -36,7 +36,7 @@ public class AdminInvoicesTests : MudBunitContext
     {
         var mediator = new FakeMediator();
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
-        mediator.Register<GetInvoicesQuery, Result<IReadOnlyList<InvoiceDto>>>(_ => Result.Success(invoices));
+        mediator.Register<GetInvoicesQuery, IReadOnlyList<InvoiceDto>>(_ => invoices);
         return mediator;
     }
 
@@ -73,10 +73,10 @@ public class AdminInvoicesTests : MudBunitContext
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = MediatorWithInvoices([Invoice]);
         GetInvoicesQuery? lastQuery = null;
-        mediator.Register<GetInvoicesQuery, Result<IReadOnlyList<InvoiceDto>>>(q =>
+        mediator.Register<GetInvoicesQuery, IReadOnlyList<InvoiceDto>>(q =>
         {
             lastQuery = q;
-            return Result.Success<IReadOnlyList<InvoiceDto>>([Invoice]);
+            return [Invoice];
         });
         Services.AddSingleton<IMediator>(mediator);
 
@@ -94,10 +94,10 @@ public class AdminInvoicesTests : MudBunitContext
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = MediatorWithInvoices([Invoice]);
         GetInvoicesQuery? lastQuery = null;
-        mediator.Register<GetInvoicesQuery, Result<IReadOnlyList<InvoiceDto>>>(q =>
+        mediator.Register<GetInvoicesQuery, IReadOnlyList<InvoiceDto>>(q =>
         {
             lastQuery = q;
-            return Result.Success<IReadOnlyList<InvoiceDto>>([Invoice]);
+            return [Invoice];
         });
         Services.AddSingleton<IMediator>(mediator);
 

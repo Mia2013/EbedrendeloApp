@@ -6,6 +6,7 @@
 @using EbedrendeloApp.Features.Billing.GetMyBalance
 @using EbedrendeloApp.Features.Calendar
 @using EbedrendeloApp.Features.Calendar.GetOrderableDays
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriodForDate
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
 @using EbedrendeloApp.Features.Menus
 @using EbedrendeloApp.Features.Menus.GetPeriodMenu
@@ -13,7 +14,6 @@
 @using EbedrendeloApp.Features.Orders.PlacePeriodOrder
 @using EbedrendeloApp.Features.Orders.CancelMenuOrders
 @using EbedrendeloApp.Features.Users.GetUsers
-@using EbedrendeloApp.Components.Pages.Orders
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
@@ -334,10 +334,10 @@ else
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        myBalanceHuf = (await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId))).Value;
+        myBalanceHuf = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
-        var current = periods.FirstOrDefault(p => p.StartDate <= TodayLocal && p.EndDate >= TodayLocal) ?? periods.FirstOrDefault();
+        var current = await Mediator.Send(new GetOrderingPeriodForDateQuery(TodayLocal)) ?? periods.FirstOrDefault();
 
         if (current is not null)
         {

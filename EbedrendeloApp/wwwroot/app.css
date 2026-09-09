@@ -19,7 +19,7 @@ h1:focus {
 }
 
     .blazor-error-boundary::after {
-        content: "An error has occurred."
+        content: "Hiba történt."
     }
 
 /* Kis, kiemelt vezérlő (pl. időszak-választó select) egy admin oldal fejlécében — több oldalon

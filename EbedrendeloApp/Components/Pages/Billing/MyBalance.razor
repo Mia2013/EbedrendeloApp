@@ -1,4 +1,4 @@
-@page "/egyenlegem"
+﻿@page "/egyenlegem"
 @using EbedrendeloApp.Common.Billing
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Billing.GetMyBalance
@@ -64,10 +64,7 @@
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        var balanceResult = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
-        balanceHuf = balanceResult.Value;
-
-        var ledgerResult = await Mediator.Send(new GetMyCreditLedgerQuery(CurrentUser.UserId));
-        ledger = ledgerResult.Value!.ToList();
+        balanceHuf = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
+        ledger = (await Mediator.Send(new GetMyCreditLedgerQuery(CurrentUser.UserId))).ToList();
     }
 }

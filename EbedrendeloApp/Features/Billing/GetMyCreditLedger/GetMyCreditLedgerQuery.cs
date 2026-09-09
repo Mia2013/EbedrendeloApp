@@ -1,11 +1,10 @@
 using EbedrendeloApp.Common.Security;
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Billing.GetMyCreditLedger;
 
-public sealed record GetMyCreditLedgerQuery(int UserId) : IRequest<Result<IReadOnlyList<CreditLedgerEntryDto>>>, IActsOnBehalfOf
+public sealed record GetMyCreditLedgerQuery(int UserId) : IRequest<IReadOnlyList<CreditLedgerEntryDto>>, IActsOnBehalfOf
 {
     int IActsOnBehalfOf.TargetUserId => UserId;
 }

@@ -39,17 +39,24 @@ Lapos elrendezés, két projekt, `.slnx` solution formátum:
 | `EbedrendeloApp.Tests/` | `Microsoft.NET.Sdk.Razor` | tesztek, `ProjectReference`-szel az appra |
 
 Az app mappaszerkezete: `Domain/` (Entities, Enums) · `Data/` (DbContext, Configurations, Migrations,
-Seed) · `Features/<Terület>/<UseCase>/` · `Common/` (Results, Behaviors, Security, Time, Calendar,
-Services, Formatting) · `Extensions/` (DI) · `Components/` (Blazor UI).
+Seed) · `Features/<Terület>/<UseCase>/` · `Common/` (keresztmetsző: Results, Behaviors, Security, Time,
+Calendar, Services, Formatting — és terület-specifikus közös logika: ALaCarte, Allergens, Billing,
+Orders) · `Extensions/` (DI) · `Theme/` (MudBlazor téma) · `Components/` (Blazor UI).
+
+A migrációk helye a `Data/Migrations/`, nem a projekt gyökerében lévő `Migrations/`.
 
 ## Architektúra — nem tárgyalható döntések
 
 - .NET 10, **Blazor Web App**, **globális InteractiveServer** render mode. Ez nem változik — ne
   javasolj WebAssembly-t vagy static SSR-t.
-- A globális interaktivitás az `App.razor`-ban van (`<Routes @rendermode="InteractiveServer" />` és
-  ugyanez a `HeadOutlet`-en). **Emiatt egyetlen oldal se írjon saját `@rendermode` direktívát** — egy
-  render mode határon belüli újabb `@rendermode` futásidejű kivételt dob.
-- Routing: `Components/Routes.razor`, a `NotFoundPage` explicit be van kötve.
+- A globális interaktivitás az `App.razor`-ban van: a `Routes` és a `HeadOutlet` ugyanazt a
+  `InteractiveServerRenderMode(prerender: false)` példányt kapja. **Emiatt egyetlen oldal se írjon saját
+  `@rendermode` direktívát** — egy render mode határon belüli újabb `@rendermode` futásidejű kivételt dob.
+- A **`prerender: false` szándékos döntés**, nem elnézés: prerenderrel minden `OnInitializedAsync`
+  (és a benne futó lekérdezés) kétszer futna — egyszer a HTTP-válaszhoz, majd újra a SignalR-circuit
+  csatlakozásakor —, miközben a prerenderelt oldal interaktivitás híján úgysem használható.
+- Routing: `Components/Routes.razor`, a `Pages.NotFound` komponens explicit be van kötve
+  (`NotFoundPage="typeof(Pages.NotFound)"`).
 - Layout: `Components/Layout/MainLayout.razor` — MudBlazor `MudLayout`/`MudAppBar`/`MudDrawer`/
   `MudMainContent`, a négy MudBlazor providerrel és az `AppErrorBoundary`-vel. A `ReconnectModal` a
   SignalR-újracsatlakozást kezeli, maradjon.
@@ -62,13 +69,19 @@ Services, Formatting) · `Extensions/` (DI) · `Components/` (Blazor UI).
 
 | Fájl | Tartalom |
 |---|---|
-| `<UseCase>Command.cs` / `Query.cs` | `sealed record` request `IRequest<Result<T>>`-vel, mellette a válasz-recordok |
+| `<UseCase>Command.cs` / `Query.cs` | `sealed record` request `IRequest<…>`-szel, mellette a válasz-recordok |
 | `<UseCase>Handler.cs` | `sealed class`, primary constructor, `IRequestHandler<,>` |
 | `<UseCase>Validator.cs` | `sealed class : AbstractValidator<TRequest>` — a formai ellenőrzés ide való, nem a handlerbe |
 
-Referencia-példa: `Features/Orders/PlacePeriodOrder/`. A teszt tükrözi a szerkezetet
-(`EbedrendeloApp.Tests/Features/Orders/…`).
+Referencia-példa: `Features/Orders/PlacePeriodOrder/`. A teszt tükrözi a szerkezetet: a norma a
+**lapos elrendezés** a terület alatt (`EbedrendeloApp.Tests/Features/Orders/PlacePeriodOrderHandlerTests.cs`),
+nem use case-enkénti almappa.
 
+- **`Result` ott kötelező, ahol a use case üzleti hibát tud jelezni.** Minden parancs
+  `IRequest<Result>` vagy `IRequest<Result<T>>`; a query akkor, ha van `Result.Failure` ága
+  (pl. `GetOrderableDaysQuery`, `ResolveColleagueQuery`). Tisztán olvasó, hibázni képtelen query
+  visszaadhat csupasz DTO-t (`IRequest<IReadOnlyList<OrderingPeriodDto>>`) — a `Result` burok ott csak
+  ceremónia, ami a hívót fölösleges `.Value` kicsomagolásra kényszeríti.
 - Hibát `Result.Failure(ErrorCodes.X, "magyar üzenet")` ad vissza, nem kivétel. A hibakód a
   `Common/Results/ErrorCodes.cs`-ből jön; új kódot oda kell felvenni.
 - Jogosultság **jelölő interfésszel** dől el, a szerveren: `IRequireAdmin`, `IActsOnBehalfOf`
@@ -83,9 +96,14 @@ Részletes, kódszintű végigvezetés: `ebedrendelo-usecase` skill.
 ## Adathozzáférés — kötelező
 
 - **EF Core az egyetlen adathozzáférési technológia.** Nincs második ORM, nincs nyers ADO.NET.
-- Az `EbedrendeloDbContext` **kizárólag MediatR handlerben** használható, `IDbContextFactory`-n
-  keresztül: `await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);`
-  (kivétel: a `Program.cs` indulási migráció/seed).
+- A DbContextet **a handler nyitja**, `IDbContextFactory`-n keresztül:
+  `await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);` (kivétel: a
+  `Program.cs` indulási migráció/seed).
+- A megnyitott `EbedrendeloDbContext` **paraméterként átadható közös helpernek** — a tulajdonos így is
+  a handler marad, a helper nem nyit sajátot. Ez a bevett minta a `Common/Services/` (`CreditService`,
+  `NotificationService`, `MenuReassignmentService`, `KitchenClosureQueries`, `MenuDishAllergenLookup`)
+  és a `Common/ALaCarte/ALaCarteOrderingGate` alatt. Amit ez **nem** enged: `IDbContextFactory`-t vagy
+  DbContextet injektáló szolgáltatás, amit komponens is használ.
 - **`.razor` komponens `IMediator`-t injektál**, soha nem DbContextet és nem repositoryt.
 - **Entitás nem hagyhatja el a handlert.** Kifelé DTO megy, kézi `.Select(...)` projekcióval, már az
   EF lekérdezésben. A DTO-k helye: `Features/<Terület>/<Terület>Dtos.cs`, vagy a use case mellett, ha
@@ -95,12 +113,16 @@ Részletes, kódszintű végigvezetés: `ebedrendelo-usecase` skill.
 
 ## C# standardok
 
-- File-scoped namespace. `sealed` alapértelmezésben. Nincs `region`.
+- File-scoped namespace. `sealed` alapértelmezésben — kivétel, ha öröklés van rá (`Common/Results/Result.cs`,
+  amiből a `Result<T>` származik). Nincs `region`.
 - Primary constructor a handlereken és a szolgáltatásokon.
 - `sealed record` a requestre és a DTO-ra; `sealed class` az entitásra és a handlerre.
 - Entitás-property `required`, ahol az érték kötelező.
 - `CancellationToken` végigfűzve minden async hívásig; `Async` utótag (a MediatR `Handle` kivétel).
-- Nullable engedélyezve solution szinten — a `?` szándékos jelzés, ne nyomd el `!`-lel.
+- Nullable engedélyezve solution szinten — a `?` szándékos jelzés, ne nyomd el `!`-lel. **Egy kivétel:**
+  EF navigációs property dereferenciája LINQ-kifejezésben (`l.ALaCarteOrder!.Date`), ahol a fordító nem
+  látja az `Include`/szűrés garanciáját. A `Result.Value!` **nem** ilyen — ott a `TryGetValue` a helyes
+  megoldás.
 - XML-doc oda, ahol **üzleti szabály** magyarázata kell (miért, nem mit).
 - **A kommentek és a felhasználónak szóló szövegek nyelve magyar.**
 
@@ -121,6 +143,9 @@ UI-konvenciók (szín-, gomb-, dialógus-, form-szabályok): `mudblazor-ui-first
 
 - ❌ Dapper vagy bármely második ORM · ❌ repository-réteg · ❌ AutoMapper/Mapster
 - ❌ DbContext `.razor`-ban vagy komponens-szolgáltatásban · ❌ entitás visszaadása a UI-nak
+  - **Egyetlen nevesített kivétel:** az `ICurrentUser` (`Common/Security/StubCurrentUser.cs`) ma
+    `IDbContextFactory`-t használ, és gyakorlatilag minden oldal injektálja. Ez az Epic 9 cookie-alapú
+    bejelentkezéséig szóló átmenet — **új szolgáltatás nem hivatkozhat rá példaként**.
 - ❌ WebAssembly / static SSR · ❌ oldal-szintű `@rendermode` · ❌ `.razor.cs` code-behind
 - ❌ Central Package Management — a verziók a `.csproj`-okban maradnak
 - ❌ üzleti érték C# konstansban (ár, határidő, szerepkör) — ezek `AppSetting`-ből jönnek

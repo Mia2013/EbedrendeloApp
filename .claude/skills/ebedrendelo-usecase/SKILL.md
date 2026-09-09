@@ -62,7 +62,13 @@ public sealed record UserOptionDto(
 
 Amit ez a néhány sor rögzít:
 
-- **`sealed record`**, a válasz típusa mindig `Result<T>` (vagy `Result` érték nélkül).
+- **`sealed record`**. A válasz típusa `Result<T>` (vagy `Result` érték nélkül) **ott, ahol a use case
+  üzleti hibát tud jelezni** — minden parancsnál, és annál a query-nél, amelyiknek van `Result.Failure`
+  ága (`GetOrderableDaysQuery`, `ResolveColleagueQuery`, `GetPeriodMenuQuery`, `GetMyPeriodOrderQuery`).
+  Tisztán olvasó, hibázni képtelen query csupasz DTO-t ad vissza
+  (`IRequest<IReadOnlyList<OrderingPeriodDto>>`): ott a `Result` burok üres ceremónia, ami a hívót
+  fölösleges `.Value` kicsomagolásra kényszeríti. Ha bizonytalan vagy: **tud-e ez a use case olyan
+  hibát adni, amit a felületnek meg kell mutatnia?** Ha nem, nincs `Result`.
 - **XML-doc az AC-számmal**, ha a use case user story-ból jön — így a `02-user-stories.md`
   visszakereshető. Ide kerül az is, ha valamiért eltérünk az AC-től.
 - **Jogosultsági jelölő a request-en**, nem a handlerben (lásd 4. pont).
@@ -118,6 +124,7 @@ Kötelező elemek:
 | Elem | Miért |
 |---|---|
 | `await using var db = await dbFactory.CreateDbContextAsync(ct)` | Blazor Serverben a scoped DbContext élettartama a kör (circuit) — a factory adja a rövid életű, szálbiztos példányt |
+| a megnyitott `db` **paraméterként** adható közös helpernek | a tulajdonos a handler marad; így működik a `CreditService`, `NotificationService`, `MenuReassignmentService`, `KitchenClosureQueries`, `MenuDishAllergenLookup` és az `ALaCarteOrderingGate`. Helper **nem** nyit saját contextet |
 | `.Select(...)` **az EF lekérdezésben** | csak a szükséges oszlopok jönnek le, és entitás nem szivárog ki |
 | `cancellationToken` minden async hívásba | a megszakadt kör ne dolgoztassa tovább az adatbázist |
 | `Result.Success` / `Result.Failure` | a hiba üzleti kimenet, nem kivétel |
@@ -251,7 +258,7 @@ public class PlacePeriodOrderHandlerTests : IDisposable
 ## 8. Ellenőrző lista új use case-hez
 
 - [ ] `Features/<Terület>/<UseCase>/` mappa, három fájllal
-- [ ] request `sealed record`, `IRequest<Result<T>>`, XML-doc az AC-számmal
+- [ ] request `sealed record`, XML-doc az AC-számmal; `Result<T>` csak ha tud üzleti hibát adni
 - [ ] jogosultsági jelölő rajta (vagy tudatos felvétel az `IntentionallyUnrestricted` listába)
 - [ ] handler `sealed class`, primary ctor, `IDbContextFactory`, `cancellationToken` mindenhol
 - [ ] kifelé DTO megy, `.Select` projekcióval — entitás nem

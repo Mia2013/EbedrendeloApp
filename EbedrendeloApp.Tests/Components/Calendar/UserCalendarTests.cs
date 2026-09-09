@@ -6,6 +6,7 @@ using EbedrendeloApp.Components.Shared;
 using EbedrendeloApp.Features.Billing.GetMyBalance;
 using EbedrendeloApp.Features.Calendar;
 using EbedrendeloApp.Features.Calendar.GetOrderableDays;
+using EbedrendeloApp.Features.Calendar.GetOrderingPeriodForDate;
 using EbedrendeloApp.Features.Calendar.GetOrderingPeriods;
 using EbedrendeloApp.Features.Menus;
 using EbedrendeloApp.Features.Menus.GetPeriodMenu;
@@ -40,13 +41,15 @@ public class UserCalendarTests : MudBunitContext
         Services.AddSingleton<IDevUserSwitcher>(currentUser);
 
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
+        // A mai napot fedő időszakot a komponens a use case-től kéri, nem maga számolja ki.
+        mediator.Register<GetOrderingPeriodForDateQuery, OrderingPeriodDto?>(_ => Period);
         mediator.Register<GetPeriodMenuQuery, Result<IReadOnlyList<DailyMenuDto>>>(_ => Result.Success<IReadOnlyList<DailyMenuDto>>([]));
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>(
+        mediator.Register<GetMyBalanceQuery, int>(_ => 0);
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(_ => 
         [
             new UserOptionDto(1, "admin", 1, "Teszt Admin", "Admin", null, null),
             new UserOptionDto(2, "kanna", 2, "Kovács Anna", "User", null, null),
-        ]));
+        ]);
         Services.AddSingleton<IMediator>(mediator);
     }
 
@@ -555,7 +558,7 @@ public class UserCalendarTests : MudBunitContext
     [Fact]
     public void Shows_a_balance_notice_when_the_user_has_a_positive_balance()
     {
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(1400));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 1400);
         mediator.Register<GetOrderableDaysQuery, Result<IReadOnlyList<OrderableDayDto>>>(_ => Result.Success<IReadOnlyList<OrderableDayDto>>([]));
 
         var cut = Render<UserCalendar>();

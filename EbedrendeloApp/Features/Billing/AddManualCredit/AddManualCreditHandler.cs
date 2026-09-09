@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Formatting;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -36,7 +37,7 @@ public sealed class AddManualCreditHandler(
             request.TargetUserId,
             NotificationType.CreditIssued,
             "Jóváírás érkezett",
-            $"{request.AmountHuf} Ft jóváírás került a menü-egyenlegedhez. Indoklás: {request.Note}",
+            $"{HungarianNumberFormat.Huf(request.AmountHuf)} jóváírás került a menü-egyenlegedhez. Indoklás: {request.Note}",
             nowUtc);
 
         await db.SaveChangesAsync(cancellationToken);

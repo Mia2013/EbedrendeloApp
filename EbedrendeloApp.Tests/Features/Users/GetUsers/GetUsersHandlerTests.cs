@@ -50,8 +50,7 @@ public class GetUsersHandlerTests : IDisposable
     {
         var result = await CreateHandler().Handle(new GetUsersQuery(), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -63,7 +62,7 @@ public class GetUsersHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetUsersQuery(), CancellationToken.None);
 
-        Assert.Equal(["Kovács Anna", "Kovács Béla", "Tóth Eszter"], result.Value!.Select(u => u.DisplayName));
+        Assert.Equal(["Kovács Anna", "Kovács Béla", "Tóth Eszter"], result.Select(u => u.DisplayName));
     }
 
     [Fact]
@@ -73,7 +72,7 @@ public class GetUsersHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetUsersQuery(), CancellationToken.None);
 
-        var user = Assert.Single(result.Value!);
+        var user = Assert.Single(result);
         Assert.Equal(42, user.UserId);
         Assert.Equal("u42", user.UserName);
         Assert.Equal("User", user.RoleName);
@@ -88,7 +87,7 @@ public class GetUsersHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetUsersQuery(), CancellationToken.None);
 
-        var user = Assert.Single(result.Value!);
+        var user = Assert.Single(result);
         Assert.Null(user.Igazgatosag);
         Assert.Null(user.Osztaly);
     }

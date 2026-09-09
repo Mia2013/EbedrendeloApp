@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Billing.GetMyInvoices;
 
 public sealed class GetMyInvoicesHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetMyInvoicesQuery, Result<IReadOnlyList<MyInvoiceDto>>>
+    : IRequestHandler<GetMyInvoicesQuery, IReadOnlyList<MyInvoiceDto>>
 {
-    public async Task<Result<IReadOnlyList<MyInvoiceDto>>> Handle(GetMyInvoicesQuery request, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<MyInvoiceDto>> Handle(GetMyInvoicesQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -50,6 +49,6 @@ public sealed class GetMyInvoicesHandler(IDbContextFactory<EbedrendeloDbContext>
             })
             .ToList();
 
-        return Result.Success<IReadOnlyList<MyInvoiceDto>>(result);
+        return result;
     }
 }

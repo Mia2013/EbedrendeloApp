@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Billing;
@@ -23,7 +23,7 @@ public class MyInvoicesTests : MudBunitContext
     public void Shows_no_invoices_message_when_there_are_none()
     {
         var mediator = new FakeMediator();
-        mediator.Register<GetMyInvoicesQuery, Result<IReadOnlyList<MyInvoiceDto>>>(_ => Result.Success<IReadOnlyList<MyInvoiceDto>>([]));
+        mediator.Register<GetMyInvoicesQuery, IReadOnlyList<MyInvoiceDto>>(_ => []);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<MyInvoices>((ComponentParameterCollectionBuilder<MyInvoices> _) => { });
@@ -41,7 +41,7 @@ public class MyInvoicesTests : MudBunitContext
             IsPaid: false, PaidAtUtc: null, GeneratedAtUtc: new DateTime(2026, 9, 16, 9, 0, 0));
 
         var mediator = new FakeMediator();
-        mediator.Register<GetMyInvoicesQuery, Result<IReadOnlyList<MyInvoiceDto>>>(_ => Result.Success<IReadOnlyList<MyInvoiceDto>>([invoice]));
+        mediator.Register<GetMyInvoicesQuery, IReadOnlyList<MyInvoiceDto>>(_ => [invoice]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<MyInvoices>((ComponentParameterCollectionBuilder<MyInvoices> _) => { });
@@ -62,7 +62,7 @@ public class MyInvoicesTests : MudBunitContext
             IsPaid: true, PaidAtUtc: new DateTime(2026, 8, 20, 14, 32, 0), GeneratedAtUtc: new DateTime(2026, 8, 16, 9, 0, 0));
 
         var mediator = new FakeMediator();
-        mediator.Register<GetMyInvoicesQuery, Result<IReadOnlyList<MyInvoiceDto>>>(_ => Result.Success<IReadOnlyList<MyInvoiceDto>>([invoice]));
+        mediator.Register<GetMyInvoicesQuery, IReadOnlyList<MyInvoiceDto>>(_ => [invoice]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<MyInvoices>((ComponentParameterCollectionBuilder<MyInvoices> _) => { });

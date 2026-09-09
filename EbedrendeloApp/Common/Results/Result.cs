@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace EbedrendeloApp.Common.Results;
 
 public class Result
@@ -43,6 +45,15 @@ public sealed class Result<T> : Result
         : base(isSuccess, errorCode, errorMessage)
     {
         Value = value;
+    }
+
+    /// <summary>Sikeres eredmény esetén kiadja az értéket, és a fordító nullable-elemzése is látja,
+    /// hogy az nem null — enélkül a hívónak <c>Value!</c>-t kellene írnia még a
+    /// <c>IsSuccess</c>-ágon belül is, mert a <see cref="Value"/> statikus típusa <c>T?</c>.</summary>
+    public bool TryGetValue([MaybeNullWhen(false)] out T value)
+    {
+        value = Value;
+        return IsSuccess;
     }
 
     public static Result<T> Success(T value) => new(true, value, null, null);

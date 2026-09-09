@@ -1,4 +1,4 @@
-@using EbedrendeloApp.Common.Security
+﻿@using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Users.GetUsers
 @using EbedrendeloApp.Features.Users.ResolveColleague
 @using MediatR
@@ -124,13 +124,8 @@ else
 
     private async Task<IEnumerable<UserOptionDto>> SearchAsync(string? value, CancellationToken cancellationToken)
     {
-        var result = await Mediator.Send(new GetUsersQuery(), cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return [];
-        }
-
-        var candidates = result.Value!.Where(u => u.Id != CurrentUser.UserId);
+        var users = await Mediator.Send(new GetUsersQuery(), cancellationToken);
+        var candidates = users.Where(u => u.Id != CurrentUser.UserId);
         return string.IsNullOrWhiteSpace(value)
             ? candidates
             : candidates.Where(u => Describe(u).Contains(value, StringComparison.OrdinalIgnoreCase));

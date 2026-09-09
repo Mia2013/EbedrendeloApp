@@ -124,8 +124,8 @@ public class ColleaguePickerTests : MudBunitContext
     public void An_admin_gets_an_autocomplete_instead_of_the_three_field_form()
     {
         // Az adminnak amúgy is joga van a teljes névsorhoz, és neki ez napi munka.
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(
-            _ => Result.Success<IReadOnlyList<UserOptionDto>>([Colleague]));
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(
+            _ => [Colleague]);
 
         var cut = RenderPicker(isAdmin: true);
         cut.FindAll("button").First(b => b.TextContent.Contains("Másik dolgozó naptára")).Click();

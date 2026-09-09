@@ -1,4 +1,5 @@
 using System.Data;
+using EbedrendeloApp.Common.Formatting;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -130,7 +131,8 @@ public sealed class GeneratePeriodInvoicesHandler(
                     NotificationType.CreditApplied,
                     invoice.SequenceNumber == 1 ? "Számla elkészült" : "Kiegészítő számla elkészült",
                     $"A(z) {period.Name} időszak {(invoice.SequenceNumber == 1 ? "számlája" : $"{invoice.SequenceNumber}. számlája")} elkészült. " +
-                    $"Beszámított jóváírás: {invoice.CreditAppliedHuf} Ft. Fizetendő: {invoice.PayableHuf} Ft.",
+                    $"Beszámított jóváírás: {HungarianNumberFormat.Huf(invoice.CreditAppliedHuf)}. " +
+                    $"Fizetendő: {HungarianNumberFormat.Huf(invoice.PayableHuf)}.",
                     nowUtc);
             }
         }

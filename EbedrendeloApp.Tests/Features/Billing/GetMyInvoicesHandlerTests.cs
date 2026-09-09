@@ -59,11 +59,10 @@ public class GetMyInvoicesHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetMyInvoicesQuery(meId), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Count);
+        Assert.Equal(2, result.Count);
 
-        Assert.Equal("Szeptember", result.Value[0].PeriodName); // most recently generated first
-        Assert.Equal("Augusztus", result.Value[1].PeriodName);
-        Assert.Equal(1400, result.Value[0].CreditAppliedHuf);
+        Assert.Equal("Szeptember", result[0].PeriodName); // most recently generated first
+        Assert.Equal("Augusztus", result[1].PeriodName);
+        Assert.Equal(1400, result[0].CreditAppliedHuf);
     }
 }

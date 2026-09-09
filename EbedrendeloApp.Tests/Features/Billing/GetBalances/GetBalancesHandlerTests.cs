@@ -60,8 +60,7 @@ public class GetBalancesHandlerTests : IDisposable
     {
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -73,7 +72,7 @@ public class GetBalancesHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -84,7 +83,7 @@ public class GetBalancesHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(-100, entry.BalanceHuf);
     }
 
@@ -97,7 +96,7 @@ public class GetBalancesHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(2200, entry.BalanceHuf);
     }
 
@@ -111,7 +110,7 @@ public class GetBalancesHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        Assert.Equal(["Kovács János", "Tóth Eszter"], result.Value!.Select(b => b.DisplayName));
+        Assert.Equal(["Kovács János", "Tóth Eszter"], result.Select(b => b.DisplayName));
     }
 
     [Fact]
@@ -122,7 +121,7 @@ public class GetBalancesHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetBalancesQuery(), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal("Logisztika", entry.Igazgatosag);
         Assert.Equal("Raktár", entry.Osztaly);
     }

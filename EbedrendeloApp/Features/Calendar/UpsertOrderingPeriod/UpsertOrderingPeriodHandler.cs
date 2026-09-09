@@ -1,6 +1,7 @@
 using System.Data;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Results;
+using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
 using MediatR;
@@ -10,7 +11,8 @@ namespace EbedrendeloApp.Features.Calendar.UpsertOrderingPeriod;
 
 public sealed class UpsertOrderingPeriodHandler(
     IDbContextFactory<EbedrendeloDbContext> dbFactory,
-    IWorkingDayCalculator workingDayCalculator)
+    IWorkingDayCalculator workingDayCalculator,
+    IAppClock clock)
     : IRequestHandler<UpsertOrderingPeriodCommand, Result<OrderingPeriodDto>>
 {
     public async Task<Result<OrderingPeriodDto>> Handle(UpsertOrderingPeriodCommand request, CancellationToken cancellationToken)
@@ -48,7 +50,7 @@ public sealed class UpsertOrderingPeriodHandler(
                 EndDate = request.EndDate,
                 OrderDeadline = request.OrderDeadline,
                 IsOpen = request.IsOpen,
-                CreatedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = clock.UtcNow.UtcDateTime,
             };
         }
 

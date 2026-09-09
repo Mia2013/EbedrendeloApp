@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Billing.GetMyBalance;
 
 public sealed class GetMyBalanceHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetMyBalanceQuery, Result<int>>
+    : IRequestHandler<GetMyBalanceQuery, int>
 {
-    public async Task<Result<int>> Handle(GetMyBalanceQuery request, CancellationToken cancellationToken)
+    public async Task<int> Handle(GetMyBalanceQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -16,6 +15,6 @@ public sealed class GetMyBalanceHandler(IDbContextFactory<EbedrendeloDbContext> 
             .Where(c => c.UserId == request.UserId)
             .SumAsync(c => c.RemainingHuf, cancellationToken);
 
-        return Result.Success(balance);
+        return balance;
     }
 }

@@ -1,5 +1,4 @@
 using EbedrendeloApp.Common.Security;
-using EbedrendeloApp.Common.Results;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Users.GetUsers;
@@ -9,7 +8,7 @@ namespace EbedrendeloApp.Features.Users.GetUsers;
 /// autocomplete) szükséges. A dev-váltó (StubCurrentUser.GetUsersAsync) és a "más nevében rendelek"
 /// választó (UserCalendar.razor, colleagues) továbbra is saját, korábbi implementációt használ — ezt a
 /// query-t nem vezetjük át rájuk ebben a körben.</summary>
-public sealed record GetUsersQuery : IRequest<Result<IReadOnlyList<UserOptionDto>>>, IRequireAdmin;
+public sealed record GetUsersQuery : IRequest<IReadOnlyList<UserOptionDto>>, IRequireAdmin;
 
 public sealed record UserOptionDto(
     int Id,

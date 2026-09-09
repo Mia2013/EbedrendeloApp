@@ -1,4 +1,4 @@
-@using EbedrendeloApp.Common.Security
+﻿@using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Billing.AddManualCredit
 @using EbedrendeloApp.Features.Billing.GetMyBalance
 @using EbedrendeloApp.Features.Users.GetUsers
@@ -88,7 +88,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        allUsers = (await Mediator.Send(new GetUsersQuery())).Value!.ToList();
+        allUsers = (await Mediator.Send(new GetUsersQuery())).ToList();
 
         if (PreselectedUserId is { } id)
         {
@@ -123,7 +123,7 @@
     {
         currentBalanceHuf = selectedUser is null
             ? null
-            : (await Mediator.Send(new GetMyBalanceQuery(selectedUser.Id))).Value;
+            : await Mediator.Send(new GetMyBalanceQuery(selectedUser.Id));
     }
 
     private async Task SaveAsync()

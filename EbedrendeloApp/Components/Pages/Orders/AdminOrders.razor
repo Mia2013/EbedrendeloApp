@@ -1,15 +1,18 @@
-@page "/rendelesek"
+﻿@page "/rendelesek"
 @using EbedrendeloApp.Common.Orders
 @using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Common.Time
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Domain.Enums
 @using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriodForDate
 @using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
 @using EbedrendeloApp.Features.Orders.GetUserOrders
 @using EbedrendeloApp.Features.Users.GetUsers
 @using MediatR
 @inject IMediator Mediator
 @inject ICurrentUser CurrentUser
+@inject IAppClock Clock
 @inject NavigationManager NavigationManager
 
 <PageTitle>Rendelések</PageTitle>
@@ -163,11 +166,10 @@
             return;
         }
 
-        users = (await Mediator.Send(new GetUsersQuery())).Value ?? [];
+        users = await Mediator.Send(new GetUsersQuery());
 
         periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var current = periods.FirstOrDefault(p => p.StartDate <= today && p.EndDate >= today) ?? periods.FirstOrDefault();
+        var current = await Mediator.Send(new GetOrderingPeriodForDateQuery(Clock.Today)) ?? periods.FirstOrDefault();
 
         if (current is not null)
         {
@@ -201,16 +203,8 @@
 
     private async Task LoadOrdersAsync()
     {
-        var result = await Mediator.Send(new GetUserOrdersQuery(selectedPeriodId, selectedUserId, null));
-        if (!result.IsSuccess)
-        {
-            orders = [];
-            errorMessage = result.ErrorMessage;
-            return;
-        }
-
         errorMessage = null;
-        orders = result.Value!.ToList();
+        orders = (await Mediator.Send(new GetUserOrdersQuery(selectedPeriodId, selectedUserId, null))).ToList();
         activeCountsByDate = orders
             .Where(o => o.Status == OrderStatus.Active)
             .GroupBy(o => o.Date)

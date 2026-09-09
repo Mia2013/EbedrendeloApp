@@ -1,4 +1,4 @@
-@page "/szamlaim"
+﻿@page "/szamlaim"
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Billing.GetMyInvoices
@@ -15,7 +15,7 @@
     </Description>
 </PageHeader>
 
-<PageState IsLoading="@(invoices is null && errorMessage is null)" ErrorMessage="@errorMessage"
+<PageState IsLoading="@(invoices is null)"
            IsEmpty="@(invoices is { Count: 0 })" EmptyText="Még nincs számlád."
            EmptyIcon="@Icons.Material.Filled.ReceiptLong">
     @foreach (var invoice in invoices ?? [])
@@ -90,20 +90,11 @@
 
 @code {
     private List<MyInvoiceDto>? invoices;
-    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        var result = await Mediator.Send(new GetMyInvoicesQuery(CurrentUser.UserId));
-        if (result.IsSuccess)
-        {
-            invoices = result.Value!.ToList();
-        }
-        else
-        {
-            errorMessage = result.ErrorMessage ?? "Nem sikerült betölteni a számláidat.";
-        }
+        invoices = (await Mediator.Send(new GetMyInvoicesQuery(CurrentUser.UserId))).ToList();
     }
 }

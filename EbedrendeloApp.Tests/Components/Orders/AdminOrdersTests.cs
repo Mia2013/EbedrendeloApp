@@ -1,10 +1,11 @@
-using Bunit;
+﻿using Bunit;
 using Bunit.TestDoubles;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Orders;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Calendar;
+using EbedrendeloApp.Features.Calendar.GetOrderingPeriodForDate;
 using EbedrendeloApp.Features.Calendar.GetOrderingPeriods;
 using EbedrendeloApp.Features.Orders.GetUserOrders;
 using EbedrendeloApp.Features.Users.GetUsers;
@@ -30,11 +31,13 @@ public class AdminOrdersTests : MudBunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         mediator.Register<GetOrderingPeriodsQuery, IReadOnlyList<OrderingPeriodDto>>(_ => [Period]);
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>(
+        // A mai napot fedő időszakot a komponens a use case-től kéri, nem maga számolja ki.
+        mediator.Register<GetOrderingPeriodForDateQuery, OrderingPeriodDto?>(_ => Period);
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(_ => 
         [
             new UserOptionDto(2, "kjanos", 2, "Kovács János", "User", null, null),
             new UserOptionDto(3, "nanna", 3, "Nagy Anna", "User", null, null),
-        ]));
+        ]);
         Services.AddSingleton<IMediator>(mediator);
     }
 
@@ -45,7 +48,7 @@ public class AdminOrdersTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Teszt Dolgozó", isAdmin: false));
         Services.AddSingleton<IDevUserSwitcher>(new FakeCurrentUser(1, "Teszt Dolgozó", isAdmin: false));
-        mediator.Register<GetUserOrdersQuery, Result<IReadOnlyList<UserOrderDto>>>(_ => Result.Success<IReadOnlyList<UserOrderDto>>([]));
+        mediator.Register<GetUserOrdersQuery, IReadOnlyList<UserOrderDto>>(_ => []);
 
         Render<AdminOrders>();
 
@@ -58,12 +61,12 @@ public class AdminOrdersTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         Services.AddSingleton<IDevUserSwitcher>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
-        mediator.Register<GetUserOrdersQuery, Result<IReadOnlyList<UserOrderDto>>>(_ => Result.Success<IReadOnlyList<UserOrderDto>>(
+        mediator.Register<GetUserOrdersQuery, IReadOnlyList<UserOrderDto>>(_ => 
         [
             new UserOrderDto(1, Monday, 2, "Kovács János", "A", "Gulyásleves", OrderStatus.Active, 2, "Kovács János", DateTime.UtcNow, null, null, null, null),
             new UserOrderDto(2, Monday, 3, "Nagy Anna", "A", "Gulyásleves", OrderStatus.Active, 3, "Nagy Anna", DateTime.UtcNow, null, null, null, null),
             new UserOrderDto(3, Monday, 4, "Szabó Péter", "B", "Húsleves", OrderStatus.Cancelled, 4, "Szabó Péter", DateTime.UtcNow, 5, "Admin", DateTime.UtcNow, CancellationReason.ByUser),
-        ]));
+        ]);
 
         var cut = Render<AdminOrders>();
 
@@ -77,11 +80,11 @@ public class AdminOrdersTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         Services.AddSingleton<IDevUserSwitcher>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
-        mediator.Register<GetUserOrdersQuery, Result<IReadOnlyList<UserOrderDto>>>(_ => Result.Success<IReadOnlyList<UserOrderDto>>(
+        mediator.Register<GetUserOrdersQuery, IReadOnlyList<UserOrderDto>>(_ => 
         [
             new UserOrderDto(1, Monday, 2, "Kovács János", "A", "Gulyásleves", OrderStatus.Active, 2, "Kovács János", DateTime.UtcNow, null, null, null, null),
             new UserOrderDto(2, Monday, 3, "Nagy Anna", "B", "Húsleves", OrderStatus.Cancelled, 3, "Nagy Anna", DateTime.UtcNow, 5, "Admin", DateTime.UtcNow, CancellationReason.ByUser),
-        ]));
+        ]);
 
         var cut = Render<AdminOrders>();
 

@@ -96,8 +96,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -108,7 +107,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(CreditEntryKind.CancellationCredit, entry.Kind);
         Assert.Equal(orderId, entry.SourceMenuOrderId);
         Assert.Equal(OrderDate, entry.SourceOrderDate);
@@ -142,7 +141,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var revoked = Assert.Single(result.Value!, e => e.Kind == CreditEntryKind.CreditRevoked);
+        var revoked = Assert.Single(result, e => e.Kind == CreditEntryKind.CreditRevoked);
         Assert.Equal("Kizárás visszavonva", revoked.Note);
         Assert.Equal(creditId, revoked.ConsumesCreditEntryId);
         Assert.Equal(adminId, revoked.CreatedByUserId);
@@ -171,7 +170,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(CreditEntryKind.ManualAdjustment, entry.Kind);
         Assert.Null(entry.SourceMenuOrderId);
         Assert.Null(entry.SourceOrderDate);
@@ -193,7 +192,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.Equal(["első", "második", "harmadik"], result.Value!.Select(e => e.Note));
+        Assert.Equal(["első", "második", "harmadik"], result.Select(e => e.Note));
     }
 
     [Fact]
@@ -209,7 +208,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -252,7 +251,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.NotNull(entry.PeriodInvoiceId);
     }
 }
