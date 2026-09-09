@@ -490,8 +490,9 @@ Azért, hogy a konyha pontosan megtervezhesse az alapanyag-beszerzést és a fő
 * **AC 6.1.1:** Lekérhető egyetlen nap élő adagszáma variánsonként (A/B/C); az aznapi a la carte összesítést a US-4.6 adja.
 * **AC 6.1.2:** Lekérhető időszaki tartomány összesítője is a korábbi rendelési igények kiszolgálására.
 * **AC 6.1.3 (Csak aktív rendelés):** Az összesítő kizárólag az `Active` státuszú rendeléseket számolja; a lemondottak nem jelennek meg benne.
+* **AC 6.1.4 (Nullás sor is látszik):** A nap minden publikált variánsa megjelenik az összesítőben, a nem rendelt is, `0` adaggal — a variáns nem eshet ki a felsorolásból. Ugyanígy az időszaki nézetben az a nap is szerepel, amelyre van publikált menü, de nincs rendelés. Ha a variánst időközben törölték vagy publikálatlanná tették, de van rá aktív rendelés, az adag akkor is látszik. Ez a záráskori pillanatképre (AC 6.2.1) is vonatkozik.
 
-**Technikai hivatkozás:** `GetKitchenSummaryQuery`, `GetKitchenSummaryRangeQuery`
+**Technikai hivatkozás:** `GetKitchenSummaryQuery`, `GetKitchenSummaryRangeQuery`, `KitchenSummaryLines`
 
 ---
 

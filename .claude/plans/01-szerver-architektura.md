@@ -775,8 +775,12 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   hónap napjaira összevonva (visszamenőleges rendelési igény kiszolgálására)
 
 ### Kitchen
-- `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő)
-- `GetKitchenSummaryRangeQuery` **[A]** — időszakra, ez adja a „3 nappal előbbi" megrendelés alapját
+- `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő). A nap **minden**
+  publikált variánsa szerepel, a nem rendelt is, `0` adaggal — a hiányzó sorból nem derülne ki, hogy
+  „senki nem rendelte" vagy „kimaradt". Amelyik variánst időközben törölték, de van rá aktív rendelés,
+  szintén a listán marad: azt az adagot meg kell főzni
+- `GetKitchenSummaryRangeQuery` **[A]** — időszakra, ez adja a „3 nappal előbbi" megrendelés alapját;
+  a publikált menüvel rendelkező nap akkor is szerepel, ha egyetlen rendelés sincs rá
 - `CloseDayCommand` **[A]** — **az „összesítő elküldve" esemény**: snapshot mentése
   `KitchenClosure`(+`Line`) táblába, és ettől kezdve a nap kiesik a rendelhető/lemondható körből (3.1),
   akkor is, ha a 3 munkanapos határidő még nem járt le

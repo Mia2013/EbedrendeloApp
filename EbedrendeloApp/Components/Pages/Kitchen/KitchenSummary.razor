@@ -1,4 +1,4 @@
-@page "/konyhai-osszesito"
+﻿@page "/konyhai-osszesito"
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Kitchen
@@ -115,7 +115,7 @@
                 <MudTh Style="text-align:right;">Adag</MudTh>
             </HeaderContent>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">Erre a napra nincs aktív rendelés.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Erre a napra nincs publikált menü, így nincs mit összesíteni.</MudText>
             </NoRecordsContent>
             <RowTemplate>
                 <MudTd DataLabel="Variáns"><b>@context.VariantCode</b></MudTd>
@@ -159,7 +159,7 @@ else
                 <MudTh>Állapot</MudTh>
             </HeaderContent>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">A megadott időszakban nincs rendelés.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">A megadott időszakban nincs publikált menü.</MudText>
             </NoRecordsContent>
             <RowTemplate>
                 <MudTd DataLabel="Dátum">@context.Date.ToString("MM.dd. (ddd)", HungarianCulture)</MudTd>
