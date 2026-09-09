@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- A .editorconfig stílusszabályai fordításkor is fussanak le, ne csak az IDE-ben.
+         A szabályok warning szinten vannak, tehát a build nem bukik el tőlük. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
 </Project>

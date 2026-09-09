@@ -14,5 +14,11 @@ obj/
 .DS_Store
 Thumbs.db
 
-## Claude Code plugin skill cache (local copy of enabled plugins' skills — see .claude/settings.json)
-.claude/skills/
+## Claude Code plugin skill cache (local copy of enabled plugins' skills — see .claude/settings.json).
+## A kézzel írt projekt-skillek viszont a szerződés részei (lásd CLAUDE.md), ezért verziózzuk őket —
+## új projekt-skill felvételekor ide is kell egy sor.
+.claude/skills/*
+!.claude/skills/ebedrendelo-extensions/
+!.claude/skills/ebedrendelo-usecase/
+!.claude/skills/mudblazor-ui-first/
+.claude/design/

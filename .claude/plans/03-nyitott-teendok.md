@@ -88,9 +88,29 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       zárható le. Ha kell: fizetés-állapot az `ALaCarteOrder`-en + napi kassza-riport.
 
 ### Konvenció-driftek
+
+> **A javítás sorrendje: előbb a szabály, aztán a kód.** Ha review-n drift derül ki, először a
+> `CLAUDE.md` vagy a megfelelő skill (`ebedrendelo-usecase`, `ebedrendelo-extensions`,
+> `mudblazor-ui-first`) mondja ki a szabályt — így a következő generálás már nem termeli újra —, és a
+> kódjavítás ide kerül tételként. A gépileg ellenőrizhető rész a gyökér `.editorconfig`-ban van
+> (`EnforceCodeStyleInBuild`, warning szinten).
+
 - [ ] 6 command-nak nincs FluentValidation validátora, a validáció inline `if` a handlerben
       (`CloseDay`, `ReopenDay`, `RemoveExcludedDay`, `SetALaCarteItemActive`, `RemoveDailyOffer`,
       `CancelALaCarteOrderLine`).
+- [ ] **Architektúra-tesztek** a `EbedrendeloApp.Tests`-be, a működő `UseCaseAuthorizationCoverageTests`
+      mintájára: (a) `Domain.Entities` / `EbedrendeloDbContext` nem hivatkozható a `Components/` alól;
+      (b) minden `IRequest` command-hoz tartozik validátor — ez utóbbi ma a fenti 6 helyen bukna, ezért
+      csak allowlisttel, vagy a driftek javítása után vezethető be.
+- [ ] **`EbedrendeloApp/Migrations/`** üres, verziókövetetlen mappa a lemezen (a valódi hely a
+      `Data/Migrations/`, 11 migrációval). Csak lokális maradék, törölhető — de érdemes ellenőrizni,
+      hogy a `dotnet ef migrations add` tényleg a `Data/Migrations/`-ba generál-e.
+- [ ] **`Program.cs` blokkos namespace-t használ** — a build egyetlen figyelmeztetése az
+      `.editorconfig` bekapcsolása után (`IDE0161`). Mechanikus javítás file-scoped namespace-re, de
+      a `RegisterServicesFromAssemblyContaining(typeof(Program))` miatt build+teszt kell utána.
+- [ ] `IDE0005` (felesleges using) fordításkor nincs bekapcsolva, mert `GenerateDocumentationFile`-t
+      igényelne, az pedig több száz `CS1591`-et hozna. Ha kell, `GenerateDocumentationFile=true` +
+      `NoWarn=CS1591` a `Directory.Build.props`-ban.
 - [ ] A `Features/Billing` tesztmappa-konvenció kevert: `AddManualCredit/…` (use case almappa) vs.
       `GeneratePeriodInvoicesHandlerTests.cs` (lapos).
 - [ ] A kommentnyelv hol magyar, hol angol, néha egy fájlon belül.
