@@ -187,6 +187,7 @@ rájuk, ha a stack ténylegesen bővül ilyen irányba.
 
 - A válasz legyen tömör: felsorolás bekezdés helyett.
 - Kutatásból vagy skillből származó állítást hivatkozz a forrásra (fájl:sor vagy skill neve).
-- Kódváltoztatásnál: rövid terv/diff, aztán végrehajtás — ne kérdezz rá minden lépésre.
+- Kódváltoztatásnál: terv/diff, aztán végrehajtás — ne kérdezz rá minden lépésre.
 - UI-komponensnél artifact-iteráció: generálás → te szerkeszted → visszajelzés.
-- Tisztázó kérdést csak akkor tegyél fel, ha a feladat tényleg többértelmű.
+- Tisztázó kérdést mindig tegyél fel, ha a feladat nem egyértelmű. Ha a feladatot nem tudod teljesíteni, jelezd, és
+  indokold.
