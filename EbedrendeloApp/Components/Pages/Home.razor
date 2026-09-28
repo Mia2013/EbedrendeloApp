@@ -18,8 +18,8 @@
         Bejelentkezve mint <strong>@CurrentUser.DisplayName</strong> (@(CurrentUser.IsAdmin ? "Admin" : "Dolgozó")).
     </MudText>
 
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@(CurrentUser.IsAdmin ? "idoszakok" : "naptar")">
-        @(CurrentUser.IsAdmin ? "Rendelési időszakok megnyitása" : "Naptár megnyitása")
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@(CurrentUser.IsAdmin ? "admin" : "naptar")">
+        @(CurrentUser.IsAdmin ? "Áttekintés megnyitása" : "Naptár megnyitása")
     </MudButton>
 }
 

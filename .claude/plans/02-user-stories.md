@@ -795,6 +795,7 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyCreditLedgerQuery` | U | US-5.3 |
 | `AddManualCreditCommand` | A | US-5.2 |
 | `GetBalancesQuery` | A | *(nincs önálló story — AC 5.2.1-et támogató implementációs részlet)* |
+| `GetAdminDashboardQuery` | A | *(nincs önálló story — az admin belépési pontja, a meglévő epicek adatait összesíti)* |
 | `GetMyNotificationsQuery` | U | US-8.1 |
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |

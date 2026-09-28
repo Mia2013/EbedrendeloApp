@@ -25,10 +25,10 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.Contains("Rendelési időszakok", cut.Markup);
         Assert.Contains("Nem rendelhető napok", cut.Markup);
         Assert.Contains("Rendelések", cut.Markup);
-        Assert.Contains("Konyhai összesítő", cut.Markup);
-        Assert.Contains("À la carte ételek", cut.Markup);
-        Assert.Contains("À la carte napi kínálat", cut.Markup);
-        Assert.Contains("À la carte konyhai lista", cut.Markup);
+        Assert.Contains("Konyha", cut.Markup);
+        Assert.Contains("Ételek", cut.Markup);
+        Assert.Contains("Napi kínálat", cut.Markup);
+        Assert.Contains("Konyhai lista", cut.Markup);
         Assert.Contains("Számlák", cut.Markup);
 
         // The admin should be able to order for themselves too — every worker-facing link must also appear.
@@ -36,6 +36,35 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.Contains("Rendeléseim", cut.Markup);
         Assert.Contains("Mai menü", cut.Markup);
         Assert.Contains("Számláim", cut.Markup);
+    }
+
+    /// <summary>A csoportosítás lényege, hogy az admin oldalak négy nyitható csoportba kerülnek —
+    /// ha valaki visszalapítaná a menüt, ez a teszt bukik.</summary>
+    [Fact]
+    public void Admin_menu_groups_the_pages_instead_of_listing_them_flat()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+
+        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+
+        Assert.Equal(4, cut.FindAll(".mud-nav-group").Count);
+    }
+
+    /// <summary>Az admin oldalt megnyitva a hozzá tartozó csoport nyitva van, a többi csukva —
+    /// különben a felhasználónak minden navigálás után kézzel kellene kinyitogatnia a menüt.</summary>
+    [Fact]
+    public void The_group_of_the_current_page_is_expanded_and_the_others_are_not()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+
+        var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("szamlak");
+
+        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+
+        var expandedGroups = cut.FindAll(".mud-nav-group .mud-nav-link.mud-expanded");
+        Assert.Single(expandedGroups);
+        Assert.Contains("Pénzügy", expandedGroups[0].TextContent);
     }
 
     [Fact]
@@ -52,5 +81,6 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         Assert.DoesNotContain("Nem rendelhető napok", cut.Markup);
         Assert.DoesNotContain("Rendelések<", cut.Markup);
         Assert.DoesNotContain("Számlák<", cut.Markup);
+        Assert.Empty(cut.FindAll(".mud-nav-group"));
     }
 }

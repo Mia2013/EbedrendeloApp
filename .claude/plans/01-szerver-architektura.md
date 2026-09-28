@@ -801,6 +801,13 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   felhasználónként), az admin "Egyenlegek" áttekintő oldalához; nincs önálló user story, AC 5.2.1-et
   támogató implementációs részlet
 
+### Admin
+- `GetAdminDashboardQuery(CurrentUserId)` **[A]** — az admin áttekintő (`/admin`) egyetlen, összevont
+  lekérdezése: mai adagok variánsonként, aktív időszak és hátralévő munkanapjai, menü nélküli munkanapok,
+  fizetetlen számlák, à la carte napi kép és heti bontás, a „mai teendők" lista (`AdminTodoKind`) és a
+  terület-csempék számai. Szándékosan **egy** hívás, hogy minden kártya ugyanazt a pillanatképet lássa.
+  Csupasz DTO (nincs `Result`, nincs üzleti hibaága); nincs önálló user story
+
 ### Notifications
 - `GetMyNotificationsQuery` **[U]**, `MarkNotificationReadCommand` **[U]**,
   `MarkAllNotificationsReadCommand` **[U]**

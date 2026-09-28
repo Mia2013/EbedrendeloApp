@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages;
 using EbedrendeloApp.Tests.TestSupport;
@@ -30,7 +30,7 @@ public class HomeTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 
         var cut = Render<Home>((Bunit.ComponentParameterCollectionBuilder<Home> _) => { });
 
-        Assert.Contains("Rendelési időszakok megnyitása", cut.Markup);
+        Assert.Contains("Áttekintés megnyitása", cut.Markup);
         Assert.Contains("Admin Teszt", cut.Markup);
     }
 
