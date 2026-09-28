@@ -800,8 +800,9 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-Minden use case-hez tartozik story és fordítva — a `GetBalancesQuery` az egyetlen kivétel, ez tisztán
-implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A `ResolveColleagueQuery` nem
+Minden use case-hez tartozik story és fordítva — két kivétel van, mindkettő tisztán implementációs
+részlet, önálló AC nélkül: a `GetBalancesQuery` (admin egyenleg-lista) és a `GetAdminDashboardQuery`
+(az admin áttekintő, `/admin`, ami a meglévő epicek adatait összesíti). A `ResolveColleagueQuery` nem
 kapott önálló storyt: az AC 3.1.6 azonosítási lépése, ezért az US-3.1 alatt szerepel. A kereszt-metsző követelmények
 (Epic 10) minden sorra vonatkoznak.
 
@@ -821,7 +822,7 @@ historikus adatmodellel (egy nap többször zárható/nyitható, minden zárás 
 a `KitchenClosureQueries.IsClosedAsync`/`GetClosedDatesAsync` közös kapu-ellenőrzéssel (ezt használja a
 rendelés/lemondás a `WorkingDayCalculator.CanChange`-en keresztül, a menü-szerkesztés/törlés és a nap
 kizárása is), UI-val (`KitchenSummary.razor` a `/konyhai-osszesito` alatt, `CloseDayDialog.razor`,
-`ReopenDayDialog.razor`, admin-only `NavMenu` "KONYHA" szekció) és teljes teszt-lefedettséggel mind az 5
+`ReopenDayDialog.razor`, admin-only `NavMenu` „Konyha" link) és teljes teszt-lefedettséggel mind az 5
 handlerre, mind a 3 komponensre.
 
 Az Epic 7 (Számlázás) elkészült: `GeneratePeriodInvoicesCommand`, `MarkInvoicePaidCommand`,

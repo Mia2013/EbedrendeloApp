@@ -2,6 +2,7 @@ using Bunit;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Layout;
 using EbedrendeloApp.Tests.TestSupport;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 
@@ -9,33 +10,56 @@ namespace EbedrendeloApp.Tests.Components.Layout;
 
 public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 {
+    private static readonly string[] AdminHrefs =
+    [
+        "admin", "idoszakok", "nem-rendelheto-napok", "etlap", "rendelesek", "konyhai-osszesito",
+        "alacarte-etelek", "alacarte-napi-kinalat", "alacarte-konyhai-lista", "egyenlegek", "szamlak",
+    ];
+
+    private static readonly string[] WorkerHrefs = ["naptar", "rendeleseim", "mai-menu", "egyenlegem", "szamlaim"];
+
     public NavMenuTests()
     {
         Services.AddMudServices();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
+    /// <summary>A szolgáltatást a navigálás előtt kell regisztrálni: bUnitban az első
+    /// <c>GetRequiredService</c> után már nem vehető fel új.</summary>
+    private IRenderedComponent<NavMenu> RenderAs(bool isAdmin, string? startUri = null)
+    {
+        Services.AddSingleton<ICurrentUser>(isAdmin
+            ? new FakeCurrentUser(1, "Admin Teszt", isAdmin: true)
+            : new FakeCurrentUser(2, "Dolgozó Teszt", isAdmin: false));
+
+        if (startUri is not null)
+        {
+            Services.GetRequiredService<NavigationManager>().NavigateTo(startUri);
+        }
+
+        return Render<NavMenu>((ComponentParameterCollectionBuilder<NavMenu> _) => { });
+    }
+
+    // A linkeket href alapján keressük, nem szövegre: a „Konyha" a „Konyhai lista" része, a „Naptár"
+    // pedig csoportcím is — szövegre állítva a link törlése sem buktatná el a tesztet.
+    private static bool HasLink(IRenderedComponent<NavMenu> cut, string href)
+        => cut.FindAll($"a[href='{href}']").Count > 0;
+
     [Fact]
     public void Admin_sees_the_admin_links_plus_every_worker_ordering_link()
     {
-        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var cut = RenderAs(isAdmin: true);
 
-        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+        Assert.All(AdminHrefs, href => Assert.True(HasLink(cut, href), $"Hiányzik az admin link: {href}"));
 
-        Assert.Contains("Rendelési időszakok", cut.Markup);
-        Assert.Contains("Nem rendelhető napok", cut.Markup);
-        Assert.Contains("Rendelések", cut.Markup);
-        Assert.Contains("Konyha", cut.Markup);
-        Assert.Contains("Ételek", cut.Markup);
-        Assert.Contains("Napi kínálat", cut.Markup);
-        Assert.Contains("Konyhai lista", cut.Markup);
-        Assert.Contains("Számlák", cut.Markup);
+        // Az admin magának is rendel — minden dolgozói linknek meg kell lennie.
+        Assert.All(WorkerHrefs, href => Assert.True(HasLink(cut, href), $"Hiányzik a saját rendelés link: {href}"));
+    }
 
-        // The admin should be able to order for themselves too — every worker-facing link must also appear.
-        Assert.Contains("Naptár", cut.Markup);
-        Assert.Contains("Rendeléseim", cut.Markup);
-        Assert.Contains("Mai menü", cut.Markup);
-        Assert.Contains("Számláim", cut.Markup);
+    [Fact]
+    public void Both_admin_and_worker_can_get_back_to_the_home_page()
+    {
+        Assert.True(HasLink(RenderAs(isAdmin: true), ""));
     }
 
     /// <summary>A csoportosítás lényege, hogy az admin oldalak négy nyitható csoportba kerülnek —
@@ -43,24 +67,20 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
     [Fact]
     public void Admin_menu_groups_the_pages_instead_of_listing_them_flat()
     {
-        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
-
-        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+        var cut = RenderAs(isAdmin: true);
 
         Assert.Equal(4, cut.FindAll(".mud-nav-group").Count);
     }
 
     /// <summary>Az admin oldalt megnyitva a hozzá tartozó csoport nyitva van, a többi csukva —
     /// különben a felhasználónak minden navigálás után kézzel kellene kinyitogatnia a menüt.</summary>
-    [Fact]
-    public void The_group_of_the_current_page_is_expanded_and_the_others_are_not()
+    [Theory]
+    [InlineData("szamlak")]
+    [InlineData("Szamlak")]
+    [InlineData("szamlak#fizetetlen")]
+    public void The_group_of_the_current_page_is_expanded_and_the_others_are_not(string uri)
     {
-        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
-
-        var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
-        navigation.NavigateTo("szamlak");
-
-        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+        var cut = RenderAs(isAdmin: true, startUri: uri);
 
         var expandedGroups = cut.FindAll(".mud-nav-group .mud-nav-link.mud-expanded");
         Assert.Single(expandedGroups);
@@ -68,19 +88,28 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
     }
 
     [Fact]
-    public void Worker_sees_only_the_calendar_link()
+    public void Navigating_to_another_group_re_syncs_the_expanded_group()
     {
-        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(2, "Dolgozó Teszt", isAdmin: false));
+        var cut = RenderAs(isAdmin: true, startUri: "szamlak");
 
-        var cut = Render<NavMenu>((Bunit.ComponentParameterCollectionBuilder<NavMenu> _) => { });
+        Services.GetRequiredService<NavigationManager>().NavigateTo("alacarte-etelek");
 
-        Assert.Contains("Naptár", cut.Markup);
-        Assert.Contains("Rendeléseim", cut.Markup);
-        Assert.Contains("Számláim", cut.Markup);
-        Assert.DoesNotContain("Rendelési időszakok", cut.Markup);
-        Assert.DoesNotContain("Nem rendelhető napok", cut.Markup);
-        Assert.DoesNotContain("Rendelések<", cut.Markup);
-        Assert.DoesNotContain("Számlák<", cut.Markup);
+        cut.WaitForAssertion(() =>
+        {
+            var expandedGroups = cut.FindAll(".mud-nav-group .mud-nav-link.mud-expanded");
+            Assert.Single(expandedGroups);
+            Assert.Contains("À la carte", expandedGroups[0].TextContent);
+        });
+    }
+
+    [Fact]
+    public void Worker_sees_only_the_worker_links_flat()
+    {
+        var cut = RenderAs(isAdmin: false);
+
+        Assert.All(WorkerHrefs, href => Assert.True(HasLink(cut, href), $"Hiányzik a dolgozói link: {href}"));
+        Assert.True(HasLink(cut, ""));
+        Assert.All(AdminHrefs, href => Assert.False(HasLink(cut, href), $"Dolgozónak nem látható admin link: {href}"));
         Assert.Empty(cut.FindAll(".mud-nav-group"));
     }
 }

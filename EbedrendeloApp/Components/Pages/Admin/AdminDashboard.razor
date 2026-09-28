@@ -30,14 +30,14 @@
     {
         <MudGrid Spacing="6">
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:100%">
+                <MudPaper Elevation="1" Class="pa-4 rounded-lg mud-height-full">
                     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
                         <MudStack Spacing="0" Class="flex-grow-1">
                             <MudText Typo="Typo.overline" Class="mud-text-secondary">Mai adagok</MudText>
                             <MudText Typo="Typo.h4">@HungarianNumberFormat.Number(data.TodayMenuPortions)</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@VariantBreakdown</MudText>
                         </MudStack>
-                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="background:var(--mud-palette-primary-hover)">
+                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="@BadgeStyle(Color.Primary)">
                             <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Color="Color.Primary" />
                         </MudPaper>
                     </MudStack>
@@ -45,14 +45,14 @@
             </MudItem>
 
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:100%">
+                <MudPaper Elevation="1" Class="pa-4 rounded-lg mud-height-full">
                     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
                         <MudStack Spacing="0" Class="flex-grow-1">
                             <MudText Typo="Typo.overline" Class="mud-text-secondary">Aktív időszak</MudText>
                             <MudText Typo="Typo.h5" Class="mt-1">@(data.ActivePeriod?.Name ?? "Nincs")</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@PeriodSubtitle</MudText>
                         </MudStack>
-                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="background:var(--mud-palette-primary-hover)">
+                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="@BadgeStyle(Color.Primary)">
                             <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" />
                         </MudPaper>
                     </MudStack>
@@ -60,34 +60,34 @@
             </MudItem>
 
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:100%">
+                <MudPaper Elevation="1" Class="pa-4 rounded-lg mud-height-full">
                     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
                         <MudStack Spacing="0" Class="flex-grow-1">
                             <MudText Typo="Typo.overline" Class="mud-text-secondary">Menü nélküli munkanap</MudText>
                             <MudText Typo="Typo.h4">@HungarianNumberFormat.Number(data.MissingDailyMenuCount)</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@MissingMenuSubtitle</MudText>
                         </MudStack>
-                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="background:var(--mud-palette-warning-hover)">
-                            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" />
+                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="@BadgeStyle(MissingMenuColor)">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Color="@MissingMenuColor" />
                         </MudPaper>
                     </MudStack>
                 </MudPaper>
             </MudItem>
 
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:100%">
+                <MudPaper Elevation="1" Class="pa-4 rounded-lg mud-height-full">
                     <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
                         <MudStack Spacing="0" Class="flex-grow-1">
                             <MudText Typo="Typo.overline" Class="mud-text-secondary">Fizetetlen számla</MudText>
-                            <MudText Typo="Typo.h4" Color="@(data.UnpaidInvoiceCount > 0 ? Color.Error : Color.Default)">
+                            <MudText Typo="Typo.h4" Color="@UnpaidColor">
                                 @HungarianNumberFormat.Number(data.UnpaidInvoiceCount)
                             </MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                 @HungarianNumberFormat.Huf(data.UnpaidInvoiceTotalHuf) kintlévőség
                             </MudText>
                         </MudStack>
-                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="background:var(--mud-palette-error-hover)">
-                            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Error" />
+                        <MudPaper Elevation="0" Class="pa-2 rounded" Style="@BadgeStyle(UnpaidColor)">
+                            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Color="@UnpaidColor" />
                         </MudPaper>
                     </MudStack>
                 </MudPaper>
@@ -121,7 +121,7 @@
                                 </MudStack>
                                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                                            EndIcon="@Icons.Material.Filled.ChevronRight"
-                                           Href="@AdminTodoDisplay.Href(todo.Kind)">
+                                           Href="@AdminTodoDisplay.Href(todo)">
                                     @AdminTodoDisplay.ActionLabel(todo.Kind)
                                 </MudButton>
                             </MudStack>
@@ -146,7 +146,11 @@
                         Előre leadott menürendelés · @HungarianNumberFormat.Number(data.TodayMenuPortions) adag
                     </MudText>
 
-                    @if (data.TodayMenuVariants.Count == 0)
+                    @if (!data.TodayIsServiceDay)
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-3">@NoServiceText</MudAlert>
+                    }
+                    else if (data.TodayMenuVariants.Count == 0)
                     {
                         <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
                             Mára nincs publikált napi menü.
@@ -154,18 +158,17 @@
                     }
                     else
                     {
-                        <MudList T="string" Class="mt-2" Dense="true">
+                        @* Csak megjelenítés: nem MudList, mert az kiválasztható listaként (listbox) renderel. *@
+                        <MudStack Spacing="0" Class="mt-2">
                             @foreach (var variant in data.TodayMenuVariants)
                             {
-                                <MudListItem T="string">
-                                    <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
-                                        <MudAvatar Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@variant.Code</MudAvatar>
-                                        <MudText Typo="Typo.body2" Class="flex-grow-1">@variant.Name</MudText>
-                                        <MudText Typo="Typo.body2" Style="font-weight:500">@HungarianNumberFormat.Number(variant.Portions) adag</MudText>
-                                    </MudStack>
-                                </MudListItem>
+                                <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Class="py-2">
+                                    <MudAvatar Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@variant.Code</MudAvatar>
+                                    <MudText Typo="Typo.body2" Class="flex-grow-1">@variant.Name</MudText>
+                                    <MudText Typo="Typo.subtitle2">@HungarianNumberFormat.Number(variant.Portions) adag</MudText>
+                                </MudStack>
                             }
-                        </MudList>
+                        </MudStack>
                     }
 
                     <MudDivider Class="my-2" />
@@ -188,7 +191,11 @@
                     </MudStack>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@ALaCarteSubtitle</MudText>
 
-                    @if (data.TodayALaCarteOffers.Count == 0)
+                    @if (!data.TodayIsServiceDay)
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-3">@NoServiceText</MudAlert>
+                    }
+                    else if (data.TodayALaCarteOffers.Count == 0)
                     {
                         <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
                             Mára nincs kiajánlva egyetlen à la carte tétel sem.
@@ -202,7 +209,7 @@
                                 <MudItem xs="12" sm="6">
                                     <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Class="py-1 pe-sm-6">
                                         <MudText Typo="Typo.body2" Class="flex-grow-1">@offer.Name</MudText>
-                                        <MudText Typo="Typo.body2" Class="@(offer.OrderedCount == 0 ? "mud-text-secondary" : null)" Style="font-weight:500">
+                                        <MudText Typo="Typo.subtitle2" Class="@(offer.OrderedCount == 0 ? "mud-text-secondary" : null)">
                                             @OrderedText(offer.OrderedCount)
                                         </MudText>
                                     </MudStack>
@@ -240,24 +247,26 @@
             @foreach (var tile in Tiles)
             {
                 <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:100%; cursor:pointer"
-                              @onclick="@(() => NavigationManager.NavigateTo(tile.Href))">
-                        <MudStack Spacing="1" Style="height:100%">
-                            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@tile.Icon" Color="Color.Primary" />
-                                <MudText Typo="Typo.subtitle1">@tile.Title</MudText>
+                    @* Valódi link, nem @onclick: billentyűzettel fókuszálható, és új lapon is nyitható. *@
+                    <a href="@tile.Href" class="d-block mud-height-full">
+                        <MudPaper Elevation="1" Class="pa-4 rounded-lg mud-height-full">
+                            <MudStack Spacing="1" Class="mud-height-full">
+                                <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@tile.Icon" Color="Color.Primary" />
+                                    <MudText Typo="Typo.subtitle1">@tile.Title</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@tile.Pages</MudText>
+                                <MudSpacer />
+                                <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                    @if (tile.StatusColor != Color.Default)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Circle" Color="@tile.StatusColor" Style="font-size:0.6rem" />
+                                    }
+                                    <MudText Typo="Typo.caption">@tile.Status</MudText>
+                                </MudStack>
                             </MudStack>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@tile.Pages</MudText>
-                            <MudSpacer />
-                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-                                @if (tile.StatusColor != Color.Default)
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Color="@tile.StatusColor" Style="font-size:0.6rem" />
-                                }
-                                <MudText Typo="Typo.caption">@tile.Status</MudText>
-                            </MudStack>
-                        </MudStack>
-                    </MudPaper>
+                        </MudPaper>
+                    </a>
                 </MudItem>
             }
         </MudGrid>
@@ -305,14 +314,30 @@
         : "A mai napot egyetlen időszak sem fedi";
 
     private string MissingMenuSubtitle => dashboard?.FirstMissingDailyMenu is { } first
-        ? $"Legkorábbi: {first.ToString("MMM d.", System.Globalization.CultureInfo.GetCultureInfo("hu-HU"))}"
+        ? $"Legkorábbi: {ShortDate(first)}"
         : "Minden közelgő munkanapra van menü";
 
     private string TodoCountText => dashboard is null ? string.Empty : $"{dashboard.Todos.Count} tétel";
 
     private string CancelledText => dashboard is null
         ? string.Empty
-        : $"Ma lemondva {dashboard.TodayCancelledPortions} adag.";
+        : $"Mára lemondva, pótlás nélkül: {dashboard.TodayCancelledPortions} adag.";
+
+    private const string NoServiceText = "Ma nincs kiszolgálás (hétvége vagy kizárt nap).";
+
+    // A figyelmeztető szín csak akkor jár, ha valóban van mit tenni — 0-nál a kártya semleges.
+    private Color MissingMenuColor => dashboard?.MissingDailyMenuCount > 0 ? Color.Warning : Color.Default;
+
+    private Color UnpaidColor => dashboard?.UnpaidInvoiceCount > 0 ? Color.Warning : Color.Default;
+
+    /// <summary>A KPI-ikon halvány háttere a téma saját „hover" árnyalatából — erre nincs MudBlazor
+    /// utility osztály, ezért marad inline.</summary>
+    private static string BadgeStyle(Color color) => color switch
+    {
+        Color.Primary => "background:var(--mud-palette-primary-hover)",
+        Color.Warning => "background:var(--mud-palette-warning-hover)",
+        _ => "background:var(--mud-palette-action-default-hover)",
+    };
 
     private string ALaCarteSubtitle => dashboard is null
         ? string.Empty
@@ -327,15 +352,30 @@
     private static string OrderedText(int orderedCount)
         => orderedCount == 0 ? "nincs rendelés" : $"{orderedCount} adag";
 
-    private bool NextDayHasOffer => dashboard?.NextWorkingDayHasALaCarteOffer ?? false;
+    private string NextDayIcon => dashboard switch
+    {
+        { NextALaCarteDay: null } => Icons.Material.Filled.Info,
+        { NextALaCarteDayHasOffer: true } => Icons.Material.Filled.CheckCircle,
+        _ => Icons.Material.Filled.Warning,
+    };
 
-    private string NextDayIcon => NextDayHasOffer ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning;
+    private Color NextDayColor => dashboard switch
+    {
+        { NextALaCarteDay: null } => Color.Default,
+        { NextALaCarteDayHasOffer: true } => Color.Success,
+        _ => Color.Warning,
+    };
 
-    private Color NextDayColor => NextDayHasOffer ? Color.Success : Color.Warning;
+    private string NextDayText => dashboard switch
+    {
+        null => string.Empty,
+        { NextALaCarteDay: null } => "A következő munkanapokat egyik rendelési időszak sem fedi.",
+        { NextALaCarteDay: { } day, NextALaCarteDayHasOffer: true } => $"{ShortDate(day)} napra már van kiajánlott kínálat.",
+        { NextALaCarteDay: { } day } => $"{ShortDate(day)} napra még nincs kiajánlva rendelhető tétel.",
+    };
 
-    private string NextDayText => NextDayHasOffer
-        ? "A következő munkanapra már van kiajánlott kínálat."
-        : "A következő munkanapra még nincs kiajánlva egyetlen tétel sem.";
+    private static string ShortDate(DateOnly date)
+        => date.ToString("MMM d.", System.Globalization.CultureInfo.GetCultureInfo("hu-HU"));
 
     private List<ChartSeries<double>> ALaCarteSeries => dashboard is null
         ? []
@@ -370,24 +410,39 @@
                     $"{HungarianNumberFormat.Number(tiles.ActiveOrderCountInPeriod)} aktív rendelés az időszakban", Color.Default, "rendelesek"),
 
                 new("Konyha", Icons.Material.Filled.SoupKitchen, "Konyhai összesítő · Napzárás",
-                    data.TodayClosedByKitchen ? "A mai nap lezárva" : "A mai nap nyitva",
-                    data.TodayClosedByKitchen ? Color.Success : Color.Warning, "konyhai-osszesito"),
+                    KitchenStatus(data), KitchenStatusColor(data), "konyhai-osszesito"),
 
                 new("À la carte", Icons.Material.Filled.Fastfood, "Ételek · Napi kínálat · Konyhai lista",
                     $"{tiles.ActiveALaCarteItemCount} aktív étel · ma {data.TodayALaCarteItemCount} rendelt tétel", Color.Default, "alacarte-etelek"),
 
-                new("Jóváírás", Icons.Material.Filled.AccountBalanceWallet, "Egyenlegek · Kézi jóváírás",
+                // A csempék neve a bal oldali menü linkjeit követi (Pénzügy → Egyenlegek, Számlák).
+                new("Egyenlegek", Icons.Material.Filled.AccountBalanceWallet, "Pénzügy · Jóváírás-egyenlegek · Kézi jóváírás",
                     $"{tiles.UsersWithBalanceCount} dolgozónak van egyenlege", Color.Default, "egyenlegek"),
 
-                new("Számlázás", Icons.Material.Filled.ReceiptLong, "Számlák · Generálás · Fizetettnek jelölés",
+                new("Számlák", Icons.Material.Filled.ReceiptLong, "Pénzügy · Generálás · Fizetettnek jelölés",
                     data.UnpaidInvoiceCount == 0 ? "Nincs fizetetlen számla" : $"{data.UnpaidInvoiceCount} fizetetlen",
-                    data.UnpaidInvoiceCount == 0 ? Color.Success : Color.Error, "szamlak"),
+                    data.UnpaidInvoiceCount == 0 ? Color.Success : Color.Warning, "szamlak"),
 
                 new("Saját rendelésem", Icons.Material.Filled.Person, "Naptár · Rendeléseim · Mai menü · Egyenlegem · Számláim",
                     MyOrderText(tiles), Color.Default, "naptar"),
             ];
         }
     }
+
+    private static string KitchenStatus(AdminDashboardDto data) => data switch
+    {
+        { TodayIsServiceDay: false } => "Ma nincs kiszolgálás",
+        { TodayClosedByKitchen: true } => "A mai nap lezárva",
+        { TodayMenuPortions: 0 } => "Mára nincs menüadag",
+        _ => "A mai nap nyitva",
+    };
+
+    private static Color KitchenStatusColor(AdminDashboardDto data) => data switch
+    {
+        { TodayIsServiceDay: false } or { TodayMenuPortions: 0, TodayClosedByKitchen: false } => Color.Default,
+        { TodayClosedByKitchen: true } => Color.Success,
+        _ => Color.Warning,
+    };
 
     private static string MyOrderText(AdminTileStatsDto tiles)
     {

@@ -40,7 +40,7 @@ Lapos elrendezés, két projekt, `.slnx` solution formátum:
 
 Az app mappaszerkezete: `Domain/` (Entities, Enums) · `Data/` (DbContext, Configurations, Migrations,
 Seed) · `Features/<Terület>/<UseCase>/` · `Common/` (keresztmetsző: Results, Behaviors, Security, Time,
-Calendar, Services, Formatting — és terület-specifikus közös logika: ALaCarte, Allergens, Billing,
+Calendar, Services, Formatting — és terület-specifikus közös logika: Admin, ALaCarte, Allergens, Billing,
 Orders) · `Extensions/` (DI) · `Theme/` (MudBlazor téma) · `Components/` (Blazor UI).
 
 A migrációk helye a `Data/Migrations/`, nem a projekt gyökerében lévő `Migrations/`.

@@ -198,6 +198,11 @@
             })
             .ToList());
 
+    /// <summary>Opcionális kezdőnap (<c>?datum=yyyy-MM-dd</c>) — az admin áttekintő „nincs kínálat"
+    /// teendője így a hiányzó napra nyitja az oldalt, nem a mára.</summary>
+    [SupplyParameterFromQuery(Name = "datum")]
+    public string? Datum { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         await CurrentUser.EnsureLoadedAsync();
@@ -205,6 +210,11 @@
         {
             NavigationManager.NavigateTo("mai-menu");
             return;
+        }
+
+        if (DateOnly.TryParseExact(Datum, "yyyy-MM-dd", out var requestedDate))
+        {
+            selectedDate = requestedDate;
         }
 
         await LoadAsync();

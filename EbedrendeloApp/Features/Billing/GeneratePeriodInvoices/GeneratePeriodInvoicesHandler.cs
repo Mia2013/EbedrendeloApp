@@ -89,6 +89,12 @@ public sealed class GeneratePeriodInvoicesHandler(
             var applied = creditService.ApplyCreditToInvoice(
                 db, creditsByUser.GetValueOrDefault(userId, []), grossHuf, request.GeneratedByUserId, nowUtc);
 
+            var payableHuf = grossHuf - applied.TotalAppliedHuf;
+
+            // A jóváírással teljesen fedezett számlán nincs mit behajtani: kiállításkor rendezett, így
+            // nem jelenik meg fizetetlenként se a számlalistán, se az admin áttekintőn.
+            var settledByCredit = payableHuf == 0;
+
             var invoice = new PeriodInvoice
             {
                 UserId = userId,
@@ -96,8 +102,11 @@ public sealed class GeneratePeriodInvoicesHandler(
                 SequenceNumber = lastSequenceByUser.GetValueOrDefault(userId, 0) + 1,
                 GrossHuf = grossHuf,
                 CreditAppliedHuf = applied.TotalAppliedHuf,
-                PayableHuf = grossHuf - applied.TotalAppliedHuf,
+                PayableHuf = payableHuf,
                 GeneratedAtUtc = nowUtc,
+                IsPaid = settledByCredit,
+                PaidAtUtc = settledByCredit ? nowUtc : null,
+                MarkedPaidByUserId = settledByCredit ? request.GeneratedByUserId : null,
             };
             db.PeriodInvoices.Add(invoice);
 

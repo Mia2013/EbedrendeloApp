@@ -803,10 +803,13 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 
 ### Admin
 - `GetAdminDashboardQuery(CurrentUserId)` **[A]** — az admin áttekintő (`/admin`) egyetlen, összevont
-  lekérdezése: mai adagok variánsonként, aktív időszak és hátralévő munkanapjai, menü nélküli munkanapok,
-  fizetetlen számlák, à la carte napi kép és heti bontás, a „mai teendők" lista (`AdminTodoKind`) és a
-  terület-csempék számai. Szándékosan **egy** hívás, hogy minden kártya ugyanazt a pillanatképet lássa.
-  Csupasz DTO (nincs `Result`, nincs üzleti hibaága); nincs önálló user story
+  lekérdezése: mai adagok variánsonként, aktív időszak és hátralévő munkanapjai, menü nélküli munkanapok
+  (mától **minden** időszakban, időszakon kívüli napot nem számol), fizetetlen számlák, à la carte napi
+  kép és heti bontás, a „mai teendők" lista (`AdminTodoKind`) és a terület-csempék számai. Szándékosan
+  **egy** hívás egyetlen óra-leolvasással, hogy minden kártya ugyanarra a napra vonatkozzon (DB-szintű
+  pillanatkép nincs). A konyhai teendő csak menüadagot számol (à la carte nem része a napzárásnak); a
+  következő napi à la carte teendő leves nélküli, nem nullázott ajánlatot keres a következő, időszakkal
+  fedett munkanapra. Csupasz DTO (nincs `Result`, nincs üzleti hibaága); nincs önálló user story
 
 ### Notifications
 - `GetMyNotificationsQuery` **[U]**, `MarkNotificationReadCommand` **[U]**,

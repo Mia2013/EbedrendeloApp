@@ -1,4 +1,4 @@
-﻿using Bunit;
+using Bunit;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages;
 using EbedrendeloApp.Tests.TestSupport;
@@ -24,13 +24,14 @@ public class HomeTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
     }
 
     [Fact]
-    public void Shows_the_quick_link_to_the_admin_periods_page_for_an_admin()
+    public void Shows_the_quick_link_to_the_admin_overview_for_an_admin()
     {
         SetUp(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true), FakeHostEnvironment.Development);
 
         var cut = Render<Home>((Bunit.ComponentParameterCollectionBuilder<Home> _) => { });
 
-        Assert.Contains("Áttekintés megnyitása", cut.Markup);
+        var quickLink = cut.Find("a[href='admin']");
+        Assert.Contains("Áttekintés megnyitása", quickLink.TextContent);
         Assert.Contains("Admin Teszt", cut.Markup);
     }
 
@@ -41,7 +42,8 @@ public class HomeTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 
         var cut = Render<Home>((Bunit.ComponentParameterCollectionBuilder<Home> _) => { });
 
-        Assert.Contains("Naptár megnyitása", cut.Markup);
+        var quickLink = cut.Find("a[href='naptar']");
+        Assert.Contains("Naptár megnyitása", quickLink.TextContent);
     }
 
     [Fact]

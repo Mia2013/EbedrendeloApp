@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.ALaCarte;
 using EbedrendeloApp.Common.Calendar;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -15,51 +16,61 @@ public sealed class GetAdminDashboardHandler(
     IWorkingDayCalculator workingDayCalculator)
     : IRequestHandler<GetAdminDashboardQuery, AdminDashboardDto>
 {
-    /// <summary>Ha nincs a mai napot lefedő időszak, ennyi napra előre keressük a hiányzó menüket —
-    /// enélkül nem lenne mihez viszonyítani a „menü nélküli munkanap" számot.</summary>
-    private const int FallbackHorizonDays = 14;
-
     public async Task<AdminDashboardDto> Handle(GetAdminDashboardQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
-        var today = clock.Today;
+        // Egyetlen óra-leolvasás: a „ma" és a határidő-összevetés nem kerülhet két külön napra éjfélkor.
         var localNow = clock.LocalNow;
+        var today = DateOnly.FromDateTime(localNow);
         var settings = await db.AppSettings.FirstAsync(cancellationToken);
 
-        // A diagramok a mai napot tartalmazó hét hétfő–péntekét mutatják, nem az utolsó öt napot: így
+        // A diagram a mai napot tartalmazó hét hétfő–péntekét mutatja, nem az utolsó öt napot: így
         // a hasáb helye a héten belül állandó, és a „Ma" oszlop nem vándorol nap mint nap.
         var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
         var friday = monday.AddDays(4);
 
-        var period = await db.OrderingPeriods
-            .Where(p => p.StartDate <= today && p.EndDate >= today)
+        var periods = await db.OrderingPeriods
+            .Where(p => p.EndDate >= today)
+            .Select(p => new { p.Id, p.Name, p.StartDate, p.EndDate, p.IsOpen })
+            .ToListAsync(cancellationToken);
+
+        var period = periods
+            .Where(p => p.StartDate <= today)
             // Ha egy napot (átfedés-tiltás ide vagy oda) mégis két időszak fedne, a nyitott a
             // relevánsabb: arra lehet még rendelni.
             .OrderByDescending(p => p.IsOpen).ThenBy(p => p.StartDate)
-            .Select(p => new { p.Id, p.Name, p.StartDate, p.EndDate, p.IsOpen })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefault();
 
         var excludedDates = await db.ExcludedDays
             .Where(e => e.Date >= today)
             .Select(e => e.Date)
             .ToHashSetAsync(cancellationToken);
 
-        var horizonEnd = period?.EndDate ?? today.AddDays(FallbackHorizonDays);
+        var todayIsServiceDay = workingDayCalculator.IsWorkingDay(today, excludedDates);
 
+        // A hiányzó menüket mától MINDEN időszakban keressük, nem csak a maiban: a következő időszak
+        // tömeges rendelési ablaka még a mostani alatt nyílik, és ha ott nincs menü, a dolgozók
+        // rendelése napról napra elbukik. Időszakon kívüli napra menü úgysem vihető fel — azt nem számoljuk.
+        var coveredWorkingDays = periods
+            .SelectMany(p => WorkingDaysBetween(Max(today, p.StartDate), p.EndDate, excludedDates))
+            .Distinct()
+            .Order()
+            .ToList();
+
+        var horizonEnd = periods.Count > 0 ? periods.Max(p => p.EndDate) : today;
         var publishedMenuDates = await db.DailyMenus
             .Where(m => m.Date >= today && m.Date <= horizonEnd && m.IsPublished && m.RemovedAtUtc == null)
             .Select(m => m.Date)
             .ToHashSetAsync(cancellationToken);
 
-        var missingMenuDates = WorkingDaysBetween(today, horizonEnd, excludedDates)
+        var missingMenuDates = coveredWorkingDays
             .Where(date => !publishedMenuDates.Contains(date))
             .ToList();
 
         var activePeriod = period is null
             ? null
             : new AdminPeriodDto(
-                period.Id,
                 period.Name,
                 period.StartDate,
                 period.EndDate,
@@ -69,49 +80,51 @@ public sealed class GetAdminDashboardHandler(
         // A mai menü sorai ugyanabból a helperből jönnek, mint a konyhai összesítő — a nem rendelt
         // variáns is látszik, 0 adaggal.
         var liveVariants = await KitchenSummaryLines.LoadLiveVariantsAsync(db, today, today, cancellationToken);
-        var orderedThisWeek = await KitchenSummaryLines.LoadOrderedVariantsAsync(db, monday, friday, cancellationToken);
-
+        var orderedToday = await KitchenSummaryLines.LoadOrderedVariantsAsync(db, today, today, cancellationToken);
         var todayVariants = KitchenSummaryLines
-            .Build(liveVariants, orderedThisWeek.Where(o => o.Date == today))
+            .Build(liveVariants, orderedToday)
             .Select(l => new AdminMenuVariantDto(l.VariantCode, l.VariantName, l.Quantity))
             .ToList();
+        var todayPortions = todayVariants.Sum(v => v.Portions);
 
-        var weeklyMenuPortions = WorkingDaysBetween(monday, friday, ExcludedDates.None)
-            .Select(date => new AdminDailyPortionsDto(
-                date,
-                orderedThisWeek.Where(o => o.Date == date).Sum(o => o.Quantity)))
-            .ToList();
-
+        // A variáns-csere egy lemondás + egy új rendelés; az nem kiesett adag. Egy felhasználónak
+        // naponta legfeljebb egy aktív rendelése van, ezért a „nem pótolt lemondás" = a felhasználók
+        // száma, akiknek van lemondott, de nincs aktív rendelésük mára.
         var cancelledToday = await db.MenuOrders
-            .CountAsync(o => o.Date == today && o.Status == OrderStatus.Cancelled, cancellationToken);
-
-        var todayClosed = await KitchenClosureQueries.IsClosedAsync(db, today, cancellationToken);
-
-        var unpaid = await db.PeriodInvoices
-            // A jóváírással teljesen fedezett (0 Ft-os) számlát a generálás nem jelöli fizetettnek, de
-            // nincs rajta mit behajtani — nem teendő, és nem kintlévőség.
-            .Where(i => !i.IsPaid && i.PayableHuf > 0)
-            .Select(i => i.PayableHuf)
-            .ToListAsync(cancellationToken);
-
-        var todayOffers = await db.ALaCarteDailyOffers
-            .Where(o => o.Date == today)
-            .OrderBy(o => o.ALaCarteItem!.Category).ThenBy(o => o.ALaCarteItem!.Name)
-            .Select(o => new AdminALaCarteOfferDto(o.ALaCarteItem!.Name, o.OrderedCount))
-            .ToListAsync(cancellationToken);
-
-        var todayALaCarteItemCount = await db.ALaCarteOrderLines
-            .CountAsync(l => l.ALaCarteOrder!.Date == today, cancellationToken);
-
-        var todayALaCarteUserCount = await db.ALaCarteOrders
-            .Where(o => o.Date == today)
+            .Where(o => o.Date == today && o.Status == OrderStatus.Cancelled
+                        && !db.MenuOrders.Any(a => a.UserId == o.UserId && a.Date == today && a.Status == OrderStatus.Active))
             .Select(o => o.UserId)
             .Distinct()
             .CountAsync(cancellationToken);
 
-        var nextWorkingDay = NextWorkingDay(today, excludedDates);
-        var nextWorkingDayHasOffer = await db.ALaCarteDailyOffers
-            .AnyAsync(o => o.Date == nextWorkingDay && o.Capacity > 0, cancellationToken);
+        var todayClosed = await KitchenClosureQueries.IsClosedAsync(db, today, cancellationToken);
+
+        var unpaidInvoices = db.PeriodInvoices.Where(i => !i.IsPaid);
+        var unpaidCount = await unpaidInvoices.CountAsync(cancellationToken);
+        var unpaidTotalHuf = await unpaidInvoices.SumAsync(i => i.PayableHuf, cancellationToken);
+
+        var todayOffers = await LoadTodayOffersAsync(db, today, cancellationToken);
+
+        var todayALaCarteItemCount = await db.ALaCarteOrderLines
+            .CountAsync(l => l.ALaCarteOrder!.Date == today, cancellationToken);
+
+        // A sorokon át számolunk, nem a fejlécen: a tétel visszavonása csak a sort törli, a fejléc
+        // marad — aki mindent visszamondott, az már nem rendelő.
+        var todayALaCarteUserCount = await db.ALaCarteOrderLines
+            .Where(l => l.ALaCarteOrder!.Date == today)
+            .Select(l => l.ALaCarteOrder!.UserId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        var nextALaCarteDay = NextCoveredWorkingDay(today, horizonEnd, excludedDates,
+            date => periods.Any(p => p.StartDate <= date && p.EndDate >= date));
+
+        // A leves önállóan nem rendelhető, a nullázott tétel pedig már nincs kínálatban — egyik sem
+        // teszi rendelhetővé a napot.
+        var nextALaCarteDayHasOffer = nextALaCarteDay is { } nextDay
+            && await db.ALaCarteDailyOffers.AnyAsync(
+                o => o.Date == nextDay && o.Capacity > 0 && o.ALaCarteItem!.Category != ALaCarteCategory.Leves,
+                cancellationToken);
 
         var weeklyALaCarte = await LoadWeeklyALaCarteAsync(db, monday, friday, cancellationToken);
 
@@ -120,31 +133,54 @@ public sealed class GetAdminDashboardHandler(
         var todos = BuildTodos(
             missingMenuDates,
             todayClosed,
-            todayVariants.Sum(v => v.Portions) + todayALaCarteItemCount,
-            unpaid,
-            nextWorkingDayHasOffer);
+            todayPortions,
+            unpaidCount,
+            unpaidTotalHuf,
+            nextALaCarteDay,
+            nextALaCarteDayHasOffer);
 
         return new AdminDashboardDto(
             today,
+            todayIsServiceDay,
             activePeriod,
             todos,
-            todayVariants.Sum(v => v.Portions),
+            todayPortions,
             todayVariants,
             cancelledToday,
             missingMenuDates.Count,
             missingMenuDates.Count > 0 ? missingMenuDates[0] : null,
             todayClosed,
-            unpaid.Count,
-            unpaid.Sum(),
-            weeklyMenuPortions,
+            unpaidCount,
+            unpaidTotalHuf,
             todayOffers,
             todayALaCarteItemCount,
             todayALaCarteUserCount,
             settings.ALaCarteOrderDeadlineLocalTime,
-            localNow.TimeOfDay > settings.ALaCarteOrderDeadlineLocalTime.ToTimeSpan(),
-            nextWorkingDayHasOffer,
+            ALaCarteOrderingGate.IsPastDeadline(settings, localNow),
+            nextALaCarteDay,
+            nextALaCarteDayHasOffer,
             weeklyALaCarte,
             tiles);
+    }
+
+    /// <summary>A mai kínálat sorai. A leves <c>OrderedCount</c>-ja sosem nő (a leves a főétel-sorokon
+    /// utazik), ezért a levesadag a mai főétel-sorok száma — ugyanaz a szabály, mint a konyhai listán
+    /// (AC 4.6.3). A nullázott, rendelés nélküli ajánlat már nincs kínálatban, nem listázzuk.</summary>
+    private static async Task<IReadOnlyList<AdminALaCarteOfferDto>> LoadTodayOffersAsync(
+        EbedrendeloDbContext db, DateOnly today, CancellationToken cancellationToken)
+    {
+        var soupPortions = await db.ALaCarteOrderLines
+            .CountAsync(l => l.ALaCarteOrder!.Date == today && l.CategorySnapshot == ALaCarteCategory.Foetel, cancellationToken);
+
+        var offers = await db.ALaCarteDailyOffers
+            .Where(o => o.Date == today && (o.Capacity > 0 || o.OrderedCount > 0))
+            .OrderBy(o => o.ALaCarteItem!.Category).ThenBy(o => o.ALaCarteItem!.Name)
+            .Select(o => new { o.ALaCarteItem!.Name, o.ALaCarteItem.Category, o.OrderedCount })
+            .ToListAsync(cancellationToken);
+
+        return offers
+            .Select(o => new AdminALaCarteOfferDto(o.Name, o.Category == ALaCarteCategory.Leves ? soupPortions : o.OrderedCount))
+            .ToList();
     }
 
     private async Task<IReadOnlyList<AdminALaCarteDayDto>> LoadWeeklyALaCarteAsync(
@@ -220,9 +256,11 @@ public sealed class GetAdminDashboardHandler(
     private static IReadOnlyList<AdminTodoDto> BuildTodos(
         IReadOnlyList<DateOnly> missingMenuDates,
         bool todayClosed,
-        int todayPortionsAndItems,
-        IReadOnlyList<int> unpaidPayableHuf,
-        bool nextWorkingDayHasALaCarteOffer)
+        int todayPortions,
+        int unpaidCount,
+        int unpaidTotalHuf,
+        DateOnly? nextALaCarteDay,
+        bool nextALaCarteDayHasOffer)
     {
         var todos = new List<AdminTodoDto>();
 
@@ -231,20 +269,20 @@ public sealed class GetAdminDashboardHandler(
             todos.Add(new AdminTodoDto(AdminTodoKind.MissingDailyMenu, missingMenuDates.Count, 0, missingMenuDates));
         }
 
-        if (!nextWorkingDayHasALaCarteOffer)
+        if (nextALaCarteDay is { } nextDay && !nextALaCarteDayHasOffer)
         {
-            todos.Add(new AdminTodoDto(AdminTodoKind.MissingALaCarteOffer, 0, 0, []));
+            todos.Add(new AdminTodoDto(AdminTodoKind.MissingALaCarteOffer, 0, 0, [nextDay]));
         }
 
-        // Üres napot nincs értelme lezáratni: a teendő akkor teendő, ha van mit összesíteni.
-        if (!todayClosed && todayPortionsAndItems > 0)
+        // Üres napot nincs értelme lezáratni: a teendő akkor teendő, ha van menüadag, amit összesíteni kell.
+        if (!todayClosed && todayPortions > 0)
         {
-            todos.Add(new AdminTodoDto(AdminTodoKind.KitchenDayOpen, todayPortionsAndItems, 0, []));
+            todos.Add(new AdminTodoDto(AdminTodoKind.KitchenDayOpen, todayPortions, 0, []));
         }
 
-        if (unpaidPayableHuf.Count > 0)
+        if (unpaidCount > 0)
         {
-            todos.Add(new AdminTodoDto(AdminTodoKind.UnpaidInvoices, unpaidPayableHuf.Count, unpaidPayableHuf.Sum(), []));
+            todos.Add(new AdminTodoDto(AdminTodoKind.UnpaidInvoices, unpaidCount, unpaidTotalHuf, []));
         }
 
         return todos;
@@ -264,16 +302,21 @@ public sealed class GetAdminDashboardHandler(
         return days;
     }
 
-    private DateOnly NextWorkingDay(DateOnly today, IReadOnlySet<DateOnly> excludedDates)
+    /// <summary>A mai nap utáni első munkanap, amit időszak fed — addig keresünk, ameddig időszak
+    /// egyáltalán van (<paramref name="horizonEnd"/>), így hosszú kizárás sem tolja hétvégére.</summary>
+    private DateOnly? NextCoveredWorkingDay(
+        DateOnly today, DateOnly horizonEnd, IReadOnlySet<DateOnly> excludedDates, Func<DateOnly, bool> isCovered)
     {
-        var date = today.AddDays(1);
-        // A hétvége plusz egy hosszabb kizárás sem tolhatja el két hétnél tovább — a védőkorlát csak
-        // azért van, hogy egy elrontott kizárás-halmaz ne fagyassza be az oldalt.
-        for (var i = 0; i < 14 && !workingDayCalculator.IsWorkingDay(date, excludedDates); i++)
+        for (var date = today.AddDays(1); date <= horizonEnd; date = date.AddDays(1))
         {
-            date = date.AddDays(1);
+            if (workingDayCalculator.IsWorkingDay(date, excludedDates) && isCovered(date))
+            {
+                return date;
+            }
         }
 
-        return date;
+        return null;
     }
+
+    private static DateOnly Max(DateOnly a, DateOnly b) => a > b ? a : b;
 }

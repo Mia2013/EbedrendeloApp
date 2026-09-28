@@ -30,8 +30,9 @@ Features/Orders/PlacePeriodOrder/
 EbedrendeloApp.Tests/Features/Orders/PlacePeriodOrderHandlerTests.cs
 ```
 
-`Terület` a hét feature-terület egyike: `ALaCarte`, `Billing`, `Calendar`, `Kitchen`, `Menus`,
-`Orders`, `Users`. Új terület nyitása architektúra-döntés — előtte nézd meg a
+`Terület` a nyolc feature-terület egyike: `Admin`, `ALaCarte`, `Billing`, `Calendar`, `Kitchen`, `Menus`,
+`Orders`, `Users`. Az `Admin` terület a több epicet átfogó admin nézeteké (pl. `GetAdminDashboardQuery`),
+nem saját domainé. Új terület nyitása architektúra-döntés — előtte nézd meg a
 `.claude/plans/01-szerver-architektura.md` 6. szakaszát.
 
 ---

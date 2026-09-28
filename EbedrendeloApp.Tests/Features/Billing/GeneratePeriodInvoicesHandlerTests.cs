@@ -270,6 +270,24 @@ public class GeneratePeriodInvoicesHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task An_invoice_fully_covered_by_credit_is_issued_as_paid()
+    {
+        await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
+        var userId = await SeedUserAsync();
+        await SeedMenuOrderAsync(userId, 1400);
+        await SeedCreditAsync(userId, 2000, new DateTime(2026, 8, 1, 8, 0, 0));
+
+        var sut = CreateHandler(new DateTime(2026, 8, 20, 9, 0, 0));
+        await sut.Handle(new GeneratePeriodInvoicesCommand(periodId, adminId), CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var persisted = await db.PeriodInvoices.SingleAsync(i => i.UserId == userId);
+        Assert.True(persisted.IsPaid);
+        Assert.NotNull(persisted.PaidAtUtc);
+        Assert.Equal(adminId, persisted.MarkedPaidByUserId);
+    }
+
+    [Fact]
     public async Task Leftover_credit_beyond_the_gross_rolls_over_on_the_ledger()
     {
         await SeedPeriodAsync(new DateTime(2026, 8, 15, 10, 0, 0));
