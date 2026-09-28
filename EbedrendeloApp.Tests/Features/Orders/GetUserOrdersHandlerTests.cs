@@ -114,8 +114,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(period1Id, null, null), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal([Mon, Tue], result.Value!.Select(o => o.Date).OrderBy(d => d));
+        Assert.Equal([Mon, Tue], result.Select(o => o.Date).OrderBy(d => d));
     }
 
     [Fact]
@@ -125,9 +124,8 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(null, user1Id, null), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Value!.Count);
-        Assert.All(result.Value, o => Assert.Equal(user1Id, o.UserId));
+        Assert.Equal(2, result.Count);
+        Assert.All(result, o => Assert.Equal(user1Id, o.UserId));
     }
 
     [Fact]
@@ -137,8 +135,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(null, null, OrderStatus.Cancelled), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        var order = Assert.Single(result.Value!);
+        var order = Assert.Single(result);
         Assert.Equal(user2Id, order.UserId);
     }
 
@@ -149,8 +146,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(period1Id, user1Id, OrderStatus.Active), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        var order = Assert.Single(result.Value!);
+        var order = Assert.Single(result);
         Assert.Equal(Mon, order.Date);
     }
 
@@ -161,7 +157,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(period2Id, user1Id, null), CancellationToken.None);
 
-        var order = Assert.Single(result.Value!);
+        var order = Assert.Single(result);
         Assert.Equal("Halászlé + Fogas fehérboros mártásban", order.VariantName);
     }
 
@@ -172,7 +168,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(period1Id, user1Id, null), CancellationToken.None);
 
-        var order = Assert.Single(result.Value!);
+        var order = Assert.Single(result);
         Assert.Equal("Gulyásleves", order.VariantName);
     }
 
@@ -183,7 +179,7 @@ public class GetUserOrdersHandlerTests : IDisposable
 
         var result = await sut.Handle(new GetUserOrdersQuery(period1Id, user2Id, null), CancellationToken.None);
 
-        var order = Assert.Single(result.Value!);
+        var order = Assert.Single(result);
         Assert.Equal("Nagy Anna", order.UserDisplayName);
         Assert.Equal("Nagy Anna", order.PlacedByDisplayName);
         Assert.Equal(adminId, order.CancelledByUserId);

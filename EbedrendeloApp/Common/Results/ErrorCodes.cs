@@ -26,4 +26,7 @@ public static class ErrorCodes
     public const string DuplicateCategory = nameof(DuplicateCategory);
     public const string SoupAlreadyOffered = nameof(SoupAlreadyOffered);
     public const string CapacityBelowReserved = nameof(CapacityBelowReserved);
+
+    public const string OrderWindowOpen = nameof(OrderWindowOpen);
+    public const string AlreadyPaid = nameof(AlreadyPaid);
 }

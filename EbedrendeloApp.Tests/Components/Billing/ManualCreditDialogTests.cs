@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Pages.Billing;
@@ -38,7 +38,7 @@ public class ManualCreditDialogTests : MudBunitContext
     private static FakeMediator MediatorWithUsers(params UserOptionDto[] users)
     {
         var mediator = new FakeMediator();
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>(users));
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(_ => users);
         return mediator;
     }
 
@@ -57,7 +57,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Preselects_the_given_user_and_shows_their_balance()
     {
         var mediator = MediatorWithUsers(Kovacs, Nagy);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(2200));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 2200);
 
         var provider = await OpenAsync(mediator, preselectedUserId: Kovacs.Id);
 
@@ -79,7 +79,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Selecting_a_user_via_the_autocomplete_shows_their_current_balance()
     {
         var mediator = MediatorWithUsers(Kovacs);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(1400));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 1400);
 
         var provider = await OpenAsync(mediator);
 
@@ -93,7 +93,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Switching_the_preselected_user_to_someone_else_reloads_the_balance()
     {
         var mediator = MediatorWithUsers(Kovacs, Nagy);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(q => Result.Success(q.UserId == Kovacs.Id ? 2200 : 0));
+        mediator.Register<GetMyBalanceQuery, int>(q => q.UserId == Kovacs.Id ? 2200 : 0);
 
         var provider = await OpenAsync(mediator, preselectedUserId: Kovacs.Id);
         Assert.Contains("2\u00A0200 Ft", provider.Markup);
@@ -108,7 +108,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Saving_sends_the_command_with_the_selected_users_id_amount_and_trimmed_note()
     {
         var mediator = MediatorWithUsers(Kovacs);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 0);
         AddManualCreditCommand? sentCommand = null;
         mediator.Register<AddManualCreditCommand, Result<int>>(cmd =>
         {
@@ -136,7 +136,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Saving_uses_the_current_users_id_as_performedbyuserid()
     {
         var mediator = MediatorWithUsers(Kovacs);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 0);
         AddManualCreditCommand? sentCommand = null;
         mediator.Register<AddManualCreditCommand, Result<int>>(cmd =>
         {
@@ -161,7 +161,7 @@ public class ManualCreditDialogTests : MudBunitContext
     public async Task Shows_the_error_message_returned_by_a_failed_save()
     {
         var mediator = MediatorWithUsers(Kovacs);
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
+        mediator.Register<GetMyBalanceQuery, int>(_ => 0);
         mediator.Register<AddManualCreditCommand, Result<int>>(
             _ => Result.Failure<int>(ErrorCodes.NotFound, "A felhasználó nem található."));
 

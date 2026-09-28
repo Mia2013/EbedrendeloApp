@@ -1,4 +1,4 @@
-using EbedrendeloApp.Domain.Entities;
+﻿using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Kitchen.GetKitchenSummary;
 using EbedrendeloApp.Tests.TestSupport;
@@ -39,15 +39,58 @@ public class GetKitchenSummaryHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_day_with_no_orders_returns_an_empty_summary()
+    public async Task A_variant_nobody_ordered_is_listed_with_zero_rather_than_dropped()
+    {
+        // AC 6.1.1 „variánsonként (A/B/C)": a konyhának látnia kell, hogy a B menüre nem rendelt
+        // senki — a hiányzó sorból ez nem derül ki.
+        await SeedMenuAsync();
+        await SeedOrderAsync(variantAId, OrderStatus.Active);
+
+        var result = await sut.Handle(new GetKitchenSummaryQuery(Thu), CancellationToken.None);
+
+        Assert.Equal(["A", "B"], result.Lines.Select(l => l.VariantCode));
+        Assert.Equal(1, result.Lines.Single(l => l.VariantCode == "A").Quantity);
+        Assert.Equal(0, result.Lines.Single(l => l.VariantCode == "B").Quantity);
+        Assert.Equal(1, result.TotalPortions);
+    }
+
+    [Fact]
+    public async Task A_day_with_no_orders_lists_every_variant_with_zero()
     {
         await SeedMenuAsync();
 
         var result = await sut.Handle(new GetKitchenSummaryQuery(Thu), CancellationToken.None);
 
-        Assert.Empty(result.Lines);
+        Assert.Equal(["A", "B"], result.Lines.Select(l => l.VariantCode));
+        Assert.All(result.Lines, l => Assert.Equal(0, l.Quantity));
         Assert.Equal(0, result.TotalPortions);
         Assert.False(result.IsClosed);
+    }
+
+    [Fact]
+    public async Task A_day_without_a_published_menu_has_nothing_to_list()
+    {
+        await SeedMenuAsync(published: false);
+
+        var result = await sut.Handle(new GetKitchenSummaryQuery(Thu), CancellationToken.None);
+
+        Assert.Empty(result.Lines);
+        Assert.Equal(0, result.TotalPortions);
+    }
+
+    [Fact]
+    public async Task An_order_on_a_since_removed_variant_still_has_to_be_cooked()
+    {
+        await SeedMenuAsync();
+        await SeedOrderAsync(variantBId, OrderStatus.Active);
+        await RemoveVariantAsync(variantBId);
+
+        var result = await sut.Handle(new GetKitchenSummaryQuery(Thu), CancellationToken.None);
+
+        // A törölt variáns kiesik az élő menüből, de a rá leadott adag nem tűnhet el az összesítőből.
+        Assert.Equal(1, result.Lines.Single(l => l.VariantCode == "B").Quantity);
+        Assert.Equal(0, result.Lines.Single(l => l.VariantCode == "A").Quantity);
+        Assert.Equal(1, result.TotalPortions);
     }
 
     [Fact]
@@ -76,7 +119,7 @@ public class GetKitchenSummaryHandlerTests : IDisposable
         Assert.False(afterReopen.IsClosed);
     }
 
-    private async Task SeedMenuAsync()
+    private async Task SeedMenuAsync(bool published = true)
     {
         await using var db = dbFactory.CreateDbContext();
 
@@ -103,7 +146,7 @@ public class GetKitchenSummaryHandlerTests : IDisposable
         db.MenuDishes.Add(soup);
         await db.SaveChangesAsync();
 
-        var menu = new DailyMenu { Date = Thu, IsPublished = true };
+        var menu = new DailyMenu { Date = Thu, IsPublished = published };
         menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "A", SoupName = "Gulyásleves", MainCourseName = "Rántott hús", SoupDishId = soup.Id, SortOrder = 0 });
         menu.Variants.Add(new MenuVariant { DailyMenuId = 0, Code = "B", SoupName = "Gulyásleves", MainCourseName = "Halászlé", SoupDishId = soup.Id, SortOrder = 1 });
         db.DailyMenus.Add(menu);
@@ -111,6 +154,14 @@ public class GetKitchenSummaryHandlerTests : IDisposable
 
         variantAId = menu.Variants.Single(v => v.Code == "A").Id;
         variantBId = menu.Variants.Single(v => v.Code == "B").Id;
+    }
+
+    private async Task RemoveVariantAsync(int variantId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+        var variant = await db.MenuVariants.SingleAsync(v => v.Id == variantId);
+        variant.RemovedAtUtc = new DateTime(2026, 8, 19, 10, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
     }
 
     private int nextWorkerUserId = 100;

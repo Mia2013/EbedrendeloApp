@@ -1,0 +1,63 @@
+@* Az oldalak közös címsora: ikon + cím + leírás, opcionális szűrő-sávval a leírás alatt és
+   művelet-gombokkal a jobb szélen. Korábban ez a blokk 13 oldalon volt kimásolva, és driftelt is
+   (`mb-4` van/nincs, `flex-grow-1` van/nincs, a szűrő hol a fejlécben, hol alatta) — ezért él itt
+   egy példányban. *@
+
+<MudPaper Elevation="1" Class="@($"pa-4 rounded-lg {Class}")">
+    <MudStack Row Spacing="3" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
+        <MudIcon Icon="@Icon" Size="Size.Large" Color="Color.Primary" />
+
+        <MudStack Spacing="0" Class="flex-grow-1">
+            <MudText Typo="Typo.h4">@Title</MudText>
+
+            @if (Description is not null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@Description</MudText>
+            }
+
+            @if (Filters is not null)
+            {
+                <MudStack Row Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-4">
+                    @Filters
+                </MudStack>
+            }
+
+            @ChildContent
+        </MudStack>
+
+        @if (Actions is not null)
+        {
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                @Actions
+            </MudStack>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = default!;
+
+    /// <summary>Egy-két mondat arról, mire való az oldal. RenderFragment, hogy kiemelést is bírjon.</summary>
+    [Parameter]
+    public RenderFragment? Description { get; set; }
+
+    /// <summary>A leírás alatti sorba kerülő szűrők (időszak-választó, dátumnavigátor stb.).</summary>
+    [Parameter]
+    public RenderFragment? Filters { get; set; }
+
+    /// <summary>A fejléc jobb szélére kerülő műveletgombok.</summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    /// <summary>Ritkán kell: a szűrők alá kerülő, oldalspecifikus tartalom (pl. figyelmeztető sáv).</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>További MudBlazor utility-osztályok a külső kártyán (pl. <c>mb-4</c>).</summary>
+    [Parameter]
+    public string? Class { get; set; }
+}

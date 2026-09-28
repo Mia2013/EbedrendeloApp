@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
@@ -10,4 +11,4 @@ public sealed record AddManualCreditCommand(
     int TargetUserId,
     int AmountHuf,
     string Note,
-    int PerformedByUserId) : IRequest<Result<int>>;
+    int PerformedByUserId) : IRequest<Result<int>>, IRequireAdmin;

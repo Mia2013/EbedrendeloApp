@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Menus.GetMenuDishSuggestions;
@@ -15,4 +16,4 @@ public sealed record CreateMenuDishCommand(
     decimal? CarbohydrateGrams = null,
     decimal? SugarGrams = null,
     decimal? ProteinGrams = null,
-    decimal? SaltGrams = null) : IRequest<Result<MenuDishDto>>;
+    decimal? SaltGrams = null) : IRequest<Result<MenuDishDto>>, IRequireAdmin;

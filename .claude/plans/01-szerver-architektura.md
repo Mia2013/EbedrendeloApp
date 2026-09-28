@@ -1,4 +1,4 @@
-# Ebédrendelő — szerver oldali architektúra és implementációs terv
+﻿# Ebédrendelő — szerver oldali architektúra és implementációs terv
 
 > **Ez a dokumentum egyetlen mérvadó példánya.** Más helyen (home `.claude/plans/`, `docs/`) ne
 > keletkezzen belőle másolat.
@@ -24,7 +24,7 @@ jön — a sablonoldalak (`Counter`, `Weather`, `Home`) csak akkor törlődnek.
 | Rendelési időszak | **Nem naptári hónap**, hanem az admin által megnyitott `[StartDate, EndDate]` tartomány (pl. aug. 5. – szept. 5.). Átfedés tilos, rés megengedett |
 | Rendelési ablak | **Kétfázisú**: az `OrderDeadline`-ig bármely időszaki napra; utána a 3 munkanapos szabály szerintiekre, akár egyszerre az összesre. Több nap egy hívásban, részleges sikerrel |
 | Értesítés | **In-app értesítés tábla** |
-| Más nevében rendelés | **Bárki bárki nevében**, de naplózzuk, ki adta le (`PlacedByUserId`) |
+| Más nevében rendelés | **Rendelést bárki bárki nevében**, de a címzettet azonosítani kell (név + igazgatóság + osztály, pontos egyezés), és naplózzuk, ki adta le (`PlacedByUserId`). **Lemondani** más naptárában **csak admin** tud, és a kolléga naptára a dolgozónak nem böngészhető történet: csak a nyitott időszakok, csak a mai naptól előre |
 | Jóváírás | **Egyenleg-könyvelés (ledger)**, azonnal felhasználható egyenlegként, automatikus beszámítás |
 | Jóváírás hatóköre | **Csak menürendelésre számítható be** — a menü és a la carte pénzügy nem keveredik |
 | Lemondás időhorizontja | **Aznapi lemondás nincs** — sem menüre, sem a la carte-ra |
@@ -93,7 +93,10 @@ Konvenciók: pénz `int` (Ft, nincs tört), naptári nap `DateOnly`, időpillana
 
 `Igazgatosag` és `Osztaly` a felhasználó szöveges igazgatóság/osztály hovatartozását tárolja (pl. „Gyártás"
 / „1. üzem") — a `SzervKod`-tól (rövid szervezeti kód, szemantikája ismeretlen, l. „Nyitott kérdések")
-függetlenül, arra logika nem épül, csak megjelenítési/szűrési adat.
+függetlenül, arra logika nem épül, csak megjelenítési/szűrési adat. Egyetlen kivétel a
+`ResolveColleagueQuery`, ami a névvel együtt **pontos egyezésre** hasonlítja őket — de az is szabad
+szövegként, nem törzsadatként. A fejlesztői seed ezért egyszerűsített értékeket használ (`A`–`D` / `1`–`7`,
+l. „Seed / init adat").
 
 ### Role
 `int Id` (PK) · `string Name` (32, unique — `"Admin"` / `"User"`)
@@ -261,16 +264,19 @@ készül (US-4.6 AC 4.6.3).
   - `ConsumesCreditEntryId?` + `PeriodInvoiceId?` → negatív tételeken: **mikor és melyik számlából**
     vonódott le
   - Így a felhasználó ledger-nézete tételesen mutatja: *mit mondott le → mennyi jóváírás keletkezett →
-    mennyi az egyenlege → melyik időszaki számla menürészéből, mikor vonódott le.*
-  - **Minden jóváírás menü-hatókörű** (a `ManualAdjustment` is): a beszámítás kizárólag a számla
-    menütételeit csökkentheti — lásd 3.3.
-- **PeriodInvoice** — `UserId` (FK), **`OrderingPeriodId`** (FK; unique `UserId`+`OrderingPeriodId`),
-  `MenuGrossHuf`, `ALaCarteGrossHuf`, `GrossHuf`, `CreditAppliedHuf`, **`MenuPayableHuf`**,
-  **`ALaCartePayableHuf`**, `PayableHuf`, `IsPaid`, `PaidAtUtc?`, `MarkedPaidByUserId?`, `GeneratedAtUtc`
-  - Invariáns: `CreditAppliedHuf <= MenuGrossHuf`;
-    `MenuPayableHuf = MenuGrossHuf - CreditAppliedHuf`;
-    `ALaCartePayableHuf = ALaCarteGrossHuf`;
-    `PayableHuf = MenuPayableHuf + ALaCartePayableHuf`
+    mennyi az egyenlege → melyik számlából, mikor vonódott le.*
+  - **Minden jóváírás menü-hatókörű** (a `ManualAdjustment` is): à la carte tétel nem kerül számlára,
+    így oda nem is számítható be — lásd 3.3.
+- **PeriodInvoice** — `UserId` (FK), **`OrderingPeriodId`** (FK), **`SequenceNumber`**
+  (unique `UserId`+`OrderingPeriodId`+`SequenceNumber`), `GrossHuf`, `CreditAppliedHuf`, `PayableHuf`,
+  `IsPaid`, `PaidAtUtc?`, `MarkedPaidByUserId?`, `GeneratedAtUtc`
+  - Invariáns: `CreditAppliedHuf <= GrossHuf`; `PayableHuf = GrossHuf - CreditAppliedHuf`
+  - **A számla nem a (felhasználó, időszak) párra szól, hanem egy konkrét rendelés-halmazra**: a hozzá
+    tartozó napokat a `MenuOrder.PeriodInvoiceId` jelöli. Egy dolgozónak egy időszakra több számlája is
+    lehet — `SequenceNumber = 1` az alapszámla (a tömeges leadási határidő után), `2+` a később leadott
+    (B-fázisú) napok kiegészítő számlája. Az egyediséget ezért a hármas index adja, nem a pár; ez fogja
+    meg azt is, ha két párhuzamos generálás ugyanazt a következő sorszámot számolná ki.
+  - Á la carte oszlop **nincs** rajta (lásd 3.3): azt a dolgozó aznap fizeti.
 
 ### Egyéb
 - **UserNotification** — `UserId` (FK), `Type`, `Title`, `Message`, `RelatedDate?`, `RelatedMenuOrderId?`,
@@ -378,32 +384,43 @@ kétszer.
 
 ### 3.3 Jóváírás: egyenleg és beszámítás
 
-**Keletkezés** — sikeres lemondáskor (vagy nap kizárásakor / menü törlésekor):
+**Keletkezés** — sikeres lemondáskor (vagy nap kizárásakor / menü törlésekor), **de kizárólag akkor, ha
+a rendelés már ki volt számlázva** (`order.PeriodInvoiceId != null`):
 ```
 order.Status = Cancelled
 order.CancelledAtUtc / CancelledByUserId / CancellationReason kitöltve
-CreditEntry {
-    AmountHuf         = +order.PriceHuf
-    Kind              = CancellationCredit
-    SourceMenuOrderId = order.Id
-    RemainingHuf      = order.PriceHuf
-}
-értesítés (CreditIssued)
+
+ha order.PeriodInvoiceId != null:
+    CreditEntry {
+        AmountHuf         = +order.PriceHuf
+        Kind              = CancellationCredit
+        SourceMenuOrderId = order.Id
+        RemainingHuf      = order.PriceHuf
+    }
+    értesítés (CreditIssued)
+egyébként:
+    nincs jóváírás, csak lemondás-értesítés (MenuCancelled)
 ```
+
+**Miért feltételes.** Egy ki nem számlázott nap lemondásáért nem jár pénz vissza: azt a dolgozó soha nem
+fizette ki, a delta-számlázás pedig eleve nem fogja rátenni egyetlen számlára sem. Feltétel nélküli
+jóváírással a leggyakoribb forgatókönyv — A-fázisban lerendelek 20 napot, a határidő előtt lemondok 5-öt —
+ingyen jóváírást osztana. A feltétel ezért a `CreditService.IssueCancellationCredit`-ben él és nem a
+hívókban: öt helyről hívjuk (lemondás, nap kizárása, napi menü törlése, variáns-átvezetés), és egy
+kifelejtett ellenőrzés pénzt osztana.
 
 **Egyenleg** — `Balance(user) = Σ CreditEntry.RemainingHuf`. A jóváírás a keletkezés pillanatától
 felhasználható; **nincs `EligibleFrom` várakozási idő**. A felhasználó a felületen egy élő egyenleget lát,
 nem egy „majd jövő hónapban" ígéretet.
 
-**Beszámítás** — a legközelebbi olyan időszaki számlánál, amelyen **van menütétel**
+**Beszámítás** — a legközelebbi olyan számlánál, amelyen **van menütétel**
 (`GeneratePeriodInvoicesCommand(periodId)`):
 ```
-MenuGross     = az időszak aktív MenuOrder-einek PriceHuf összege
-                (WHERE OrderingPeriodId = periodId)
-ALaCarteGross = az időszak a la carte összege
+Gross = a számlára kerülő MenuOrder-ek PriceHuf összege
+        (WHERE OrderingPeriodId = periodId AND Status = Active AND PeriodInvoiceId IS NULL)
 
-elérhető  = CreditEntry-k ahol RemainingHuf > 0, rendezve CreatedAtUtc szerint (FIFO)
-fedezetlen = MenuGross                        // ← kizárólag a menü rész
+elérhető   = CreditEntry-k ahol RemainingHuf > 0, rendezve CreatedAtUtc szerint (FIFO)
+fedezetlen = Gross
 
 minden c ∈ elérhető, amíg fedezetlen > 0:
     fel = min(c.RemainingHuf, fedezetlen)
@@ -411,18 +428,17 @@ minden c ∈ elérhető, amíg fedezetlen > 0:
     CreditEntry { AmountHuf = -fel, Kind = CreditApplied,
                   ConsumesCreditEntryId = c.Id, PeriodInvoiceId = invoice.Id }
 
-invoice.CreditAppliedHuf   = Σ fel
-invoice.MenuPayableHuf     = MenuGross - CreditAppliedHuf
-invoice.ALaCartePayableHuf = ALaCarteGross
-invoice.PayableHuf         = MenuPayableHuf + ALaCartePayableHuf
-értesítés (CreditApplied) a levont tételek felsorolásával
+invoice.CreditAppliedHuf = Σ fel
+invoice.PayableHuf       = Gross - CreditAppliedHuf
+minden bekerült order.PeriodInvoiceId = invoice.Id
+értesítés (CreditApplied) a levont összeggel
 ```
 
-**Miért nem keveredhet a menü és a la carte.** A lemondott menüadag a konyha szempontjából átütemezés:
-az az adag nem készül el, a helyette rendelt *menüadag* váltja ki. Az a la carte külön elszámolás, oda
-a menüből származó jóváírás nem folyhat át. Ezért a beszámítás felső korlátja a `MenuGrossHuf`, és a
-számla két fizetendő sort mutat. Ha az egyenleg meghaladja az időszak menütételeinek összegét, a
-maradék `RemainingHuf`-ban görgetődik tovább a következő olyan **időszakra**, amelyben van menürendelés.
+**Az a la carte nincs a számlán.** Az a la carte kizárólag aznapra vehető, a menüszámla viszont az
+étkezési hónap *kezdete előtt* készül (előre fizetés) — így à la carte tétel a számla kiállításakor
+fogalmilag nem létezhet rajta. Ezt a dolgozó aznap fizeti, külön. A jóváírás emiatt eleve csak menüre
+tud beszámítódni, és a számlán egyetlen fizetendő sor van. Ha az egyenleg meghaladja a számla bruttóját,
+a maradék `RemainingHuf`-ban görgetődik tovább a következő menüszámlára.
 
 **Időzítés.** Mivel nincs `EligibleFrom`, a beszámítás annál a számlánál történik, amelyik előbb
 legenerálódik: ha egy „aug. 5. – szept. 5." időszakon belüli lemondás még ennek az időszaknak a számlája
@@ -550,10 +566,13 @@ Egy rendelés csak akkor áll vissza, ha **mind** teljesül:
 
 1. `CancellationReason == DayExcluded` **és** `CancelledByExcludedDayId == a most visszavont kizárás`
    (a felhasználó saját lemondása tehát **soha** nem éled újra)
-2. a hozzá tartozó `CreditEntry.RemainingHuf == AmountHuf` — érintetlen, nincs rá `CreditApplied` tétel
-3. a rendelés `OrderingPeriodId`-jára még nincs `PeriodInvoice` generálva
-4. a napra nincs `KitchenClosure`
-5. a felhasználónak nincs időközben új aktív rendelése arra a napra
+2. ha keletkezett hozzá jóváírás (`order.PeriodInvoiceId != null` volt a kizáráskor), akkor a
+   `CreditEntry.RemainingHuf == AmountHuf` — érintetlen, nincs rá `CreditApplied` tétel. Ki nem
+   számlázott rendelésnél nincs jóváírás, így nincs is mit visszavonni — a hiányzó `CreditEntry` itt a
+   normális eset, nem kihagyási ok. A rendelés `PeriodInvoiceId`-ja érintetlen marad, tehát ha már ki
+   volt számlázva, a visszaállítás után sem számlázódik újra
+3. a napra nincs `KitchenClosure`
+4. a felhasználónak nincs időközben új aktív rendelése arra a napra
    (különben a szűrt unique index amúgy is elhasalna)
 
 ```
@@ -648,11 +667,14 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 > Ha ez a lista változik, a mátrixot is frissíteni kell.
 
 ### Users
-- `GetUsersQuery` **[A/U]** — felhasználólista (admin nézet és a dev váltó); a valós implementáció
-  (`Features/Users/GetUsers/`) a Billing kézi jóváírás autocomplete-jéhez készült el elsőként, két extra
-  mezővel (`Igazgatosag`, `Osztaly`) a névsor-egyértelműsítéshez — a dev váltó (`StubCurrentUser`) és a
-  "más nevében rendelek" választó (`UserCalendar.razor`, `colleagues`) egyelőre saját, korábbi
-  implementációt használ, nincs átvezetve erre.
+- `GetUsersQuery` **[A]** — a teljes felhasználólista, két extra mezővel (`Igazgatosag`, `Osztaly`) a
+  névsor-egyértelműsítéshez. **Admin-only**, szándékosan: a dolgozónak nem szabad végiglapozhatnia a
+  névsort (lásd `ResolveColleagueQuery`). Kiszolgálja a kézi jóváírás és a más nevében rendelés
+  *adminisztrátori* autocomplete-jét.
+- `ResolveColleagueQuery(Name, Igazgatosag, Osztaly)` **[A/U]** — egyetlen kolléga azonosítása a hármas
+  **pontos** egyezésével, a más nevében rendeléshez (AC 3.1.6). Nincs részleges keresés és nincs
+  listázás; a nem-találat egyetlen semleges üzenetet ad, hogy mezőnként ne lehessen kitalálni a
+  hármast. Kettőnél több vagy nulla találat egyaránt elutasítás — névazonos kollégáknál sem tippelünk.
 - `GetUserByIdQuery`, `GetUserByUserNameQuery` **[A/U]**
 
 ### Calendar
@@ -673,7 +695,11 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetOrderableDaysQuery` **[U]** — **a felület egyetlen igazságforrása**: az időszak minden napjára
   megmondja, hogy *rendelhető-e*, *lemondható-e*, és ha nem, **miért** (ugyanaz az `ErrorCodes` készlet,
   amit a köteges parancsok `Skipped` listája használ). Így a felület előre le tudja tiltani a nem
-  választható napokat, és a parancs eredménye megerősítés, nem meglepetés
+  választható napokat, és a parancs eredménye megerősítés, nem meglepetés.
+  **Idegen felhasználóra a válasz szűkül** (`IAuditedOnBehalfOf` marad, de a handler minimalizál): a
+  dolgozó lezárt időszakra `PeriodClosed` hibát kap, nyitottra pedig csak a mai naptól kezdődő napokat.
+  A múltbeli napok nem a felületen tűnnek el, hanem be sem kerülnek a válaszba — a kolléga korábbi
+  rendeléseiről semmi nem hagyja el a szervert. Adminra a teljes időszak jön (AC 3.1.9)
 
 ### Menus
 - `UpsertDailyMenuCommand` **[A]** — nap menüjének létrehozása/módosítása variánsokkal; a kikerült
@@ -688,9 +714,13 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `DeleteDailyMenuCommand` **[A]** — teljes nap menüjének **soft delete**-je, minden aktív rendelés
   lemondása (`MenuDeleted`) + jóváírás; a menü és minden variánsa `RemovedAtUtc`-t kap,
   `IsPublished = false`
-- `GetDailyMenuQuery` **[A/U]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata;
-  mindkettő a `RemovedAtUtc == null` variánsokat/napokat adja vissza, és az `IncludeUnpublished` flaget
-  a hívó szerepköre szerint kell állítani ([A] = true, [U] = false — AC 2.5.2)
+- `GetDailyMenuQuery` **[A]**, `GetPeriodMenuQuery` **[A/U]** — az időszaki rendelőfelület adata;
+  mindkettő a `RemovedAtUtc == null` variánsokat/napokat adja vissza. Az `IncludeUnpublished` flag
+  admin-jog (AC 2.5.2), de a kettő ezt máshogy éri el: a `GetDailyMenuQuery`-t **csak** admin felület
+  hívja, ezért az egészében `IRequireAdmin`. A `GetPeriodMenuQuery`-t a dolgozói naptár is hívja
+  (`IncludeUnpublished: false`), tehát maga a kérés nyitott, és a **kapcsolót** a handler ellenőrzi
+  (`ForbiddenException`, ha nem admin). Jelölő ezt nem tudná kifejezni: a jelölők a kérés egészére
+  vonatkoznak, nem egy paraméterértékre
 - `GetTodayMenuForUserQuery` **[U]** — **a „napi kiírás"**: mai menü variánsai + a felhasználó aznapi
   választása, vagy explicit „ma nem rendeltél" jelzés + mai a la carte kínálat és a felhasználó a la
   carte rendelése
@@ -709,10 +739,14 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   `OrderingPeriodId`. A fázistól függően a 3.5 A vagy B sorát érvényesíti napokra bontva, és
   `Result<BatchOrderResult>`-ot ad vissza a `Skipped` listával. A más nevében rendelést a
   `TargetUserId ≠ CurrentUser` eset fedi, `PlacedByUserId` mindig az aktuális felhasználó.
-- `CancelMenuOrdersCommand` **[U]** — `TargetUserId` + **dátumlista**; naponként `CanChange` (3.1),
-  `CancellationReason = ByUser`, jóváírás létrehozása, értesítés. Szintén `Result<BatchOrderResult>`.
-  Egyetlen nap lemondása ennek az egyelemű esete — nincs külön parancs rá.
-- `GetMyPeriodOrderQuery` **[U]**, `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
+- `CancelMenuOrdersCommand` **[U / idegenre A]** — `TargetUserId` + **dátumlista**; naponként `CanChange`
+  (3.1), `CancellationReason = ByUser`, jóváírás létrehozása, értesítés. Szintén
+  `Result<BatchOrderResult>`. Egyetlen nap lemondása ennek az egyelemű esete — nincs külön parancs rá.
+  A párjával (`PlacePeriodOrderCommand`) ellentétben `IActsOnBehalfOf`, **nem** `IAuditedOnBehalfOf`:
+  rendelést leadni a kollégának szívesség, lemondani kárt okoz, ezért idegen `TargetUserId` admin-jog.
+- `GetMyPeriodOrderQuery` **[U / idegenre A]** — egy időszak teljes rendeléstörténete egy felhasználóra;
+  pontosan az, amit a más nevében rendelő dolgozó nem láthat, ezért `IActsOnBehalfOf`.
+  `GetUserOrdersQuery` **[A]** (szűrők: időszak, felhasználó, státusz)
 
 ### ALaCarte
 - `UpsertALaCarteItemCommand` **[A]**, `SetALaCarteItemActiveCommand` **[A]** (kétirányú — kivezetés
@@ -741,8 +775,12 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   hónap napjaira összevonva (visszamenőleges rendelési igény kiszolgálására)
 
 ### Kitchen
-- `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő)
-- `GetKitchenSummaryRangeQuery` **[A]** — időszakra, ez adja a „3 nappal előbbi" megrendelés alapját
+- `GetKitchenSummaryQuery` **[A]** — egy napra, variánsonkénti darabszám (élő). A nap **minden**
+  publikált variánsa szerepel, a nem rendelt is, `0` adaggal — a hiányzó sorból nem derülne ki, hogy
+  „senki nem rendelte" vagy „kimaradt". Amelyik variánst időközben törölték, de van rá aktív rendelés,
+  szintén a listán marad: azt az adagot meg kell főzni
+- `GetKitchenSummaryRangeQuery` **[A]** — időszakra, ez adja a „3 nappal előbbi" megrendelés alapját;
+  a publikált menüvel rendelkező nap akkor is szerepel, ha egyetlen rendelés sincs rá
 - `CloseDayCommand` **[A]** — **az „összesítő elküldve" esemény**: snapshot mentése
   `KitchenClosure`(+`Line`) táblába, és ettől kezdve a nap kiesik a rendelhető/lemondható körből (3.1),
   akkor is, ha a 3 munkanapos határidő még nem járt le
@@ -751,8 +789,9 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetKitchenClosureQuery` **[A]**
 
 ### Billing
-- `GeneratePeriodInvoicesCommand(OrderingPeriodId)` **[A]** — az időszak számláinak generálása +
-  jóváírás FIFO beszámítás **kizárólag a menürészre** (3.3)
+- `GeneratePeriodInvoicesCommand(OrderingPeriodId)` **[A]** — az időszak **még ki nem számlázott**
+  menürendeléseinek kiszámlázása (delta-számlázás) + jóváírás FIFO beszámítás (3.3). Újrafuttatható:
+  másodszorra csak az azóta leadott napokról készít kiegészítő számlát
 - `MarkInvoicePaidCommand` **[A]** — **a kézi fizetés-jelölés**
 - `GetInvoicesQuery` **[A]** (`OrderingPeriodId` + fizetett szűrő), `GetMyInvoicesQuery` **[U]**
 - `GetMyBalanceQuery` **[U]** — az aktuális egyenleg (`Σ RemainingHuf`) a fejlécbe/dashboardra
@@ -761,6 +800,16 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
 - `GetBalancesQuery` **[A]** — minden dolgozó aktuális, nem-nulla egyenlege (`Σ RemainingHuf`
   felhasználónként), az admin "Egyenlegek" áttekintő oldalához; nincs önálló user story, AC 5.2.1-et
   támogató implementációs részlet
+
+### Admin
+- `GetAdminDashboardQuery(CurrentUserId)` **[A]** — az admin áttekintő (`/admin`) egyetlen, összevont
+  lekérdezése: mai adagok variánsonként, aktív időszak és hátralévő munkanapjai, menü nélküli munkanapok
+  (mától **minden** időszakban, időszakon kívüli napot nem számol), fizetetlen számlák, à la carte napi
+  kép és heti bontás, a „mai teendők" lista (`AdminTodoKind`) és a terület-csempék számai. Szándékosan
+  **egy** hívás egyetlen óra-leolvasással, hogy minden kártya ugyanarra a napra vonatkozzon (DB-szintű
+  pillanatkép nincs). A konyhai teendő csak menüadagot számol (à la carte nem része a napzárásnak); a
+  következő napi à la carte teendő leves nélküli, nem nullázott ajánlatot keres a következő, időszakkal
+  fedett munkanapra. Csupasz DTO (nincs `Result`, nincs üzleti hibaága); nincs önálló user story
 
 ### Notifications
 - `GetMyNotificationsQuery` **[U]**, `MarkNotificationReadCommand` **[U]**,
@@ -814,8 +863,19 @@ Connection string (`appsettings.json`):
 `Data/Seed/DatabaseSeeder.cs`, indításkor hívva (`await db.Database.MigrateAsync()` majd idempotens
 feltöltés — minden blokk csak akkor fut, ha az adott tábla/nap még üres):
 
-- **6 felhasználó**: `admin` (Role=`Admin`) + 5 dolgozó (`kovacs.j`, `nagy.a`, `szabo.p`, `toth.e`,
-  `varga.b`), `UserId` 1001–1006, kitöltött `Nev` / `Igazgatosag` / `Osztaly` / `Rf` / `SzervKod`.
+- **14 felhasználó** (`SeedCatalog.Users`): `admin` (Role=`Admin`) + 13 dolgozó, `UserId` 1001–1014,
+  kitöltött `VezetekNev` / `KeresztNev` / `Igazgatosag` / `Osztaly` / `Rf` / `SzervKod`.
+  - A szervezeti egység szándékosan **triviális séma**: igazgatóság `A`–`D`, osztály `1`–`7`
+    (`SzervKod` = a kettő összefűzve, pl. `B3`). A más nevében rendeléshez a kollégát *pontosan* kell
+    azonosítani (`ResolveColleagueQuery`), és valósághű, ékezetes egységneveket böngészőben körülményes
+    begépelni. Mind a 4 igazgatóság és mind a 7 osztály szerepel — az **admin is** kap egységet.
+  - **Két névütközés szándékos**, hogy az azonosítás mindkét éles ága kézzel kipróbálható legyen:
+    „Kovács János" kétszer, *különböző* egységben (A/1 és D/7) → a hármas így is egyértelmű;
+    „Tóth Eszter" kétszer, *ugyanabban* az egységben (B/3) → a handler `matches.Count != 1` ága
+    szándékosan elutasít. Ezt a `SeedCatalogTests` rögzíti.
+  - Ez az egy blokk **nem** lép ki, ha a tábla már nem üres: `UserId` szerint a katalógushoz igazítja a
+    meglévő sorokat, hogy egy már seedelt fejlesztői adatbázis is megkapja a katalógus változásait a DB
+    eldobása nélkül. A katalógusban nem szereplő felhasználókat és a meglévők `RoleId`-ját nem bántja.
 - **OrderingPeriod**: **két, egymáshoz csatlakozó, szándékosan nem naptári időszak** — az aktuális hónap
   5-étől a következő hónap 5-éig, majd onnan az azt követő hónap 5-éig. `OrderDeadline` =
   `StartDate − 10 nap` 10:00, `IsOpen = true`. Így a seed maga demonstrálja, hogy a „hónap" eltolható.
@@ -827,9 +887,15 @@ feltöltés — minden blokk csak akkor fut, ha az adott tábla/nap még üres):
 - **ALaCarteDailyOffer**: a következő 5 munkanapra, tételenként napi keret — a Leves tételnek is jár
   napi ajánlat (legfeljebb egy/nap), a `Capacity` rá nézve figyelmen kívül hagyott placeholder
   (`int.MaxValue`), mert a leves korlátlan és sosem kerül ellenőrzésre.
-- **Minta forgalom**: néhány aktív `MenuOrder` az **első időszakhoz kötve**, 1 felhasználó által lemondott
-  rendelés (`ByUser`) a hozzá tartozó `CreditEntry`-vel, 1 kizárás miatt lemondott rendelés
-  (`DayExcluded`), 1–2 `UserNotification` — hogy a ledger, az egyenleg és az értesítés nézet ne legyen üres.
+- **Minta forgalom**: `MenuOrder`-ek mindhárom időszakra, a múltban sűrűbben; egy részük `ByUser`
+  lemondott, egy nap pedig kizárás miatt (`DayExcluded`) — a hozzájuk tartozó `UserNotification`-ökkel.
+- **PeriodInvoice**: a **lezárt előző időszakra** felhasználónként egy alapszámla (`SequenceNumber = 1`),
+  a hozzá tartozó rendelésekre rábélyegzett `MenuOrder.PeriodInvoiceId`-vel; minden második fizetettként.
+  Ez nem kozmetika: jóváírás **csak kiszámlázott napért** keletkezhet (`ICreditService`), tehát enélkül a
+  seedelt lemondásokért nem járna `CreditEntry`, és az egyenleg-nézet üres lenne. A folyó és a következő
+  időszak szándékosan számlázatlan marad — azokon mutatható be a „Számlák generálása".
+- **CreditEntry**: a kiszámlázott napok lemondásaiból automatikusan, plusz egy kézi korrekció
+  (`ManualAdjustment`) és egy visszavont jóváírás (`CreditRevoked`), hogy a ledger mindhárom fajtát mutassa.
 
 ---
 
@@ -985,9 +1051,11 @@ bUnit tesztek.
 1. **MediatR licenc** — a MediatR 13.0-tól kereskedelmi licencű; belső céges használatnál érdemes
    ellenőrizni, kell-e licenckulcs. Ha nem, a use case szerkezet változatlanul átültethető egy egyszerű
    handler-diszpécserre.
-2. **A la carte jóváírás** — jelenleg minden jóváírás menü-hatókörű, mert a la carte lemondás nincs.
-   Ha valaha kell a la carte korrekció (elmaradt adag), a `CreditEntry`-re egy `Scope` mező kerül, és a
-   beszámítás hatóköre szerint válik szét — a `PeriodInvoice` bontása ezt már ma is elbírja. Ezen felül:
+2. **A la carte elszámolás** — az a la carte-ot a dolgozó aznap fizeti, a rendszer csak a rendelést
+   rögzíti; **a tényleges fizetés rögzítésére nincs modul** (nincs pénztár/kassza), így az `ALaCarteOrder`
+   pénzügyi kimutatásként ma nem zárható le. Ha ez kell, önálló kör: fizetés-állapot az `ALaCarteOrder`-en
+   + napi kassza-riport. Kapcsolódóan, ha valaha kell a la carte jóváírás/korrekció (elmaradt adag), a
+   `CreditEntry`-re egy `Scope` mező kerül, mert ma minden jóváírás menü-hatókörű. Ezen felül:
    mivel a Leves ára a Főétel-sor `UnitPriceHuf`-jába van beolvasztva, egy jövőbeli tételes korrekció
    (pl. csak a főételt cserélik, a levest nem) nem vonhatja ki egyszerűen a katalógusárat a
    snapshotból — a bontást a korrekció pillanatában, a két akkori katalógusárból kellene újraszámolni.

@@ -49,8 +49,7 @@ public class GetMyBalanceHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyBalanceQuery(userId), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(0, result.Value);
+        Assert.Equal(0, result);
     }
 
     [Fact]
@@ -62,7 +61,7 @@ public class GetMyBalanceHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyBalanceQuery(userId), CancellationToken.None);
 
-        Assert.Equal(2600, result.Value);
+        Assert.Equal(2600, result);
     }
 
     [Fact]
@@ -76,7 +75,7 @@ public class GetMyBalanceHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyBalanceQuery(userId), CancellationToken.None);
 
-        Assert.Equal(0, result.Value);
+        Assert.Equal(0, result);
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public class GetMyBalanceHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyBalanceQuery(userId), CancellationToken.None);
 
-        Assert.Equal(500, result.Value);
+        Assert.Equal(500, result);
     }
 
     [Fact]
@@ -114,6 +113,6 @@ public class GetMyBalanceHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyBalanceQuery(userId), CancellationToken.None);
 
-        Assert.Equal(700, result.Value);
+        Assert.Equal(700, result);
     }
 }

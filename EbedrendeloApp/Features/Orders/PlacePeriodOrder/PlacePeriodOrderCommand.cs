@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
@@ -7,6 +8,6 @@ public sealed record PlacePeriodOrderCommand(
     int TargetUserId,
     int PlacedByUserId,
     int OrderingPeriodId,
-    IReadOnlyList<DayOrderRequest> Days) : IRequest<Result<BatchOrderResult>>;
+    IReadOnlyList<DayOrderRequest> Days) : IRequest<Result<BatchOrderResult>>, IAuditedOnBehalfOf;
 
 public sealed record DayOrderRequest(DateOnly Date, string VariantCode);

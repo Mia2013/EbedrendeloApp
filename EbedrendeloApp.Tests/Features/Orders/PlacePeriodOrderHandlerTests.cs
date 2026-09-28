@@ -144,6 +144,40 @@ public class PlacePeriodOrderHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Allows_a_new_order_after_the_period_was_already_invoiced()
+    {
+        // A számla kiállítása nem zárja le a hónapot (B-fázis, 01-szerver-architektura.md 3.1): az új nap
+        // felvehető, és PeriodInvoiceId nélkül jön létre, hogy a következő generálás kiegészítő számlára
+        // tegye.
+        await SeedAsync();
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            db.PeriodInvoices.Add(new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = periodId,
+                SequenceNumber = 1,
+                GrossHuf = 0,
+                CreditAppliedHuf = 0,
+                PayableHuf = 0,
+                GeneratedAtUtc = new DateTime(2026, 8, 16, 9, 0, 0),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 10, 9, 0, 0)); // Phase A, otherwise fully orderable
+        var result = await sut.Handle(new PlacePeriodOrderCommand(userId, userId, periodId, [new DayOrderRequest(Mon, "A")]), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value!.Succeeded);
+        Assert.Empty(result.Value.Skipped);
+
+        await using var verifyDb = dbFactory.CreateDbContext();
+        var order = await verifyDb.MenuOrders.SingleAsync(o => o.Date == Mon);
+        Assert.Null(order.PeriodInvoiceId);
+    }
+
+    [Fact]
     public async Task Rejects_a_date_outside_the_period()
     {
         await SeedAsync();

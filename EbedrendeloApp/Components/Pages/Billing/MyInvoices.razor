@@ -1,0 +1,100 @@
+﻿@page "/szamlaim"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Features.Billing.GetMyInvoices
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+
+<PageTitle>Számláim</PageTitle>
+
+<PageHeader Icon="@Icons.Material.Filled.ReceiptLong" Title="Számláim">
+    <Description>
+        Az időszaki menüszámláid, és hogy a jóváírásaidat valóban beszámították-e. Az à la carte tételeket
+        aznap fizeted, azok nem kerülnek ide.
+    </Description>
+</PageHeader>
+
+<PageState IsLoading="@(invoices is null)"
+           IsEmpty="@(invoices is { Count: 0 })" EmptyText="Még nincs számlád."
+           EmptyIcon="@Icons.Material.Filled.ReceiptLong">
+    @foreach (var invoice in invoices ?? [])
+    {
+        <MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Spacing="3">
+                <MudStack Spacing="0">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.subtitle1"><b>@invoice.PeriodName</b></MudText>
+                        @if (invoice.SequenceNumber > 1)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                @invoice.SequenceNumber. számla
+                            </MudChip>
+                        }
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @invoice.PeriodStartDate.ToString("yyyy.MM.dd.") &ndash; @invoice.PeriodEndDate.ToString("yyyy.MM.dd.")
+                    </MudText>
+                </MudStack>
+                <MudChip T="string" Color="@(invoice.IsPaid ? Color.Success : Color.Warning)"
+                         Variant="@(invoice.IsPaid ? Variant.Filled : Variant.Outlined)">
+                    @(invoice.IsPaid ? "Fizetve" : "Fizetetlen")
+                </MudChip>
+            </MudStack>
+
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                Kiállítva: @invoice.GeneratedAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")
+                @if (invoice.PaidAtUtc is { } paidAtUtc)
+                {
+                    <text> &middot; Fizetve: @paidAtUtc.ToLocalTime().ToString("yyyy.MM.dd. HH:mm")</text>
+                }
+            </MudText>
+
+            <MudDivider Class="my-3" />
+
+            <MudGrid Spacing="1">
+                <MudItem xs="8">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Bruttó menü (@invoice.DayCount nap)</MudText>
+                </MudItem>
+                <MudItem xs="4"><MudText Align="Align.Right">@HungarianNumberFormat.Huf(invoice.GrossHuf)</MudText></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.body2" Class="mud-text-secondary">Beszámított jóváírás</MudText></MudItem>
+                <MudItem xs="4">
+                    <MudText Align="Align.Right" Color="@(invoice.CreditAppliedHuf > 0 ? Color.Success : Color.Default)">
+                        @(invoice.CreditAppliedHuf > 0 ? "−" : "")@HungarianNumberFormat.Huf(invoice.CreditAppliedHuf)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12"><MudDivider Style="border-style:dashed;" /></MudItem>
+
+                <MudItem xs="8"><MudText Typo="Typo.subtitle1">Összesen fizetendő</MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.h6" Align="Align.Right">@HungarianNumberFormat.Huf(invoice.PayableHuf)</MudText></MudItem>
+            </MudGrid>
+
+            @if (invoice.CreditAppliedHuf > 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-3">
+                    @HungarianNumberFormat.Huf(invoice.CreditAppliedHuf) jóváírás került beszámításra.
+                </MudAlert>
+            }
+
+            @if (invoice.SequenceNumber > 1)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-3">
+                    Ez kiegészítő számla: a korábbi számlád kiállítása után leadott napokat tartalmazza.
+                </MudAlert>
+            }
+        </MudPaper>
+    }
+</PageState>
+
+@code {
+    private List<MyInvoiceDto>? invoices;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+
+        invoices = (await Mediator.Send(new GetMyInvoicesQuery(CurrentUser.UserId))).ToList();
+    }
+}

@@ -27,6 +27,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssemblyContaining(typeof(Program));
+            // Sorrend számít: előbb dőljön el, hogy a hívó kérheti-e ezt egyáltalán, és csak utána,
+            // hogy jól kérte-e.
+            cfg.AddOpenBehavior(typeof(AuthorizationBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
 

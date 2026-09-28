@@ -13,18 +13,14 @@
 
 <PageTitle>À la carte konyhai lista</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">À la carte konyhai lista</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Az à la carte rendelések összesítője, ez alapján tudja a konyha, mennyit kell főznie — napi vagy havi bontásban.
-            </MudText>
-        </MudStack>
+<PageHeader Icon="@Icons.Material.Filled.Kitchen" Title="À la carte konyhai lista">
+    <Description>
+        Az à la carte rendelések összesítője, ez alapján tudja a konyha, mennyit kell főznie — napi vagy havi bontásban.
+    </Description>
+    <Actions>
         <MudIconButton Icon="@Icons.Material.Filled.Print" title="Nyomtatás" OnClick="PrintAsync" />
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
     <MudStack Row Spacing="2">

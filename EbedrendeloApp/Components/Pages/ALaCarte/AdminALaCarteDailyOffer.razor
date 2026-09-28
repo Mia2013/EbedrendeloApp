@@ -18,52 +18,43 @@
 
 <PageTitle>À la carte napi kínálat</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
-        <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-            <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Large" Color="Color.Primary" />
-            <MudStack Spacing="0" Class="flex-grow-1">
-                <MudText Typo="Typo.h4">À la carte napi kínálat</MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Állítsd be, mely aktív tételek rendelhetők az adott napon, és mekkora a keretük. Naponta legfeljebb
-                    egy leves ajánlható — annak nincs kerete, az ára minden főétel árába beleolvad.
-                </MudText>
-            </MudStack>
-        </MudStack>
-
+<PageHeader Icon="@Icons.Material.Filled.EventAvailable" Title="À la carte napi kínálat">
+    <Description>
+        Állítsd be, mely aktív tételek rendelhetők az adott napon, és mekkora a keretük. Naponta legfeljebb
+        egy leves ajánlható — annak nincs kerete, az ára minden főétel árába beleolvad.
+    </Description>
+    <Actions>
         @if (!isLoading)
         {
-            <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
-                @if (isEditing)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)" Disabled="isSaving" OnClick="SaveAllAsync">
-                        @if (isSaving)
-                        {
-                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                            <MudText Class="ms-2">Mentés...</MudText>
-                        }
-                        else
-                        {
-                            <MudText>Mentés</MudText>
-                        }
-                    </MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Disabled="isSaving" OnClick="CancelEditing">
-                        Mégse
-                    </MudButton>
-                    <MudButton Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RestartAlt" Disabled="isSaving" OnClick="ResetAllToZero">
-                        Nullázás
-                    </MudButton>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => isEditing = true">
-                        Szerkesztés
-                    </MudButton>
-                }
-            </MudStack>
+            @if (isEditing)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@(isSaving ? null : Icons.Material.Filled.Save)" Disabled="isSaving" OnClick="SaveAllAsync">
+                    @if (isSaving)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Mentés...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Mentés</MudText>
+                    }
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Disabled="isSaving" OnClick="CancelEditing">
+                    Mégse
+                </MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RestartAlt" Disabled="isSaving" OnClick="ResetAllToZero">
+                    Nullázás
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => isEditing = true">
+                    Szerkesztés
+                </MudButton>
+            }
         }
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -207,6 +198,11 @@
             })
             .ToList());
 
+    /// <summary>Opcionális kezdőnap (<c>?datum=yyyy-MM-dd</c>) — az admin áttekintő „nincs kínálat"
+    /// teendője így a hiányzó napra nyitja az oldalt, nem a mára.</summary>
+    [SupplyParameterFromQuery(Name = "datum")]
+    public string? Datum { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         await CurrentUser.EnsureLoadedAsync();
@@ -214,6 +210,11 @@
         {
             NavigationManager.NavigateTo("mai-menu");
             return;
+        }
+
+        if (DateOnly.TryParseExact(Datum, "yyyy-MM-dd", out var requestedDate))
+        {
+            selectedDate = requestedDate;
         }
 
         await LoadAsync();

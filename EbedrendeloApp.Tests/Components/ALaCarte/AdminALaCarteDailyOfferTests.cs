@@ -51,6 +51,28 @@ public class AdminALaCarteDailyOfferTests : MudBunitContext
     }
 
     [Fact]
+    public void The_datum_query_parameter_opens_the_page_on_that_day()
+    {
+        Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
+        var requestedDay = new DateOnly(2026, 9, 11);
+        DateOnly? queriedDay = null;
+        var mediator = new FakeMediator();
+        mediator.Register<GetALaCarteItemsQuery, IReadOnlyList<ALaCarteItemDto>>(_ => []);
+        mediator.Register<GetDailyOffersQuery, IReadOnlyList<ALaCarteDailyOfferDto>>(q =>
+        {
+            queriedDay = q.Date;
+            return [];
+        });
+        RegisterZeroSummary(mediator);
+        Services.AddSingleton<IMediator>(mediator);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("alacarte-napi-kinalat?datum=2026-09-11");
+
+        Render<AdminALaCarteDailyOffer>((ComponentParameterCollectionBuilder<AdminALaCarteDailyOffer> _) => { });
+
+        Assert.Equal(requestedDay, queriedDay);
+    }
+
+    [Fact]
     public void The_soup_select_is_only_visible_while_editing()
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));

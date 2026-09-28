@@ -6,8 +6,14 @@ namespace EbedrendeloApp.Common.Services;
 
 public sealed class CreditService : ICreditService
 {
-    public CreditEntry IssueCancellationCredit(EbedrendeloDbContext db, MenuOrder order, int createdByUserId, DateTime nowUtc)
+    public CreditEntry? IssueCancellationCredit(EbedrendeloDbContext db, MenuOrder order, int createdByUserId, DateTime nowUtc)
     {
+        // Ki nem számlázott nap lemondásáért nincs jóváírás — lásd ICreditService.
+        if (order.PeriodInvoiceId is null)
+        {
+            return null;
+        }
+
         var entry = new CreditEntry
         {
             UserId = order.UserId,
@@ -55,5 +61,39 @@ public sealed class CreditService : ICreditService
 
         db.CreditEntries.Add(entry);
         return entry;
+    }
+
+    public CreditApplicationResult ApplyCreditToInvoice(
+        EbedrendeloDbContext db, IReadOnlyList<CreditEntry> availableCreditsFifoOrdered, int grossHuf, int createdByUserId, DateTime nowUtc)
+    {
+        var remaining = grossHuf;
+        var applied = new List<CreditEntry>();
+
+        foreach (var source in availableCreditsFifoOrdered)
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            var amount = Math.Min(source.RemainingHuf, remaining);
+            source.RemainingHuf -= amount;
+            remaining -= amount;
+
+            var entry = new CreditEntry
+            {
+                UserId = source.UserId,
+                AmountHuf = -amount,
+                Kind = CreditEntryKind.CreditApplied,
+                CreatedAtUtc = nowUtc,
+                CreatedByUserId = createdByUserId,
+                ConsumesCreditEntryId = source.Id,
+                RemainingHuf = 0,
+            };
+            db.CreditEntries.Add(entry);
+            applied.Add(entry);
+        }
+
+        return new CreditApplicationResult(applied.Sum(e => -e.AmountHuf), applied);
     }
 }

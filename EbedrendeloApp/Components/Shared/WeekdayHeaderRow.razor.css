@@ -1,10 +1,12 @@
+/* A rács geometriája az app.css-ben lévő --week-grid-* változókból jön, közösen a WeekGrid-del —
+   különben a fejléc elcsúszhatna a napcellák oszlopaitól. */
 .weekday-header-row {
     position: sticky;
     top: var(--mud-appbar-height);
     z-index: 2;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    column-gap: 12px;
+    grid-template-columns: var(--week-grid-columns);
+    column-gap: var(--week-grid-column-gap);
 }
 
 .weekday-header-row__day {

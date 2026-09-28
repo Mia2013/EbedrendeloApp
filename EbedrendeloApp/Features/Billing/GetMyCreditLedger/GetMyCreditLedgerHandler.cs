@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
 using MediatR;
@@ -7,9 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Billing.GetMyCreditLedger;
 
 public sealed class GetMyCreditLedgerHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>
+    : IRequestHandler<GetMyCreditLedgerQuery, IReadOnlyList<CreditLedgerEntryDto>>
 {
-    public async Task<Result<IReadOnlyList<CreditLedgerEntryDto>>> Handle(GetMyCreditLedgerQuery request, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CreditLedgerEntryDto>> Handle(GetMyCreditLedgerQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -57,6 +56,6 @@ public sealed class GetMyCreditLedgerHandler(IDbContextFactory<EbedrendeloDbCont
                 e.PeriodInvoiceId);
         }).ToList();
 
-        return Result.Success<IReadOnlyList<CreditLedgerEntryDto>>(result);
+        return result;
     }
 }

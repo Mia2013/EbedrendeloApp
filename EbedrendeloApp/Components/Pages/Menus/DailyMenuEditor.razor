@@ -17,62 +17,35 @@
 
 <PageTitle>Napi menü szerkesztése</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0">
-            <MudText Typo="Typo.h4">Napi menü szerkesztése</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Válassz egy rendelési időszakot — csak az ahhoz tartozó munkanapok listázódnak. Elmúlt napok menüje
-                csak megtekinthető.
-            </MudText>
-            @if (!isLoadingPeriods && periods.Count > 0)
-            {
-                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                           Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                           Class="mt-4 panel-narrow-surface">
-                    @foreach (var period in periods)
-                    {
-                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
-                    }
-                </MudSelect>
-            }
-        </MudStack>
-    </MudStack>
-</MudPaper>
-
-@if (!isLoadingPeriods && periods.Count == 0)
-{
-    <MudAlert Severity="Severity.Info">Még nincs rendelési időszak.</MudAlert>
-}
-
-@if (isLoadingPeriods || isLoadingDays)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else
-{
-    <WeekdayHeaderRow />
-
-    <div class="menu-calendar mt-3">
-        @foreach (var week in BuildWeeks())
+<PageHeader Icon="@Icons.Material.Filled.RestaurantMenu" Title="Napi menü szerkesztése">
+    <Description>
+        Válassz egy rendelési időszakot — csak az ahhoz tartozó munkanapok listázódnak. Elmúlt napok menüje
+        csak megtekinthető.
+    </Description>
+    <Filters>
+        @if (!isLoadingPeriods && periods.Count > 0)
         {
-            @foreach (var cell in week)
-            {
-                @if (cell is null)
-                {
-                    <div class="menu-calendar__cell menu-calendar__cell--empty"></div>
-                }
-                else
-                {
-                    <div class="menu-calendar__cell" style="@(cell.Date == today ? "background:var(--mud-palette-primary-hover);" : null)">
-                        @DayCell(cell)
-                    </div>
-                }
-            }
+            <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
         }
-    </div>
-}
+    </Filters>
+</PageHeader>
+
+<PageState IsLoading="@(isLoadingPeriods || isLoadingDays)"
+           IsEmpty="@(!isLoadingPeriods && periods.Count == 0)"
+           EmptyText="Még nincs rendelési időszak."
+           EmptyIcon="@Icons.Material.Filled.DateRange">
+    @if (SelectedPeriod is { } period)
+    {
+        <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today">
+            <CellContent Context="date">
+                @if (days.FirstOrDefault(d => d.Date == date) is { } cell)
+                {
+                    @DayCell(cell)
+                }
+            </CellContent>
+        </WeekGrid>
+    }
+</PageState>
 
 @code {
     /// <summary>Egyetlen közös sablon a naptár-rács minden napcellájához (Razor templated delegate,
@@ -80,24 +53,24 @@ else
     /// a variáns-lista (vagy "nincs menü" felirat) alatta.</summary>
     private RenderFragment<DayRow> DayCell => day =>
     @<MudStack Spacing="1" Style="height:100%;">
-        <div class="menu-calendar__header">
-            <div class="menu-calendar__header-left">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="flex-shrink-0">
                 <MudText Typo="Typo.subtitle2" Class="@GetTextClass(day)" Color="@(day.IsPastDay ? Color.Default : Color.Primary)" Style="font-weight:700;">@day.Date.ToString("MM.dd.")</MudText>
                 @if (day.Date == today)
                 {
                     <MudBadge Content="@("Ma")" Color="Color.Primary" />
                 }
-            </div>
+            </MudStack>
 
-            <div class="menu-calendar__header-actions menu-calendar__actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Variant="Variant.Text" Size="Size.Small"
+            <MudStack Row Spacing="0" Class="flex-shrink-0">
+                <MudIconButton Class="pa-1" Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Variant="Variant.Text" Size="Size.Small"
                                title="@(day.IsPastDay ? "Elmúlt, csak megtekinthető" : "Szerkesztés")"
                                OnClick="() => EditDayAsync(day)" Disabled="!day.CanEdit" />
-                <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Variant="Variant.Text" Size="Size.Small"
+                <MudIconButton Class="pa-1" Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" Variant="Variant.Text" Size="Size.Small"
                                title="Nap menüjének törlése" OnClick="() => DeleteDayRowAsync(day)"
                                Disabled="!day.CanDelete" />
-            </div>
-        </div>
+            </MudStack>
+        </MudStack>
 
         @if (!string.IsNullOrEmpty(day.ErrorMessage))
         {
@@ -255,45 +228,9 @@ else
         isLoadingDays = false;
     }
 
-    /// <summary>Hétfő-Péntek oszlopos naptár-rács hetes sorokba rendezve. Ha az időszak nem hétfővel kezdődik
-    /// (vagy nem péntekkel végződik), az adott hét lefedetlen napjaira null kerül — ezekből üres cella lesz,
-    /// hogy a rács oszlopai (hétfő..péntek) mindig helyükön maradjanak.</summary>
-    private List<DayRow?[]> BuildWeeks()
-    {
-        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
-        if (period is null)
-        {
-            return [];
-        }
-
-        var weeks = new List<DayRow?[]>();
-        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
-        {
-            var week = new DayRow?[5];
-            for (var i = 0; i < 5; i++)
-            {
-                var date = weekStart.AddDays(i);
-                week[i] = days.FirstOrDefault(d => d.Date == date);
-            }
-
-            weeks.Add(week);
-        }
-
-        // Ha az időszak hétvégén kezdődik, a MondayOf visszaugrik egy olyan hétre, amelyben egyetlen
-        // nap sincs még az időszakban (az első valódi nap csak a rákövetkező héten van) — ez a vezető
-        // hét ilyenkor csupa null cellából állna, ezért innen levágjuk. Csak elölről: a záró hét soha
-        // nem lehet teljesen üres (lásd a doksit fent).
-        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
-        {
-            weeks.RemoveAt(0);
-        }
-
-        return weeks;
-    }
-
-    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
-
-    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+    /// <summary>A hétfő–péntek rácsot a közös `WeekGrid` építi az időszak dátumtartományából; a
+    /// cella-sablon dátum szerint keresi ki a saját `DayRow`-ját.</summary>
+    private OrderingPeriodDto? SelectedPeriod => periods.FirstOrDefault(p => p.Id == selectedPeriodId);
 
     /// <summary>Muted grey for an elmúlt (past) day's text — a subtle "not editable anymore" cue.</summary>
     private static string? GetTextClass(DayRow day, string? extra = null)

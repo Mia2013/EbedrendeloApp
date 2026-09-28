@@ -40,7 +40,7 @@ public class RemoveExcludedDayHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Restores_the_order_when_its_credit_is_untouched_and_no_invoice_exists()
+    public async Task Restores_an_invoiced_order_and_revokes_its_credit()
     {
         var (periodId, orderId, userId) = await SeedExcludedOrderAsync();
 
@@ -71,36 +71,23 @@ public class RemoveExcludedDayHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Skips_restoring_the_order_when_a_period_invoice_already_exists()
+    public async Task Restores_an_uninvoiced_order_even_though_it_has_no_credit_to_revoke()
     {
-        var (periodId, orderId, userId) = await SeedExcludedOrderAsync();
-
-        await using (var db = dbFactory.CreateDbContext())
-        {
-            db.PeriodInvoices.Add(new PeriodInvoice
-            {
-                UserId = userId,
-                OrderingPeriodId = periodId,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
-                GrossHuf = 1400,
-                CreditAppliedHuf = 0,
-                MenuPayableHuf = 1400,
-                ALaCartePayableHuf = 0,
-                PayableHuf = 1400,
-            });
-            await db.SaveChangesAsync();
-        }
+        // Ki nem számlázott nap kizárása nem szül jóváírást, így a visszaállításkor nincs mit
+        // visszavonni — a hiányzó CreditEntry itt a normális eset, nem kihagyási ok.
+        var (_, orderId, userId) = await SeedExcludedOrderAsync(invoiced: false);
 
         var result = await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(0, result.Value!.RestoredCount);
-        Assert.Equal(1, result.Value.SkippedCount);
+        Assert.Equal(1, result.Value!.RestoredCount);
+        Assert.Equal(0, result.Value.SkippedCount);
 
-        await using var verifyDb = dbFactory.CreateDbContext();
-        var order = await verifyDb.MenuOrders.SingleAsync(o => o.Id == orderId);
-        Assert.Equal(OrderStatus.Cancelled, order.Status);
+        await using var db = dbFactory.CreateDbContext();
+        var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+        Assert.Equal(OrderStatus.Active, order.Status);
+        Assert.Null(order.PeriodInvoiceId);
+        Assert.False(await db.CreditEntries.AnyAsync(c => c.UserId == userId));
     }
 
     [Fact]
@@ -216,7 +203,9 @@ public class RemoveExcludedDayHandlerTests : IDisposable
         Assert.False(await db.ExcludedDays.AnyAsync(e => e.Date == ExcludedDate));
     }
 
-    private async Task<(int periodId, int orderId, int userId)> SeedExcludedOrderAsync()
+    /// <param name="invoiced">Ha igaz, a rendelés egy már kiállított számlához tartozik — a kizárás
+    /// jóváírása (és így a visszaállításkori visszavonása) csak ilyenkor jön létre.</param>
+    private async Task<(int periodId, int orderId, int userId)> SeedExcludedOrderAsync(bool invoiced = true)
     {
         int periodId, orderId, userId;
 
@@ -249,6 +238,24 @@ public class RemoveExcludedDayHandlerTests : IDisposable
             await db.SaveChangesAsync();
             adminId = admin.Id;
 
+            int? invoiceId = null;
+            if (invoiced)
+            {
+                var invoice = new PeriodInvoice
+                {
+                    UserId = user.Id,
+                    OrderingPeriodId = period.Id,
+                    SequenceNumber = 1,
+                    GrossHuf = 1400,
+                    CreditAppliedHuf = 0,
+                    PayableHuf = 1400,
+                    GeneratedAtUtc = new DateTime(2026, 8, 10, 9, 0, 0),
+                };
+                db.PeriodInvoices.Add(invoice);
+                await db.SaveChangesAsync();
+                invoiceId = invoice.Id;
+            }
+
             var order = new MenuOrder
             {
                 UserId = user.Id,
@@ -258,6 +265,7 @@ public class RemoveExcludedDayHandlerTests : IDisposable
                 PriceHuf = 1400,
                 Status = OrderStatus.Active,
                 PlacedByUserId = user.Id,
+                PeriodInvoiceId = invoiceId,
             };
             db.MenuOrders.Add(order);
             await db.SaveChangesAsync();

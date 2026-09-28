@@ -60,13 +60,15 @@ public sealed class ExcludeDayHandler(
             order.CancellationReason = CancellationReason.DayExcluded;
             order.CancelledByExcludedDayId = excluded.Id;
 
-            creditService.IssueCancellationCredit(db, order, request.CreatedByUserId, nowUtc);
+            var credit = creditService.IssueCancellationCredit(db, order, request.CreatedByUserId, nowUtc);
             notificationService.Notify(
                 db,
                 order.UserId,
                 NotificationType.MenuCancelled,
                 "Rendelésed lemondásra került",
-                $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed jóváírásra került.",
+                credit is null
+                    ? $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                    : $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed jóváírásra került.",
                 nowUtc,
                 request.Date,
                 order.Id);

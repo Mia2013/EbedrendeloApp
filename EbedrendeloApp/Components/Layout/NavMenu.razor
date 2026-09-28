@@ -1,93 +1,162 @@
 @using EbedrendeloApp.Common.Security
 @using Microsoft.AspNetCore.Components.Routing
 @inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
+@* Az admin menü csoportokba van zárva (`MudNavGroup`): korábban 16 link és 8 szekciócím állt egymás
+   alatt laposan, ami már görgetést igényelt, és a saját rendelés oldalai belekeveredtek az admin
+   oldalakba. A csoportosítás jóváhagyott irány — új admin oldal a meglévő csoport link-listájába
+   kerüljön (lent, a @code-ban), ne a lista végére. *@
+
 <MudNavMenu>
+    @* A Kezdőlap mindenkié, és a felhasználó betöltése előtt is ott van: fejlesztői környezetben innen
+       érhető el a felhasználóváltó, az admin is ide jut vissza. *@
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
         Kezdőlap
     </MudNavLink>
 
     @if (CurrentUser.IsLoaded && CurrentUser.IsAdmin)
     {
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">NAPTÁR</MudText>
-        <MudNavLink Href="idoszakok" Icon="@Icons.Material.Filled.CalendarMonth">
-            Rendelési időszakok
-        </MudNavLink>
-        <MudNavLink Href="nem-rendelheto-napok" Icon="@Icons.Material.Filled.EventBusy">
-            Nem rendelhető napok
+        @* Az admin munkájának belépési pontja az összevont áttekintő: onnan minden terület elérhető,
+           és ott látszik, mi vár ma elintézésre. *@
+        <MudNavLink Href="admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            Áttekintés
         </MudNavLink>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">ÉTLAP</MudText>
+        <MudNavGroup Title="Naptár" Icon="@Icons.Material.Filled.CalendarMonth" @bind-Expanded="calendarExpanded">
+            @foreach (var link in CalendarLinks)
+            {
+                <MudNavLink Href="@link.Href">@link.Label</MudNavLink>
+            }
+        </MudNavGroup>
+
         <MudNavLink Href="etlap" Icon="@Icons.Material.Filled.RestaurantMenu">
-            Napi menü szerkesztése
+            Étlap
         </MudNavLink>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">RENDELÉS</MudText>
         <MudNavLink Href="rendelesek" Icon="@Icons.Material.Filled.ListAlt">
             Rendelések
         </MudNavLink>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">KONYHA</MudText>
         <MudNavLink Href="konyhai-osszesito" Icon="@Icons.Material.Filled.SoupKitchen">
-            Konyhai összesítő
+            Konyha
         </MudNavLink>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">À LA CARTE</MudText>
-        <MudNavLink Href="alacarte-etelek" Icon="@Icons.Material.Filled.Fastfood">
-            À la carte ételek
-        </MudNavLink>
-        <MudNavLink Href="alacarte-napi-kinalat" Icon="@Icons.Material.Filled.EventAvailable">
-            À la carte napi kínálat
-        </MudNavLink>
-        <MudNavLink Href="alacarte-konyhai-lista" Icon="@Icons.Material.Filled.Kitchen">
-            À la carte konyhai lista
-        </MudNavLink>
+        <MudNavGroup Title="À la carte" Icon="@Icons.Material.Filled.Fastfood" @bind-Expanded="aLaCarteExpanded">
+            @foreach (var link in ALaCarteLinks)
+            {
+                <MudNavLink Href="@link.Href">@link.Label</MudNavLink>
+            }
+        </MudNavGroup>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">JÓVÁÍRÁS</MudText>
-        <MudNavLink Href="egyenlegek" Icon="@Icons.Material.Filled.AccountBalanceWallet">
-            Egyenlegek
-        </MudNavLink>
+        <MudNavGroup Title="Pénzügy" Icon="@Icons.Material.Filled.AccountBalanceWallet" @bind-Expanded="financeExpanded">
+            @foreach (var link in FinanceLinks)
+            {
+                <MudNavLink Href="@link.Href">@link.Label</MudNavLink>
+            }
+        </MudNavGroup>
 
-        <MudText Typo="Typo.overline" Class="px-4 pt-4 pb-1 mud-text-secondary">SAJÁT RENDELÉS</MudText>
-        <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
-            Naptár
-        </MudNavLink>
-        <MudNavLink Href="rendeleseim" Icon="@Icons.Material.Filled.Receipt">
-            Rendeléseim
-        </MudNavLink>
-        <MudNavLink Href="mai-menu" Icon="@Icons.Material.Filled.RestaurantMenu">
-            Mai menü
-        </MudNavLink>
-        <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
-            Egyenlegem
-        </MudNavLink>
+        <MudDivider Class="my-2" />
+
+        @* Az admin is rendel magának — ugyanaz az öt oldal, amit a dolgozó lát, csak egy szinttel
+           lejjebb, hogy ne keveredjen az adminisztrációval. *@
+        <MudNavGroup Title="Saját rendelésem" Icon="@Icons.Material.Filled.Person" @bind-Expanded="personalExpanded">
+            @foreach (var link in PersonalLinks)
+            {
+                <MudNavLink Href="@link.Href">@link.Label</MudNavLink>
+            }
+        </MudNavGroup>
     }
     else if (CurrentUser.IsLoaded)
     {
-        <MudNavLink Href="naptar" Icon="@Icons.Material.Filled.CalendarMonth">
-            Naptár
-        </MudNavLink>
-        <MudNavLink Href="rendeleseim" Icon="@Icons.Material.Filled.Receipt">
-            Rendeléseim
-        </MudNavLink>
-        <MudNavLink Href="mai-menu" Icon="@Icons.Material.Filled.RestaurantMenu">
-            Mai menü
-        </MudNavLink>
-        <MudNavLink Href="egyenlegem" Icon="@Icons.Material.Filled.AccountBalanceWallet">
-            Egyenlegem
-        </MudNavLink>
+        @* A dolgozónak összesen öt oldala van — ezt nincs mit csoportosítani. *@
+        @foreach (var link in PersonalLinks)
+        {
+            <MudNavLink Href="@link.Href" Icon="@link.Icon">@link.Label</MudNavLink>
+        }
     }
 </MudNavMenu>
 
 @code {
+    private sealed record NavItem(string Href, string Label, string? Icon = null);
+
+    // A csoportok linkjei egy helyen: ebből renderel a menü, és ebből dől el, melyik csoport nyíljon
+    // ki — így új oldal felvételekor nem lehet az egyiket elfelejteni.
+    private static readonly NavItem[] CalendarLinks =
+    [
+        new("idoszakok", "Rendelési időszakok"),
+        new("nem-rendelheto-napok", "Nem rendelhető napok"),
+    ];
+
+    private static readonly NavItem[] ALaCarteLinks =
+    [
+        new("alacarte-etelek", "Ételek"),
+        new("alacarte-napi-kinalat", "Napi kínálat"),
+        new("alacarte-konyhai-lista", "Konyhai lista"),
+    ];
+
+    private static readonly NavItem[] FinanceLinks =
+    [
+        new("egyenlegek", "Egyenlegek"),
+        new("szamlak", "Számlák"),
+    ];
+
+    private static readonly NavItem[] PersonalLinks =
+    [
+        new("naptar", "Naptár", Icons.Material.Filled.CalendarMonth),
+        new("rendeleseim", "Rendeléseim", Icons.Material.Filled.Receipt),
+        new("mai-menu", "Mai menü", Icons.Material.Filled.RestaurantMenu),
+        new("egyenlegem", "Egyenlegem", Icons.Material.Filled.AccountBalanceWallet),
+        new("szamlaim", "Számláim", Icons.Material.Filled.ReceiptLong),
+    ];
+
+    private bool calendarExpanded;
+    private bool aLaCarteExpanded;
+    private bool financeExpanded;
+    private bool personalExpanded;
+
     protected override async Task OnInitializedAsync()
     {
         CurrentUser.Changed += OnCurrentUserChanged;
+        NavigationManager.LocationChanged += OnLocationChanged;
+
+        SyncExpandedGroups();
+
         await CurrentUser.EnsureLoadedAsync();
+    }
+
+    /// <summary>A nyitva lévő csoportot az aktuális oldal dönti el, navigáláskor újra: aki az
+    /// „Egyenlegek”-re lép, annak a Pénzügy nyílik ki, a többi csukódik. Kézzel bármelyik nyitható —
+    /// azt a <c>@bind-Expanded</c> tartja meg a következő navigálásig. Az egyezés a routerrel
+    /// összhangban kis-nagybetű független, és a query/fragment nem számít bele.</summary>
+    private void SyncExpandedGroups()
+    {
+        var route = NavigationManager
+            .ToBaseRelativePath(NavigationManager.Uri)
+            .Split('?', '#')[0]
+            .Trim('/');
+
+        calendarExpanded = Contains(CalendarLinks, route);
+        aLaCarteExpanded = Contains(ALaCarteLinks, route);
+        financeExpanded = Contains(FinanceLinks, route);
+        personalExpanded = Contains(PersonalLinks, route);
+    }
+
+    private static bool Contains(NavItem[] links, string route)
+        => links.Any(link => string.Equals(link.Href, route, StringComparison.OrdinalIgnoreCase));
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        SyncExpandedGroups();
+        InvokeAsync(StateHasChanged);
     }
 
     private void OnCurrentUserChanged() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => CurrentUser.Changed -= OnCurrentUserChanged;
+    public void Dispose()
+    {
+        CurrentUser.Changed -= OnCurrentUserChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
 }

@@ -1,5 +1,6 @@
+using EbedrendeloApp.Common.Security;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Calendar.GetUncoveredWorkdays;
 
-public sealed record GetUncoveredWorkdaysQuery(DateOnly From, DateOnly To) : IRequest<IReadOnlyList<DateOnly>>;
+public sealed record GetUncoveredWorkdaysQuery(DateOnly From, DateOnly To) : IRequest<IReadOnlyList<DateOnly>>, IRequireAdmin;

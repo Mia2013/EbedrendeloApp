@@ -1,0 +1,41 @@
+@using EbedrendeloApp.Features.Calendar
+
+@* Az időszak-választó öt oldalon volt újraírva (UserCalendar, MyOrders, AdminOrders, DailyMenuEditor,
+   AdminInvoices), mindegyik saját megjelenéssel. A betöltés a hívó dolga marad — több oldalnak úgyis
+   kell a lista maga is (alapértelmezett időszak kiválasztásához, névhez) —, ez a komponens csak a
+   megjelenítést és a kiválasztást egységesíti. *@
+
+<MudSelect T="int" Label="@Label" Value="Value" ValueChanged="ValueChanged"
+           Variant="Variant.Outlined" Margin="Margin.Dense"
+           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.DateRange"
+           Class="@($"panel-narrow-surface {Class}")" Disabled="@(Periods.Count == 0)">
+    @foreach (var period in Periods)
+    {
+        <MudSelectItem Value="@period.Id">@Format(period)</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<OrderingPeriodDto> Periods { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public int Value { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<int> ValueChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Rendelési időszak";
+
+    /// <summary>Ha hamis, csak az időszak neve látszik a dátumtartomány nélkül (szűk helyre).</summary>
+    [Parameter]
+    public bool ShowDateRange { get; set; } = true;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private string Format(OrderingPeriodDto period) => ShowDateRange
+        ? $"{period.Name} ({period.StartDate:yyyy.MM.dd.}–{period.EndDate:yyyy.MM.dd.})"
+        : period.Name;
+}

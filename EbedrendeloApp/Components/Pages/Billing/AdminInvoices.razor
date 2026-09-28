@@ -1,0 +1,239 @@
+﻿@page "/szamlak"
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Components.Shared
+@using EbedrendeloApp.Features.Billing.GeneratePeriodInvoices
+@using EbedrendeloApp.Features.Billing.GetInvoices
+@using EbedrendeloApp.Features.Calendar
+@using EbedrendeloApp.Features.Calendar.GetOrderingPeriods
+@using MediatR
+@inject IMediator Mediator
+@inject IDialogService DialogService
+@inject ICurrentUser CurrentUser
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Számlák</PageTitle>
+
+<PageHeader Icon="@Icons.Material.Filled.ReceiptLong" Title="Számlák">
+    <Description>
+        A számla a rendelési időszak tömeges leadási határidejének leteltével generálható, és csak a
+        menürendeléseket tartalmazza — az à la carte tételeket a dolgozó aznap fizeti. Újrafuttatva csak
+        az azóta leadott napokról készít kiegészítő számlát, a korábban kiszámlázottakat nem érinti.
+    </Description>
+    <Actions>
+        @if (periods.Count > 0)
+        {
+            <PeriodSelector Periods="periods" Value="generatePeriodId" ValueChanged="@(v => generatePeriodId = v)"
+                            Label="Időszak" ShowDateRange="false" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="GenerateAsync">
+                Számlák generálása
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+@if (generationSummary is not null)
+{
+    <MudAlert Severity="Severity.Success" Class="mt-4" ShowCloseIcon="true" CloseIconClicked="@(() => generationSummary = null)">
+        @generationSummary
+    </MudAlert>
+}
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
+    <MudStack Row Spacing="2">
+        @foreach (var option in StatusFilterOptions)
+        {
+            <MudChip T="string" Color="@(statusFilter == option ? Color.Primary : Color.Default)"
+                     Variant="@(statusFilter == option ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => SetStatusFilterAsync(option)">
+                @option
+            </MudChip>
+        }
+    </MudStack>
+
+    <MudSelect T="int?" Label="Időszak" Value="filterPeriodId" ValueChanged="OnFilterPeriodChangedAsync"
+               Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width:220px;">
+        @foreach (var period in periods)
+        {
+            <MudSelectItem Value="@((int?)period.Id)">@period.Name</MudSelectItem>
+        }
+    </MudSelect>
+</MudStack>
+
+<MudTable Items="invoices" Loading="@(invoices is null)" Hover="true" Elevation="1" Dense="true">
+    <HeaderContent>
+        <MudTh>Dolgozó</MudTh>
+        <MudTh>Időszak</MudTh>
+        <MudTh Style="text-align:right">Napok</MudTh>
+        <MudTh Style="text-align:right">Bruttó</MudTh>
+        <MudTh Style="text-align:right">Jóváírás</MudTh>
+        <MudTh Style="text-align:right">Fizetendő</MudTh>
+        <MudTh>Állapot</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nincs a szűrésnek megfelelő számla.</MudText>
+    </NoRecordsContent>
+    <RowTemplate>
+        <MudTd DataLabel="Dolgozó">@context.UserDisplayName</MudTd>
+        <MudTd DataLabel="Időszak" Class="mud-text-secondary">
+            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                <span>@context.PeriodName</span>
+                @if (context.SequenceNumber > 1)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                             title="Kiegészítő számla a korábbi számla kiállítása után leadott napokról">
+                        @context.SequenceNumber. számla
+                    </MudChip>
+                }
+            </MudStack>
+        </MudTd>
+        <MudTd DataLabel="Napok" Style="text-align:right">@context.DayCount</MudTd>
+        <MudTd DataLabel="Bruttó" Style="text-align:right">@HungarianNumberFormat.Huf(context.GrossHuf)</MudTd>
+        <MudTd DataLabel="Jóváírás" Style="text-align:right">
+            @if (context.CreditAppliedHuf > 0)
+            {
+                <MudText Color="Color.Success">&minus;@HungarianNumberFormat.Huf(context.CreditAppliedHuf)</MudText>
+            }
+            else
+            {
+                @HungarianNumberFormat.Huf(context.CreditAppliedHuf)
+            }
+        </MudTd>
+        <MudTd DataLabel="Fizetendő" Style="text-align:right"><b>@HungarianNumberFormat.Huf(context.PayableHuf)</b></MudTd>
+        <MudTd DataLabel="Állapot">
+            <MudStack Spacing="0">
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsPaid ? Color.Success : Color.Warning)"
+                         Variant="@(context.IsPaid ? Variant.Filled : Variant.Outlined)">
+                    @(context.IsPaid ? "Fizetve" : "Fizetetlen")
+                </MudChip>
+                @if (context.PaidAtUtc is { } paidAtUtc)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@paidAtUtc.ToLocalTime().ToString("yyyy.MM.dd.")</MudText>
+                }
+            </MudStack>
+        </MudTd>
+        <MudTd Style="text-align:right">
+            @if (!context.IsPaid)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Paid" Color="Color.Success" Size="Size.Small"
+                               title="Fizetettnek jelölés" OnClick="() => MarkPaidAsync(context)" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <FooterContent>
+        <MudTd colspan="5"><b>Összesen (@(invoices?.Count ?? 0) számla)</b></MudTd>
+        <MudTd Style="text-align:right"><b>@HungarianNumberFormat.Huf(invoices?.Sum(i => i.PayableHuf) ?? 0)</b></MudTd>
+        <MudTd colspan="2" />
+    </FooterContent>
+</MudTable>
+
+@code {
+    private static readonly string[] StatusFilterOptions = ["Mind", "Fizetetlen", "Fizetve"];
+
+    private List<OrderingPeriodDto> periods = [];
+    private int generatePeriodId;
+    private int? filterPeriodId;
+    private string statusFilter = "Mind";
+    private List<InvoiceDto>? invoices;
+    private string? generationSummary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        if (!CurrentUser.IsAdmin)
+        {
+            NavigationManager.NavigateTo("mai-menu");
+            return;
+        }
+
+        periods = (await Mediator.Send(new GetOrderingPeriodsQuery())).OrderByDescending(p => p.StartDate).ToList();
+        if (periods.Count > 0)
+        {
+            generatePeriodId = periods[0].Id;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        invoices = null;
+        StateHasChanged();
+
+        bool? isPaid = statusFilter switch
+        {
+            "Fizetetlen" => false,
+            "Fizetve" => true,
+            _ => null,
+        };
+
+        invoices = (await Mediator.Send(new GetInvoicesQuery(filterPeriodId, isPaid))).ToList();
+    }
+
+    private async Task SetStatusFilterAsync(string option)
+    {
+        statusFilter = option;
+        await LoadAsync();
+    }
+
+    private async Task OnFilterPeriodChangedAsync(int? periodId)
+    {
+        filterPeriodId = periodId;
+        await LoadAsync();
+    }
+
+    private static readonly DialogOptions DialogOptions = new()
+    {
+        CloseButton = true,
+        FullWidth = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private async Task GenerateAsync()
+    {
+        var period = periods.FirstOrDefault(p => p.Id == generatePeriodId);
+        if (period is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<GenerateInvoicesDialog> { { x => x.PeriodId, period.Id }, { x => x.PeriodName, period.Name } };
+        var dialogRef = await DialogService.ShowAsync<GenerateInvoicesDialog>("Számlák generálása", parameters, DialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false, Data: BatchInvoiceResult batchResult })
+        {
+            generationSummary = BuildGenerationSummary(period.Name, batchResult);
+            await LoadAsync();
+        }
+    }
+
+    private static string BuildGenerationSummary(string periodName, BatchInvoiceResult result)
+    {
+        if (result.Generated.Count == 0)
+        {
+            return $"{periodName}: nem volt kiszámlázatlan rendelés, nem készült új számla.";
+        }
+
+        var supplementary = result.Generated.Count(i => i.SequenceNumber > 1);
+        var text = $"{periodName}: {result.Generated.Count} számla legenerálva";
+        if (supplementary > 0)
+        {
+            text += $" (ebből {supplementary} kiegészítő számla a korábbi számlázás óta leadott napokról)";
+        }
+
+        return text + $", összesen {HungarianNumberFormat.Huf(result.Generated.Sum(i => i.PayableHuf))} fizetendő.";
+    }
+
+    private async Task MarkPaidAsync(InvoiceDto invoice)
+    {
+        var parameters = new DialogParameters<MarkInvoicePaidDialog> { { x => x.Invoice, invoice } };
+        var dialogRef = await DialogService.ShowAsync<MarkInvoicePaidDialog>("Számla fizetettnek jelölése", parameters, DialogOptions);
+        var result = await dialogRef.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Számla fizetettnek jelölve.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+}

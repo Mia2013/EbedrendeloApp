@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Formatting;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -12,7 +13,8 @@ public sealed class AddManualCreditHandler(
     IDbContextFactory<EbedrendeloDbContext> dbFactory,
     IAppClock clock,
     ICreditService creditService,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    ILogger<AddManualCreditHandler> logger)
     : IRequestHandler<AddManualCreditCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(AddManualCreditCommand request, CancellationToken cancellationToken)
@@ -35,11 +37,15 @@ public sealed class AddManualCreditHandler(
             request.TargetUserId,
             NotificationType.CreditIssued,
             "Jóváírás érkezett",
-            $"{request.AmountHuf} Ft jóváírás került a menü-egyenlegedhez. Indoklás: {request.Note}",
+            $"{HungarianNumberFormat.Huf(request.AmountHuf)} jóváírás került a menü-egyenlegedhez. Indoklás: {request.Note}",
             nowUtc);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Kézi jóváírás: {AmountHuf} Ft a(z) {TargetUserId} dolgozónak (tétel {EntryId}); rögzítette: {PerformedByUserId}",
+            request.AmountHuf, request.TargetUserId, entry.Id, request.PerformedByUserId);
 
         return Result.Success(entry.Id);
     }

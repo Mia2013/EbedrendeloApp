@@ -15,7 +15,8 @@ public sealed class CancelMenuOrdersHandler(
     IAppClock clock,
     IWorkingDayCalculator workingDayCalculator,
     ICreditService creditService,
-    INotificationService notificationService)
+    INotificationService notificationService,
+    ILogger<CancelMenuOrdersHandler> logger)
     : IRequestHandler<CancelMenuOrdersCommand, Result<BatchOrderResult>>
 {
     public async Task<Result<BatchOrderResult>> Handle(CancelMenuOrdersCommand request, CancellationToken cancellationToken)
@@ -97,13 +98,17 @@ public sealed class CancelMenuOrdersHandler(
             order.CancelledByUserId = request.CancelledByUserId;
             order.CancellationReason = CancellationReason.ByUser;
 
-            creditService.IssueCancellationCredit(db, order, request.CancelledByUserId, nowUtc);
+            // Jóváírás csak akkor keletkezik, ha a nap már ki volt számlázva (lásd ICreditService) —
+            // ezért az értesítés szövege sem állíthatja, hogy jóváírás történt.
+            var credit = creditService.IssueCancellationCredit(db, order, request.CancelledByUserId, nowUtc);
             notificationService.Notify(
                 db,
                 order.UserId,
-                NotificationType.CreditIssued,
+                credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
                 "Rendelésed lemondva",
-                $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került.",
+                credit is null
+                    ? $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                    : $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került.",
                 nowUtc,
                 date,
                 order.Id);
@@ -113,6 +118,10 @@ public sealed class CancelMenuOrdersHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Lemondás: {TargetUserId} dolgozó {SucceededCount} napja lemondva, {SkippedCount} kihagyva; kérte: {CancelledByUserId}",
+            request.TargetUserId, succeeded.Count, skipped.Count, request.CancelledByUserId);
 
         return Result.Success(new BatchOrderResult(succeeded, skipped));
     }

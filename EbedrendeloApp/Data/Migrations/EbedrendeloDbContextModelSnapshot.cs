@@ -510,6 +510,9 @@ namespace EbedrendeloApp.Data.Migrations
                     b.Property<int>("OrderingPeriodId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PeriodInvoiceId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("PlacedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -540,6 +543,8 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("MenuVariantId");
 
+                    b.HasIndex("PeriodInvoiceId");
+
                     b.HasIndex("PlacedByUserId");
 
                     b.HasIndex("Date", "Status");
@@ -549,6 +554,8 @@ namespace EbedrendeloApp.Data.Migrations
                     b.HasIndex("UserId", "Date")
                         .IsUnique()
                         .HasFilter("[Status] = 0");
+
+                    b.HasIndex("OrderingPeriodId", "Status", "PeriodInvoiceId");
 
                     b.ToTable("MenuOrders");
                 });
@@ -654,12 +661,6 @@ namespace EbedrendeloApp.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("ALaCarteGrossHuf")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ALaCartePayableHuf")
-                        .HasColumnType("int");
-
                     b.Property<int>("CreditAppliedHuf")
                         .HasColumnType("int");
 
@@ -675,12 +676,6 @@ namespace EbedrendeloApp.Data.Migrations
                     b.Property<int?>("MarkedPaidByUserId")
                         .HasColumnType("int");
 
-                    b.Property<int>("MenuGrossHuf")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MenuPayableHuf")
-                        .HasColumnType("int");
-
                     b.Property<int>("OrderingPeriodId")
                         .HasColumnType("int");
 
@@ -688,6 +683,9 @@ namespace EbedrendeloApp.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<int>("PayableHuf")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SequenceNumber")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
@@ -699,7 +697,7 @@ namespace EbedrendeloApp.Data.Migrations
 
                     b.HasIndex("OrderingPeriodId");
 
-                    b.HasIndex("UserId", "OrderingPeriodId")
+                    b.HasIndex("UserId", "OrderingPeriodId", "SequenceNumber")
                         .IsUnique();
 
                     b.ToTable("PeriodInvoices");
@@ -987,6 +985,11 @@ namespace EbedrendeloApp.Data.Migrations
                         .HasForeignKey("OrderingPeriodId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("EbedrendeloApp.Domain.Entities.PeriodInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("PeriodInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EbedrendeloApp.Domain.Entities.User", null)
                         .WithMany()

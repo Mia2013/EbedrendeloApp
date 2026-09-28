@@ -1,0 +1,60 @@
+@* Egységes betöltés / hiba / üres állapot. Eddig oldalanként háromféleképp volt megoldva
+   (MudProgressCircular / semmi / `@if (x is null)`), az üres állapotra pedig nem volt közös minta.
+
+   A hibaág egyben a `result.Value!` kiváltása is: a sikertelen `Result` így látható hibaüzenet lesz,
+   nem NullReferenceException. *@
+
+@if (IsLoading)
+{
+    <div class="page-state">
+        <MudProgressCircular Indeterminate="true" Size="Size.Medium" Color="Color.Primary" />
+        @if (!string.IsNullOrEmpty(LoadingText))
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@LoadingText</MudText>
+        }
+    </div>
+}
+else if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <MudAlert Severity="Severity.Error" Class="mt-4">@ErrorMessage</MudAlert>
+}
+else if (IsEmpty)
+{
+    <div class="page-state">
+        <MudIcon Icon="@EmptyIcon" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">@EmptyText</MudText>
+        @EmptyActions
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    /// <summary>A szerver hibaüzenete (<c>Result.ErrorMessage</c>), ha a betöltés elbukott.</summary>
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public bool IsEmpty { get; set; }
+
+    [Parameter]
+    public string EmptyText { get; set; } = "Nincs megjeleníthető adat.";
+
+    [Parameter]
+    public string EmptyIcon { get; set; } = Icons.Material.Filled.Inbox;
+
+    [Parameter]
+    public string? LoadingText { get; set; }
+
+    /// <summary>Üres állapotban felkínált művelet (pl. „Új tétel felvétele").</summary>
+    [Parameter]
+    public RenderFragment? EmptyActions { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

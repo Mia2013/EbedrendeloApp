@@ -43,9 +43,9 @@ public class ExcludeDayHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancels_active_orders_and_issues_full_credit_and_notification()
+    public async Task Cancels_active_invoiced_orders_and_issues_full_credit_and_notification()
     {
-        var (periodId, orderId) = await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400);
+        var (periodId, orderId) = await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400, invoiced: true);
 
         var result = await sut.Handle(new ExcludeDayCommand(new DateOnly(2026, 8, 20), "Karbantartás", CreatedByUserId: adminId), CancellationToken.None);
 
@@ -72,6 +72,26 @@ public class ExcludeDayHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancels_uninvoiced_orders_without_issuing_credit()
+    {
+        // A napot kizárjuk, de a rendelés még nem volt kiszámlázva — nincs mit jóváírni, különben a
+        // dolgozó pénzt kapna egy soha ki nem fizetett napért.
+        var (_, orderId) = await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400, invoiced: false);
+
+        var result = await sut.Handle(new ExcludeDayCommand(new DateOnly(2026, 8, 20), "Karbantartás", CreatedByUserId: adminId), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await using var db = dbFactory.CreateDbContext();
+        var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+        Assert.Equal(OrderStatus.Cancelled, order.Status);
+        Assert.False(await db.CreditEntries.AnyAsync(c => c.SourceMenuOrderId == orderId));
+
+        var notification = await db.UserNotifications.SingleAsync(n => n.UserId == order.UserId);
+        Assert.Contains("nem volt kiszámlázva", notification.Message);
+    }
+
+    [Fact]
     public async Task Rejects_when_the_day_is_already_excluded()
     {
         await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400);
@@ -84,7 +104,9 @@ public class ExcludeDayHandlerTests : IDisposable
         Assert.Equal(ErrorCodes.DayExcluded, second.ErrorCode);
     }
 
-    private async Task<(int periodId, int orderId)> SeedActiveOrderAsync(DateOnly date, int price)
+    /// <param name="invoiced">Ha igaz, a rendelés egy már kiállított számlához tartozik — a kizárás
+    /// jóváírása csak ilyenkor keletkezik (lásd ICreditService).</param>
+    private async Task<(int periodId, int orderId)> SeedActiveOrderAsync(DateOnly date, int price, bool invoiced = true)
     {
         await using var db = dbFactory.CreateDbContext();
 
@@ -116,6 +138,24 @@ public class ExcludeDayHandlerTests : IDisposable
         userId = user.Id;
         adminId = admin.Id;
 
+        int? invoiceId = null;
+        if (invoiced)
+        {
+            var invoice = new PeriodInvoice
+            {
+                UserId = user.Id,
+                OrderingPeriodId = period.Id,
+                SequenceNumber = 1,
+                GrossHuf = price,
+                CreditAppliedHuf = 0,
+                PayableHuf = price,
+                GeneratedAtUtc = date.AddDays(-14).ToDateTime(new TimeOnly(9, 0)),
+            };
+            db.PeriodInvoices.Add(invoice);
+            await db.SaveChangesAsync();
+            invoiceId = invoice.Id;
+        }
+
         var order = new MenuOrder
         {
             UserId = user.Id,
@@ -125,6 +165,7 @@ public class ExcludeDayHandlerTests : IDisposable
             PriceHuf = price,
             Status = OrderStatus.Active,
             PlacedByUserId = user.Id,
+            PeriodInvoiceId = invoiceId,
         };
         db.MenuOrders.Add(order);
         await db.SaveChangesAsync();

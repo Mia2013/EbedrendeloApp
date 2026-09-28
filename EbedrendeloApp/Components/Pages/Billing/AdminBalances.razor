@@ -1,4 +1,4 @@
-@page "/egyenlegek"
+﻿@page "/egyenlegek"
 @using EbedrendeloApp.Common.Billing
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Billing.GetBalances
@@ -12,21 +12,17 @@
 
 <PageTitle>Egyenlegek</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Egyenlegek</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                A dolgozók aktuális jóváírás-egyenlege. A 0 Ft-os egyenlegű dolgozók itt nem jelennek meg —
-                bármelyik dolgozónak az "Új jóváírás" gombbal rögzíthetsz jóváírást.
-            </MudText>
-        </MudStack>
+<PageHeader Icon="@Icons.Material.Filled.AccountBalanceWallet" Title="Egyenlegek">
+    <Description>
+        A dolgozók aktuális jóváírás-egyenlege. A 0 Ft-os egyenlegű dolgozók itt nem jelennek meg —
+        bármelyik dolgozónak az "Új jóváírás" gombbal rögzíthetsz jóváírást.
+    </Description>
+    <Actions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddCreditAsync()">
             Új jóváírás
         </MudButton>
-    </MudStack>
-</MudPaper>
+    </Actions>
+</PageHeader>
 
 <MudTextField T="string" Value="searchText" ValueChanged="@(v => searchText = v)" Immediate="true"
               Label="Keresés név vagy szervezet szerint" Variant="Variant.Outlined"
@@ -151,7 +147,7 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).Value!.ToList();
+    private async Task LoadAsync() => balances = (await Mediator.Send(new GetBalancesQuery())).ToList();
 
     private bool IsHistoryExpanded(int userId) => expandedUserIds.Contains(userId);
 
@@ -165,8 +161,7 @@
 
         if (!historyByUserId.ContainsKey(userId))
         {
-            var result = await Mediator.Send(new GetMyCreditLedgerQuery(userId));
-            historyByUserId[userId] = result.Value!.ToList();
+            historyByUserId[userId] = (await Mediator.Send(new GetMyCreditLedgerQuery(userId))).ToList();
         }
     }
 

@@ -1,4 +1,4 @@
-@page "/egyenlegem"
+﻿@page "/egyenlegem"
 @using EbedrendeloApp.Common.Billing
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Features.Billing.GetMyBalance
@@ -9,17 +9,11 @@
 
 <PageTitle>Egyenlegem</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Egyenlegem</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                A jóváírásaid egyenlege és a mögöttük álló tételes könyvelés.
-            </MudText>
-        </MudStack>
-    </MudStack>
-</MudPaper>
+<PageHeader Icon="@Icons.Material.Filled.AccountBalanceWallet" Title="Egyenlegem">
+    <Description>
+        A jóváírásaid egyenlege és a mögöttük álló tételes könyvelés.
+    </Description>
+</PageHeader>
 
 <MudPaper Elevation="1" Class="pa-4 rounded-lg mt-4">
     @if (balanceHuf is null)
@@ -70,10 +64,7 @@
     {
         await CurrentUser.EnsureLoadedAsync();
 
-        var balanceResult = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
-        balanceHuf = balanceResult.Value;
-
-        var ledgerResult = await Mediator.Send(new GetMyCreditLedgerQuery(CurrentUser.UserId));
-        ledger = ledgerResult.Value!.ToList();
+        balanceHuf = await Mediator.Send(new GetMyBalanceQuery(CurrentUser.UserId));
+        ledger = (await Mediator.Send(new GetMyCreditLedgerQuery(CurrentUser.UserId))).ToList();
     }
 }

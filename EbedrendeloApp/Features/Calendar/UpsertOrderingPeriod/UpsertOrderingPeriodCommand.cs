@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using MediatR;
 
@@ -9,4 +10,4 @@ public sealed record UpsertOrderingPeriodCommand(
     DateOnly StartDate,
     DateOnly EndDate,
     DateTime OrderDeadline,
-    bool IsOpen) : IRequest<Result<OrderingPeriodDto>>;
+    bool IsOpen) : IRequest<Result<OrderingPeriodDto>>, IRequireAdmin;

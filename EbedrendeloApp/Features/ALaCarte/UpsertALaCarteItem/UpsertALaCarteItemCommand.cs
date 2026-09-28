@@ -1,3 +1,4 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
@@ -19,4 +20,4 @@ public sealed record UpsertALaCarteItemCommand(
     decimal? CarbohydrateGrams = null,
     decimal? SugarGrams = null,
     decimal? ProteinGrams = null,
-    decimal? SaltGrams = null) : IRequest<Result<ALaCarteItemDto>>;
+    decimal? SaltGrams = null) : IRequest<Result<ALaCarteItemDto>>, IRequireAdmin;

@@ -8,10 +8,14 @@ namespace EbedrendeloApp.Data.Seed;
 /// <summary>
 /// Demo/dev data. Every date is derived from <c>DateTime.Now</c> at seed time (never a fixed literal),
 /// so a freshly created database always looks "current" — roughly a month of history behind today and a
-/// month of orderable days ahead — no matter when the app is first run. Each Seed*Async method still
-/// short-circuits if its table already has rows (see e.g. <see cref="SeedUsersAsync"/>), so re-running
-/// this against an already-seeded database is a no-op: to get fresh dates again the database itself has
-/// to be recreated first.
+/// month of orderable days ahead — no matter when the app is first run.
+///
+/// Az <b>egy</b> kivétellel minden Seed*Async metódus kilép, ha a saját táblájában már van sor, tehát
+/// újrafuttatva no-op: friss dátumokhoz az adatbázist újra kell hozni. A kivétel a
+/// <see cref="SeedUsersAsync"/>, ami <c>UserId</c> szerint a <see cref="SeedCatalog.Users"/>-hoz igazítja
+/// a meglévő sorokat — enélkül egy már seedelt fejlesztői adatbázis sosem kapná meg a katalógus
+/// változásait. Ez <b>minden induláskor</b> ír, ha a katalógus eltér a DB-től (a <c>Program.cs</c> nem
+/// köti fejlesztői környezethez), és felülírja a nevet is: éles használat előtt ezt kapuzni kell.
 /// </summary>
 public static class DatabaseSeeder
 {
@@ -83,37 +87,56 @@ public static class DatabaseSeeder
         return setting;
     }
 
+    /// <summary>
+    /// A többi Seed*Async metódussal ellentétben ez nem lép ki azonnal, ha a tábla már nem üres, hanem
+    /// <see cref="SeedCatalog.Users"/>-hoz igazítja a meglévő sorokat (<c>UserId</c> szerint párosítva).
+    /// Enélkül egy már seedelt fejlesztői adatbázis sosem kapná meg a katalógus változásait — csak a DB
+    /// eldobásával, ami a kézzel felvitt rendeléseket/számlákat is vinné.
+    ///
+    /// Ezért a névváltozás is átmegy: ha egy <c>UserId</c> mögött a katalógusban más név áll, a meglévő
+    /// felhasználó átnevezésre kerül, és a rendelései/jóváírásai ezután az új néven jelennek meg. Demo-
+    /// adatnál ez a kívánt viselkedés. A katalógusban nem szereplő felhasználókat nem bántjuk, a
+    /// <c>RoleId</c>-t pedig meglévő soron nem írjuk felül (kézi szerepkör-állítás megmarad).
+    /// </summary>
     private static async Task<List<User>> SeedUsersAsync(EbedrendeloDbContext db, Dictionary<string, Role> roles, CancellationToken ct)
     {
-        if (await db.Users.AnyAsync(ct))
-        {
-            return await db.Users.ToListAsync(ct);
-        }
-
         var adminRoleId = roles[AdminRoleName].Id;
         var userRoleId = roles[UserRoleName].Id;
 
-        var users = new List<User>
-        {
-            new() { UserId = 1001, UserName = "admin", KeresztNev = "Rendszer", VezetekNev = "Adminisztrátor", Igazgatosag = "Központ", Osztaly = "Informatika", Rf = "RF-000", SzervKod = "KOZP", RoleId = adminRoleId },
-            new() { UserId = 1002, UserName = "kovacs.j", KeresztNev = "János", VezetekNev = "Kovács", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-101", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1003, UserName = "nagy.a", KeresztNev = "Anna", VezetekNev = "Nagy", Igazgatosag = "Gyártás", Osztaly = "1. üzem", Rf = "RF-102", SzervKod = "GY01", RoleId = userRoleId },
-            new() { UserId = 1004, UserName = "szabo.p", KeresztNev = "Péter", VezetekNev = "Szabó", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-103", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1005, UserName = "toth.e", KeresztNev = "Eszter", VezetekNev = "Tóth", Igazgatosag = "Gyártás", Osztaly = "2. üzem", Rf = "RF-104", SzervKod = "GY02", RoleId = userRoleId },
-            new() { UserId = 1006, UserName = "varga.b", KeresztNev = "Balázs", VezetekNev = "Varga", Igazgatosag = "Logisztika", Osztaly = "Raktár", Rf = "RF-105", SzervKod = "GY03", RoleId = userRoleId },
-            new() { UserId = 1007, UserName = "horvath.k", KeresztNev = "Katalin", VezetekNev = "Horváth", Igazgatosag = "Logisztika", Osztaly = "Szállítás", Rf = "RF-106", SzervKod = "GY03", RoleId = userRoleId },
-            new() { UserId = 1008, UserName = "kiss.z", KeresztNev = "Zoltán", VezetekNev = "Kiss", Igazgatosag = "Pénzügy", Osztaly = "Könyvelés", Rf = "RF-107", SzervKod = "PU01", RoleId = userRoleId },
-            new() { UserId = 1009, UserName = "molnar.r", KeresztNev = "Réka", VezetekNev = "Molnár", Igazgatosag = "Pénzügy", Osztaly = "Kontrolling", Rf = "RF-108", SzervKod = "PU01", RoleId = userRoleId },
-            new() { UserId = 1010, UserName = "farkas.g", KeresztNev = "Gábor", VezetekNev = "Farkas", Igazgatosag = "HR", Osztaly = "Toborzás", Rf = "RF-109", SzervKod = "HR01", RoleId = userRoleId },
-            new() { UserId = 1011, UserName = "papp.zs", KeresztNev = "Zsófia", VezetekNev = "Papp", Igazgatosag = "HR", Osztaly = "Bérszámfejtés", Rf = "RF-110", SzervKod = "HR01", RoleId = userRoleId },
-            new() { UserId = 1012, UserName = "balogh.t", KeresztNev = "Tamás", VezetekNev = "Balogh", Igazgatosag = "Informatika", Osztaly = "Fejlesztés", Rf = "RF-111", SzervKod = "IT01", RoleId = userRoleId },
-            new() { UserId = 1013, UserName = "szucs.n", KeresztNev = "Nóra", VezetekNev = "Szűcs", Igazgatosag = "Informatika", Osztaly = "Üzemeltetés", Rf = "RF-112", SzervKod = "IT01", RoleId = userRoleId },
-            new() { UserId = 1014, UserName = "juhasz.m", KeresztNev = "Márton", VezetekNev = "Juhász", Igazgatosag = "Gyártás", Osztaly = "3. üzem", Rf = "RF-113", SzervKod = "GY04", RoleId = userRoleId },
-        };
+        var existingByUserId = await db.Users.ToDictionaryAsync(u => u.UserId, ct);
 
-        db.Users.AddRange(users);
+        foreach (var seed in SeedCatalog.Users)
+        {
+            if (existingByUserId.TryGetValue(seed.UserId, out var user))
+            {
+                user.UserName = seed.UserName;
+                user.VezetekNev = seed.VezetekNev;
+                user.KeresztNev = seed.KeresztNev;
+                user.Igazgatosag = seed.Igazgatosag;
+                user.Osztaly = seed.Osztaly;
+                user.Rf = seed.Rf;
+                user.SzervKod = seed.SzervKod;
+                continue;
+            }
+
+            db.Users.Add(new User
+            {
+                UserId = seed.UserId,
+                UserName = seed.UserName,
+                VezetekNev = seed.VezetekNev,
+                KeresztNev = seed.KeresztNev,
+                Igazgatosag = seed.Igazgatosag,
+                Osztaly = seed.Osztaly,
+                Rf = seed.Rf,
+                SzervKod = seed.SzervKod,
+                RoleId = seed.IsAdmin ? adminRoleId : userRoleId,
+            });
+        }
+
+        // Változatlan adaton ez nem küld parancsot az adatbázisnak, tehát újrafuttatva no-op.
         await db.SaveChangesAsync(ct);
-        return users;
+
+        return await db.Users.ToListAsync(ct);
     }
 
     /// <summary>
@@ -468,27 +491,44 @@ public static class DatabaseSeeder
         db.MenuOrders.AddRange(orders);
         await db.SaveChangesAsync(ct);
 
+        var admin = users.First(u => u.RoleId == roles[AdminRoleName].Id);
+        await SeedPastPeriodInvoicesAsync(db, orders, periods[0], admin.Id, ct);
+
         // Now that the cancelled orders have real Ids, issue their cancellation credit + notification.
         var notifications = new List<UserNotification>();
         var creditEntries = new List<CreditEntry>();
         foreach (var cancelled in orders.Where(o => o.Status == OrderStatus.Cancelled))
         {
-            creditEntries.Add(new CreditEntry
+            // Jóváírás CSAK kiszámlázott napért jár (ICreditService / AC 3.2.3). A seed sem hozhat létre
+            // „ingyen pénzt": ha ezt a napot soha nem számláztuk ki, a dolgozó ki sem fizette, a
+            // delta-számlázás pedig eleve nem teszi rá egyetlen számlára sem. Enélkül az első éles
+            // számlagenerálás ezekkel a fantom-jóváírásokkal csökkentené a valódi számlákat.
+            var isInvoiced = cancelled.PeriodInvoiceId is not null;
+            if (isInvoiced)
             {
-                UserId = cancelled.UserId,
-                AmountHuf = cancelled.PriceHuf,
-                Kind = CreditEntryKind.CancellationCredit,
-                CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
-                CreatedByUserId = cancelled.CancelledByUserId!.Value,
-                SourceMenuOrderId = cancelled.Id,
-                RemainingHuf = cancelled.PriceHuf,
-            });
+                creditEntries.Add(new CreditEntry
+                {
+                    UserId = cancelled.UserId,
+                    AmountHuf = cancelled.PriceHuf,
+                    Kind = CreditEntryKind.CancellationCredit,
+                    CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
+                    CreatedByUserId = cancelled.CancelledByUserId!.Value,
+                    SourceMenuOrderId = cancelled.Id,
+                    RemainingHuf = cancelled.PriceHuf,
+                });
+            }
 
-            var (type, title, message) = cancelled.CancellationReason == CancellationReason.DayExcluded
-                ? (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
-                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került, a rendelésed jóváírásra került.")
-                : (NotificationType.CreditIssued, "Jóváírás keletkezett",
-                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi lemondásod után {cancelled.PriceHuf} Ft jóváírás került az egyenlegedre.");
+            var (type, title, message) = (cancelled.CancellationReason, isInvoiced) switch
+            {
+                (CancellationReason.DayExcluded, true) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került, a rendelésed jóváírásra került."),
+                (CancellationReason.DayExcluded, false) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."),
+                (_, true) => (NotificationType.CreditIssued, "Jóváírás keletkezett",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi lemondásod után {cancelled.PriceHuf} Ft jóváírás került az egyenlegedre."),
+                _ => (NotificationType.MenuCancelled, "Rendelésed lemondva",
+                    $"A(z) {cancelled.Date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."),
+            };
 
             notifications.Add(new UserNotification
             {
@@ -498,13 +538,12 @@ public static class DatabaseSeeder
                 Message = message,
                 RelatedDate = cancelled.Date,
                 RelatedMenuOrderId = cancelled.Id,
-                CreatedAtUtc = cancelled.CancelledAtUtc.Value,
+                CreatedAtUtc = cancelled.CancelledAtUtc!.Value,
             });
         }
 
         // A little variety beyond auto-generated cancellation credits, so the balances/ledger views show
         // a manual adjustment and a revoked credit too, not just cancellation credits.
-        var admin = users.First(u => u.RoleId == roles[AdminRoleName].Id);
         var creditSubject = workers[0];
 
         var manualCredit = new CreditEntry
@@ -560,6 +599,62 @@ public static class DatabaseSeeder
             Note = "A korrekció tévesen lett kiadva, visszavonva",
             RemainingHuf = 0,
         });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// A lezárt előző időszakot a valóságban már kiszámláztuk, ezért a seed is kiállítja rá a számlákat,
+    /// és rábélyegzi a <see cref="MenuOrder.PeriodInvoiceId"/>-t az összes odatartozó rendelésre (a
+    /// lemondottakra is — azok a lemondás pillanatában még rajta voltak a számlán).
+    ///
+    /// Ez nem kozmetika: a jóváírás keletkezésének feltétele, hogy a nap ki legyen számlázva, tehát
+    /// enélkül a seedelt lemondásokért egyáltalán nem járna jóváírás, és az egyenleg-képernyők üresek
+    /// lennének. A folyó és a következő időszak szándékosan számlázatlan marad — azokon a
+    /// „Számlák generálása" gomb mutatható be.
+    /// </summary>
+    private static async Task SeedPastPeriodInvoicesAsync(
+        EbedrendeloDbContext db, List<MenuOrder> orders, OrderingPeriod pastPeriod, int adminUserId, CancellationToken ct)
+    {
+        var pastOrders = orders.Where(o => o.OrderingPeriodId == pastPeriod.Id).ToList();
+        if (pastOrders.Count == 0)
+        {
+            return;
+        }
+
+        var generatedAtUtc = pastPeriod.OrderDeadline.AddHours(1);
+
+        var invoices = pastOrders
+            .GroupBy(o => o.UserId)
+            .OrderBy(g => g.Key)
+            .Select((g, index) =>
+            {
+                var gross = g.Sum(o => o.PriceHuf);
+                return new PeriodInvoice
+                {
+                    UserId = g.Key,
+                    OrderingPeriodId = pastPeriod.Id,
+                    SequenceNumber = 1,
+                    GrossHuf = gross,
+                    CreditAppliedHuf = 0,
+                    PayableHuf = gross,
+                    // Minden második számla fizetettként, hogy mindkét állapot látszódjon a listában.
+                    IsPaid = index % 2 == 0,
+                    PaidAtUtc = index % 2 == 0 ? generatedAtUtc.AddDays(5) : null,
+                    MarkedPaidByUserId = index % 2 == 0 ? adminUserId : null,
+                    GeneratedAtUtc = generatedAtUtc,
+                };
+            })
+            .ToList();
+
+        db.PeriodInvoices.AddRange(invoices);
+        await db.SaveChangesAsync(ct);
+
+        var invoiceIdByUserId = invoices.ToDictionary(i => i.UserId, i => i.Id);
+        foreach (var order in pastOrders)
+        {
+            order.PeriodInvoiceId = invoiceIdByUserId[order.UserId];
+        }
+
         await db.SaveChangesAsync(ct);
     }
 

@@ -1,11 +1,9 @@
-using System.Data;
+﻿using System.Data;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
 using EbedrendeloApp.Data;
 using EbedrendeloApp.Domain.Entities;
-using EbedrendeloApp.Domain.Enums;
-using EbedrendeloApp.Features.Orders;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,27 +27,22 @@ public sealed class CloseDayHandler(IDbContextFactory<EbedrendeloDbContext> dbFa
             return Result.Failure<KitchenClosureDto>(ErrorCodes.DayClosed, "A nap már le van zárva.");
         }
 
-        // AC 6.1.3 / 6.2.1: only Active orders count, and the variant Code/Name are snapshotted as they
-        // are right now — a later menu edit must not retroactively change what this closure recorded.
-        var grouped = await db.MenuOrders
-            .Where(o => o.Date == request.Date && o.Status == OrderStatus.Active)
-            .Join(db.MenuVariants, o => o.MenuVariantId, v => v.Id, (o, v) => v)
-            .GroupBy(v => new { v.Code, v.SoupName, v.MainCourseName })
-            .Select(g => new { g.Key.Code, g.Key.SoupName, g.Key.MainCourseName, Quantity = g.Count() })
-            .ToListAsync(cancellationToken);
+        // AC 6.1.3 / 6.2.1: csak az Active rendelés számít, és a variáns kódja/neve a MOSTANI állapot
+        // pillanatképe — egy későbbi menü-szerkesztés nem írhatja át visszamenőleg, mit rögzített ez a
+        // zárás. A nem rendelt variáns is bekerül, 0 adaggal, hogy a pillanatkép ugyanazt mutassa,
+        // amit a konyha záráskor a képernyőn látott.
+        var live = await KitchenSummaryLines.LoadLiveVariantsAsync(db, request.Date, request.Date, cancellationToken);
+        var ordered = await KitchenSummaryLines.LoadOrderedVariantsAsync(db, request.Date, request.Date, cancellationToken);
+        var orderedLines = KitchenSummaryLines.Build(live, ordered);
 
         var nowUtc = clock.UtcNow.UtcDateTime;
-
-        var orderedLines = grouped
-            .OrderBy(g => g.Code, StringComparer.Ordinal)
-            .ToList();
 
         var closure = new KitchenClosure
         {
             Date = request.Date,
             ClosedAtUtc = nowUtc,
             ClosedByUserId = request.ClosedByUserId,
-            TotalPortions = orderedLines.Sum(g => g.Quantity),
+            TotalPortions = orderedLines.Sum(l => l.Quantity),
         };
         db.KitchenClosures.Add(closure);
 
@@ -58,12 +51,12 @@ public sealed class CloseDayHandler(IDbContextFactory<EbedrendeloDbContext> dbFa
         await db.SaveChangesAsync(cancellationToken);
 
         var lines = orderedLines
-            .Select(g => new KitchenClosureLine
+            .Select(l => new KitchenClosureLine
             {
                 KitchenClosureId = closure.Id,
-                VariantCode = g.Code,
-                VariantNameSnapshot = VariantDisplayName.Combine(g.SoupName, g.MainCourseName),
-                Quantity = g.Quantity,
+                VariantCode = l.VariantCode,
+                VariantNameSnapshot = l.VariantName,
+                Quantity = l.Quantity,
             })
             .ToList();
         db.KitchenClosureLines.AddRange(lines);

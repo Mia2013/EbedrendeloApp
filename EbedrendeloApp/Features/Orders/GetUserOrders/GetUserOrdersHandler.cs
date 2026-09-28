@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Orders.GetUserOrders;
 
 public sealed class GetUserOrdersHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetUserOrdersQuery, Result<IReadOnlyList<UserOrderDto>>>
+    : IRequestHandler<GetUserOrdersQuery, IReadOnlyList<UserOrderDto>>
 {
-    public async Task<Result<IReadOnlyList<UserOrderDto>>> Handle(GetUserOrdersQuery request, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<UserOrderDto>> Handle(GetUserOrdersQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -55,6 +54,6 @@ public sealed class GetUserOrdersHandler(IDbContextFactory<EbedrendeloDbContext>
                 o.CancellationReason);
         }).ToList();
 
-        return Result.Success<IReadOnlyList<UserOrderDto>>(result);
+        return result;
     }
 }

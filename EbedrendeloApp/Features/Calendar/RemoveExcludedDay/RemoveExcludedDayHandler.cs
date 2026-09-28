@@ -63,7 +63,6 @@ public sealed class RemoveExcludedDayHandler(
         // materially, switch to a table-valued parameter / temp-table join instead of inline IN lists.
         var orderIds = candidates.Select(o => o.Id).ToList();
         var userIds = candidates.Select(o => o.UserId).Distinct().ToList();
-        var periodIds = candidates.Select(o => o.OrderingPeriodId).Distinct().ToList();
         var candidateDates = candidates.Select(o => o.Date).Distinct().ToList();
 
         var userNames = await db.Users
@@ -96,13 +95,6 @@ public sealed class RemoveExcludedDayHandler(
                     ?? g.OrderByDescending(c => c.Id).First();
             });
 
-        var invoicedUserPeriods = (await db.PeriodInvoices
-            .Where(i => userIds.Contains(i.UserId) && periodIds.Contains(i.OrderingPeriodId))
-            .Select(i => new { i.UserId, i.OrderingPeriodId })
-            .ToListAsync(cancellationToken))
-            .Select(i => (i.UserId, i.OrderingPeriodId))
-            .ToHashSet();
-
         var activeOrdersOnCandidateDates = await db.MenuOrders
             .Where(o => o.Status == OrderStatus.Active && userIds.Contains(o.UserId) && candidateDates.Contains(o.Date))
             .Select(o => new { o.Id, o.UserId, o.Date })
@@ -115,21 +107,25 @@ public sealed class RemoveExcludedDayHandler(
         {
             var creditEntry = creditEntryByOrderId.GetValueOrDefault(order.Id);
 
-            var hasInvoice = invoicedUserPeriods.Contains((order.UserId, order.OrderingPeriodId));
-
             var hasNewerActiveOrder = activeOrdersOnCandidateDates
                 .Any(a => a.Id != order.Id && a.UserId == order.UserId && a.Date == order.Date);
 
             var userName = userNames.GetValueOrDefault(order.UserId, "Ismeretlen felhasználó");
 
+            // A ki nem számlázott napok lemondása nem szül jóváírást (lásd ICreditService), így itt a
+            // hiányzó CreditEntry a normális eset — ilyenkor csak vissza kell állítani a rendelést,
+            // visszavonni való jóváírás nincs. A rendelés PeriodInvoiceId-ja érintetlen marad: ha már ki
+            // volt számlázva, a visszaállítás után is arra a számlára tartozik, tehát nem számlázódik újra.
+            var wasInvoiced = order.PeriodInvoiceId is not null;
+
             string? skipReason = null;
-            if (creditEntry is null || creditEntry.RemainingHuf != creditEntry.AmountHuf)
+            if (wasInvoiced && creditEntry is null)
+            {
+                skipReason = "nem található a lemondáskor keletkezett jóváírása, ezért nem állítható vissza automatikusan";
+            }
+            else if (creditEntry is not null && creditEntry.RemainingHuf != creditEntry.AmountHuf)
             {
                 skipReason = "a jóváírása időközben felhasználásra került, nem vonható vissza automatikusan";
-            }
-            else if (hasInvoice)
-            {
-                skipReason = "erre az időszakra már készült számla, a jóváírása nem vonható vissza automatikusan";
             }
             else if (hasNewerActiveOrder)
             {
@@ -144,7 +140,11 @@ public sealed class RemoveExcludedDayHandler(
                 order.CancellationReason = null;
                 order.CancelledByExcludedDayId = null;
 
-                creditService.RevokeCredit(db, creditEntry!, request.PerformedByUserId, nowUtc, "Kizárás visszavonva");
+                if (creditEntry is not null)
+                {
+                    creditService.RevokeCredit(db, creditEntry, request.PerformedByUserId, nowUtc, "Kizárás visszavonva");
+                }
+
                 notificationService.Notify(
                     db,
                     order.UserId,
@@ -169,7 +169,7 @@ public sealed class RemoveExcludedDayHandler(
                     order.UserId,
                     NotificationType.DayReopened,
                     "A nap újranyitva",
-                    $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, a jóváírásod megmarad, a leadási határidőn belül újra rendelhetsz.",
+                    $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de a rendelésed nem állt vissza automatikusan — a leadási határidőn belül újra rendelhetsz.",
                     nowUtc,
                     request.Date,
                     order.Id);

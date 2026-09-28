@@ -1,9 +1,10 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Menus.GetMenuDishSuggestions;
 
-public sealed record GetMenuDishSuggestionsQuery : IRequest<MenuDishSuggestionsDto>;
+public sealed record GetMenuDishSuggestionsQuery : IRequest<MenuDishSuggestionsDto>, IRequireAdmin;
 
 public sealed record MenuDishDto(
     string Name,

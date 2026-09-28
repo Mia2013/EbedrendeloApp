@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using Bunit.TestDoubles;
 using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Common.Security;
@@ -46,8 +46,8 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(2, "Kovács János", 2200, "Gyártás", "1. üzem")]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(2, "Kovács János", 2200, "Gyártás", "1. üzem")]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -62,8 +62,8 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(2, "Kovács János", 2200, igazgatosag: "Gyártás", osztaly: null)]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(2, "Kovács János", 2200, igazgatosag: "Gyártás", osztaly: null)]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -77,11 +77,11 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(_ => Result.Success<IReadOnlyList<UserBalanceDto>>(
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(_ => 
         [
             Balance(2, "Kovács János", 2200),
             Balance(3, "Tóth Eszter", 1400),
-        ]));
+        ]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -97,11 +97,11 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(_ => Result.Success<IReadOnlyList<UserBalanceDto>>(
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(_ => 
         [
             Balance(2, "Kovács János", 2200, igazgatosag: "Gyártás"),
             Balance(3, "Tóth Eszter", 1400, igazgatosag: "Logisztika"),
-        ]));
+        ]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -117,7 +117,7 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(_ => Result.Success<IReadOnlyList<UserBalanceDto>>([]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(_ => []);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -130,8 +130,8 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(_ => Result.Success<IReadOnlyList<UserBalanceDto>>([]));
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>([]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(_ => []);
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(_ => []);
         Services.AddSingleton<IMediator>(mediator);
 
         var dialogProvider = Render<MudDialogProvider>();
@@ -149,9 +149,9 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(_ => Result.Success<IReadOnlyList<UserOptionDto>>([]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(7, "Kovács János", 2200)]);
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(_ => []);
         Services.AddSingleton<IMediator>(mediator);
 
         var dialogProvider = Render<MudDialogProvider>();
@@ -170,14 +170,14 @@ public class AdminBalancesTests : MudBunitContext
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
         var loadCount = 0;
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(_ =>
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(_ =>
         {
             loadCount++;
-            return Result.Success<IReadOnlyList<UserBalanceDto>>([]);
+            return [];
         });
-        mediator.Register<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>(
-            _ => Result.Success<IReadOnlyList<UserOptionDto>>([new UserOptionDto(9, "u9", 9, "Kovács János", "User", null, null)]));
-        mediator.Register<GetMyBalanceQuery, Result<int>>(_ => Result.Success(0));
+        mediator.Register<GetUsersQuery, IReadOnlyList<UserOptionDto>>(
+            _ => [new UserOptionDto(9, "u9", 9, "Kovács János", "User", null, null)]);
+        mediator.Register<GetMyBalanceQuery, int>(_ => 0);
         mediator.Register<AddManualCreditCommand, Result<int>>(_ => Result.Success(1));
         Services.AddSingleton<IMediator>(mediator);
 
@@ -211,10 +211,10 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
-        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
-            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(7, "Kovács János", 2200)]);
+        mediator.Register<GetMyCreditLedgerQuery, IReadOnlyList<CreditLedgerEntryDto>>(
+            _ => [LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -231,10 +231,10 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
-        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
-            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(7, "Kovács János", 2200)]);
+        mediator.Register<GetMyCreditLedgerQuery, IReadOnlyList<CreditLedgerEntryDto>>(
+            _ => [LedgerEntry(CreditEntryKind.ManualAdjustment, 1400, "Havi jóváírás")]);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -252,10 +252,10 @@ public class AdminBalancesTests : MudBunitContext
     {
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
-        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(
-            _ => Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([]));
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(7, "Kovács János", 2200)]);
+        mediator.Register<GetMyCreditLedgerQuery, IReadOnlyList<CreditLedgerEntryDto>>(
+            _ => []);
         Services.AddSingleton<IMediator>(mediator);
 
         var cut = Render<AdminBalances>();
@@ -271,12 +271,12 @@ public class AdminBalancesTests : MudBunitContext
         Services.AddSingleton<ICurrentUser>(new FakeCurrentUser(1, "Admin Teszt", isAdmin: true));
         var mediator = new FakeMediator();
         var ledgerQueryCount = 0;
-        mediator.Register<GetBalancesQuery, Result<IReadOnlyList<UserBalanceDto>>>(
-            _ => Result.Success<IReadOnlyList<UserBalanceDto>>([Balance(7, "Kovács János", 2200)]));
-        mediator.Register<GetMyCreditLedgerQuery, Result<IReadOnlyList<CreditLedgerEntryDto>>>(_ =>
+        mediator.Register<GetBalancesQuery, IReadOnlyList<UserBalanceDto>>(
+            _ => [Balance(7, "Kovács János", 2200)]);
+        mediator.Register<GetMyCreditLedgerQuery, IReadOnlyList<CreditLedgerEntryDto>>(_ =>
         {
             ledgerQueryCount++;
-            return Result.Success<IReadOnlyList<CreditLedgerEntryDto>>([LedgerEntry(CreditEntryKind.ManualAdjustment, 1400)]);
+            return [LedgerEntry(CreditEntryKind.ManualAdjustment, 1400)];
         });
         Services.AddSingleton<IMediator>(mediator);
 

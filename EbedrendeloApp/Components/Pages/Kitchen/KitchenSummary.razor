@@ -1,4 +1,4 @@
-@page "/konyhai-osszesito"
+﻿@page "/konyhai-osszesito"
 @using EbedrendeloApp.Common.Security
 @using EbedrendeloApp.Components.Shared
 @using EbedrendeloApp.Features.Kitchen
@@ -14,19 +14,13 @@
 
 <PageTitle>Konyhai összesítő</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.SoupKitchen" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0" Class="flex-grow-1">
-            <MudText Typo="Typo.h4">Konyhai összesítő</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Az adott nap élő rendelés-összesítője variánsonként — ez alapján tudja a konyha, mennyit kell
-                főznie. A nap lezárása rögzíti a végleges darabszámot: onnantól a 3 munkanapos szabálytól
-                függetlenül sem rendelni, sem lemondani nem lehet rá.
-            </MudText>
-        </MudStack>
-    </MudStack>
-</MudPaper>
+<PageHeader Icon="@Icons.Material.Filled.SoupKitchen" Title="Konyhai összesítő">
+    <Description>
+        Az adott nap élő rendelés-összesítője variánsonként — ez alapján tudja a konyha, mennyit kell
+        főznie. A nap lezárása rögzíti a végleges darabszámot: onnantól a 3 munkanapos szabálytól
+        függetlenül sem rendelni, sem lemondani nem lehet rá.
+    </Description>
+</PageHeader>
 
 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-4">
     <MudStack Row Spacing="2">
@@ -121,7 +115,7 @@
                 <MudTh Style="text-align:right;">Adag</MudTh>
             </HeaderContent>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">Erre a napra nincs aktív rendelés.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Erre a napra nincs publikált menü, így nincs mit összesíteni.</MudText>
             </NoRecordsContent>
             <RowTemplate>
                 <MudTd DataLabel="Variáns"><b>@context.VariantCode</b></MudTd>
@@ -165,7 +159,7 @@ else
                 <MudTh>Állapot</MudTh>
             </HeaderContent>
             <NoRecordsContent>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">A megadott időszakban nincs rendelés.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">A megadott időszakban nincs publikált menü.</MudText>
             </NoRecordsContent>
             <RowTemplate>
                 <MudTd DataLabel="Dátum">@context.Date.ToString("MM.dd. (ddd)", HungarianCulture)</MudTd>

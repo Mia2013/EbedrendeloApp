@@ -1,4 +1,3 @@
-using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Data;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace EbedrendeloApp.Features.Users.GetUsers;
 
 public sealed class GetUsersHandler(IDbContextFactory<EbedrendeloDbContext> dbFactory)
-    : IRequestHandler<GetUsersQuery, Result<IReadOnlyList<UserOptionDto>>>
+    : IRequestHandler<GetUsersQuery, IReadOnlyList<UserOptionDto>>
 {
-    public async Task<Result<IReadOnlyList<UserOptionDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<UserOptionDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -24,6 +23,6 @@ public sealed class GetUsersHandler(IDbContextFactory<EbedrendeloDbContext> dbFa
                 u.Osztaly))
             .ToListAsync(cancellationToken);
 
-        return Result.Success<IReadOnlyList<UserOptionDto>>(users);
+        return users;
     }
 }

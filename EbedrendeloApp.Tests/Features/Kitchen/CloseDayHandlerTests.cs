@@ -1,4 +1,4 @@
-using EbedrendeloApp.Common.Results;
+﻿using EbedrendeloApp.Common.Results;
 using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Kitchen.CloseDay;
@@ -49,15 +49,18 @@ public class CloseDayHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Closing_a_day_with_no_orders_succeeds_with_an_empty_snapshot()
+    public async Task Closing_a_day_with_no_orders_snapshots_every_variant_with_zero()
     {
+        // A pillanatkép ugyanazt rögzíti, amit a konyha záráskor a képernyőn látott — beleértve a
+        // nem rendelt variánsokat is.
         await SeedMenuAsync();
 
         var result = await sut.Handle(new CloseDayCommand(Thu, adminId), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(0, result.Value!.TotalPortions);
-        Assert.Empty(result.Value.Lines);
+        Assert.NotEmpty(result.Value.Lines);
+        Assert.All(result.Value.Lines, l => Assert.Equal(0, l.Quantity));
     }
 
     [Fact]

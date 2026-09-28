@@ -96,8 +96,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -108,7 +107,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(CreditEntryKind.CancellationCredit, entry.Kind);
         Assert.Equal(orderId, entry.SourceMenuOrderId);
         Assert.Equal(OrderDate, entry.SourceOrderDate);
@@ -142,7 +141,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var revoked = Assert.Single(result.Value!, e => e.Kind == CreditEntryKind.CreditRevoked);
+        var revoked = Assert.Single(result, e => e.Kind == CreditEntryKind.CreditRevoked);
         Assert.Equal("Kizárás visszavonva", revoked.Note);
         Assert.Equal(creditId, revoked.ConsumesCreditEntryId);
         Assert.Equal(adminId, revoked.CreatedByUserId);
@@ -171,7 +170,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.Equal(CreditEntryKind.ManualAdjustment, entry.Kind);
         Assert.Null(entry.SourceMenuOrderId);
         Assert.Null(entry.SourceOrderDate);
@@ -193,7 +192,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.Equal(["első", "második", "harmadik"], result.Value!.Select(e => e.Note));
+        Assert.Equal(["első", "második", "harmadik"], result.Select(e => e.Note));
     }
 
     [Fact]
@@ -209,14 +208,14 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        Assert.Empty(result.Value!);
+        Assert.Empty(result);
     }
 
     [Fact]
     public async Task Surfaces_period_invoice_id_when_present()
     {
-        // Epic 7 (GeneratePeriodInvoicesCommand) isn't built yet, so no handler produces this today —
-        // seeded directly to prove the DTO round-trips the field for forward compatibility (AC 5.3.1).
+        // A CreditApplied tételt a számlagenerálás írja; itt közvetlenül seedeljük, hogy a DTO
+        // mezőjének körbejárását önmagában ellenőrizzük (AC 5.3.1).
         var userId = await SeedUserAsync();
         await using (var db = dbFactory.CreateDbContext())
         {
@@ -228,12 +227,9 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
             {
                 UserId = userId,
                 OrderingPeriodId = period.Id,
-                MenuGrossHuf = 1400,
-                ALaCarteGrossHuf = 0,
+                SequenceNumber = 1,
                 GrossHuf = 1400,
                 CreditAppliedHuf = 1400,
-                MenuPayableHuf = 0,
-                ALaCartePayableHuf = 0,
                 PayableHuf = 0,
                 GeneratedAtUtc = DateTime.UtcNow,
             };
@@ -255,7 +251,7 @@ public class GetMyCreditLedgerHandlerTests : IDisposable
 
         var result = await CreateHandler().Handle(new GetMyCreditLedgerQuery(userId), CancellationToken.None);
 
-        var entry = Assert.Single(result.Value!);
+        var entry = Assert.Single(result);
         Assert.NotNull(entry.PeriodInvoiceId);
     }
 }

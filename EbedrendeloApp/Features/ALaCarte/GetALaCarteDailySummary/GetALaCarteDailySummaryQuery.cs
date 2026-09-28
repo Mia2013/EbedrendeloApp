@@ -1,9 +1,10 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.ALaCarte.GetALaCarteDailySummary;
 
-public sealed record GetALaCarteDailySummaryQuery(DateOnly Date) : IRequest<ALaCarteDailySummaryDto>;
+public sealed record GetALaCarteDailySummaryQuery(DateOnly Date) : IRequest<ALaCarteDailySummaryDto>, IRequireAdmin;
 
 public sealed record ALaCarteSummaryLineDto(ALaCarteCategory Category, string ItemName, int Count);
 

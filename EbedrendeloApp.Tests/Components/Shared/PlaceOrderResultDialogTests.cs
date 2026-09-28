@@ -1,13 +1,13 @@
 using Bunit;
 using EbedrendeloApp.Common.Results;
-using EbedrendeloApp.Components.Pages.Orders;
+using EbedrendeloApp.Components.Shared;
 using EbedrendeloApp.Features.Orders;
 using EbedrendeloApp.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
 
-namespace EbedrendeloApp.Tests.Components.Orders;
+namespace EbedrendeloApp.Tests.Components.Shared;
 
 public class PlaceOrderResultDialogTests : MudBunitContext
 {

@@ -12,60 +12,24 @@
 
 <PageTitle>Rendeléseim</PageTitle>
 
-<MudPaper Elevation="1" Class="pa-4 rounded-lg">
-    <MudStack Row Spacing="3" AlignItems="AlignItems.Start">
-        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Primary" />
-        <MudStack Spacing="0">
-            <MudText Typo="Typo.h4">Rendeléseim</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                A kiválasztott időszakra leadott és lemondott rendeléseid, naptár nézetben.
-            </MudText>
-            @if (periods is { Count: > 0 })
-            {
-                <MudSelect T="int" Label="Rendelési időszak" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" AdornmentIcon="@Icons.Material.Filled.DateRange" Adornment="Adornment.Start"
-                           Class="mt-4 panel-narrow-surface">
-                    @foreach (var period in periods)
-                    {
-                        <MudSelectItem Value="@period.Id">@period.Name (@period.StartDate.ToString("yyyy.MM.dd.")–@period.EndDate.ToString("yyyy.MM.dd."))</MudSelectItem>
-                    }
-                </MudSelect>
-            }
-        </MudStack>
-    </MudStack>
-</MudPaper>
-
-@if (days is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mt-4" />
-}
-else if (!string.IsNullOrEmpty(errorMessage))
-{
-    <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
-}
-else
-{
-    <WeekdayHeaderRow />
-
-    <div class="my-orders-calendar mt-3">
-        @foreach (var week in BuildWeeks())
+<PageHeader Icon="@Icons.Material.Filled.Receipt" Title="Rendeléseim">
+    <Description>
+        A kiválasztott időszakra leadott és lemondott rendeléseid, naptár nézetben.
+    </Description>
+    <Filters>
+        @if (periods is { Count: > 0 })
         {
-            @foreach (var date in week)
-            {
-                @if (date is null)
-                {
-                    <div class="my-orders-calendar__cell my-orders-calendar__cell--empty"></div>
-                }
-                else
-                {
-                    <div class="my-orders-calendar__cell @(date == today ? "my-orders-calendar__cell--today" : null)">
-                        @DayCell(date.Value)
-                    </div>
-                }
-            }
+            <PeriodSelector Periods="periods" Value="selectedPeriodId" ValueChanged="OnPeriodSelectedAsync" />
         }
-    </div>
-}
+    </Filters>
+</PageHeader>
+
+<PageState IsLoading="@(days is null && string.IsNullOrEmpty(errorMessage))" ErrorMessage="@errorMessage">
+    @if (SelectedPeriod is { } period)
+    {
+        <WeekGrid StartDate="period.StartDate" EndDate="period.EndDate" Today="today" CellContent="DayCell" />
+    }
+</PageState>
 
 @code {
     private RenderFragment<DateOnly> DayCell => date =>
@@ -157,40 +121,8 @@ else
         ordersByDate = days.GroupBy(o => o.Date).ToDictionary(g => g.Key, g => g.ToList());
     }
 
-    /// <summary>Hétfő-Péntek oszlopos rács — a `GetMyPeriodOrderQuery` csak a ténylegesen létező
-    /// rendeléseket adja vissza, ezért maga a naptár a periódus munkanapjait sorolja fel, nem a
-    /// visszakapott listát (ellentétben a `UserCalendar`-ral, ahol a `GetOrderableDaysQuery` már
-    /// minden munkanapra ad sort).</summary>
-    private List<DateOnly?[]> BuildWeeks()
-    {
-        var period = periods.FirstOrDefault(p => p.Id == selectedPeriodId);
-        if (period is null)
-        {
-            return [];
-        }
-
-        var weeks = new List<DateOnly?[]>();
-        for (var weekStart = MondayOf(period.StartDate); weekStart <= MondayOf(period.EndDate); weekStart = weekStart.AddDays(7))
-        {
-            var week = new DateOnly?[5];
-            for (var i = 0; i < 5; i++)
-            {
-                var date = weekStart.AddDays(i);
-                week[i] = date >= period.StartDate && date <= period.EndDate ? date : null;
-            }
-
-            weeks.Add(week);
-        }
-
-        while (weeks.Count > 0 && weeks[0].All(cell => cell is null))
-        {
-            weeks.RemoveAt(0);
-        }
-
-        return weeks;
-    }
-
-    private static DateOnly MondayOf(DateOnly date) => date.AddDays(-WeekdayIndex(date));
-
-    private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
+    /// <summary>A rácsot a `WeekGrid` építi az időszak dátumtartományából — a `GetMyPeriodOrderQuery`
+    /// csak a ténylegesen létező rendeléseket adja vissza, ezért a naptár a periódus munkanapjait
+    /// sorolja fel, nem a visszakapott listát.</summary>
+    private OrderingPeriodDto? SelectedPeriod => periods.FirstOrDefault(p => p.Id == selectedPeriodId);
 }

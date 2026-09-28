@@ -10,11 +10,12 @@ namespace EbedrendeloApp.Tests.Features.Calendar;
 public class UpsertOrderingPeriodHandlerTests : IDisposable
 {
     private readonly SqliteDbContextFactory dbFactory = new();
+    private readonly FixedAppClock clock = new(new DateTime(2026, 8, 17, 9, 0, 0));
     private readonly UpsertOrderingPeriodHandler sut;
 
     public UpsertOrderingPeriodHandlerTests()
     {
-        sut = new UpsertOrderingPeriodHandler(dbFactory, new WorkingDayCalculator());
+        sut = new UpsertOrderingPeriodHandler(dbFactory, new WorkingDayCalculator(), clock);
 
         using var db = dbFactory.CreateDbContext();
         db.AppSettings.Add(new AppSetting

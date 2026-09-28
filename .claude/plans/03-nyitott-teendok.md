@@ -1,4 +1,4 @@
-# Nyitott Teendők / Backlog
+﻿# Nyitott Teendők / Backlog
 
 > **Ez a dokumentum egyetlen mérvadó példánya.** Más helyen (home `.claude/plans/`, `docs/`) ne
 > keletkezzen belőle másolat.
@@ -6,6 +6,114 @@
 > Ide kerülnek azok az észrevételek, hibák és finomítási ötletek, amik fejlesztés közben merülnek fel,
 > de nem blokkolják az aktuális user story-t — nem kell rögtön megoldani, csak ne vesszen el.
 > A user story-kon való végigmenet után érdemes visszanézni és rendszerezni/priorizálni.
+
+---
+
+## Epic 1–7 átvilágítás (2026-09-08) — még nyitott tételek
+
+A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számlázási modell + jóváírás-szabály),
+**Fázis 2** (szerveroldali jogosultság, `ErrorBoundary`, naplózás). Az alábbiak maradtak.
+
+### Biztonság — elkészült (Fázis 2)
+- [x] **Szerveroldali jogosultság-ellenőrzés** — `AuthorizationBehavior` MediatR pipeline behavior
+      (`ValidationBehavior` ELŐTT fut), `IRequireAdmin` és `IActsOnBehalfOf` jelölőkkel; 32 admin és
+      10 saját-adat use case megjelölve. A `UseCaseAuthorizationCoverageTests` architektúra-teszt
+      elbukik, ha új use case jelöletlenül csúszik be, így a védelem nem tud csendben lyukassá válni.
+- [x] **Idegen nevében végzett műveletek** — a `TargetUserId` ellenőrzött, idegen id csak adminnak.
+      **Kivéve a rendelés leadását**: az AC 3.1.6/9.2.2 szerint bárki rendelhet bárki nevében, ezt először
+      tévesen adminhoz kötöttem. Javítva, majd a második körben szűkítve: **csak** a
+      `PlacePeriodOrderCommand` és a `GetOrderableDaysQuery` viseli az `IAuditedOnBehalfOf` jelölőt
+      (nyitva marad, a védelem az audit + a címzett azonosítása). A lemondás
+      (`CancelMenuOrdersCommand`, AC 3.2.8), a rendeléstörténet (`GetMyPeriodOrderQuery`, AC 3.1.9) és a
+      pénzügyi lekérdezések `IActsOnBehalfOf`-fal admin-jogot kívánnak idegen felhasználóra. A
+      `UseCaseAuthorizationCoverageTests` két teszttel őrzi mindkét oldalt: hogy ez a **két** use case
+      nyitva maradjon, és hogy a másik kettő ne nyíljon ki.
+- [x] **Paraméterértékhez kötött jog** — a `GetPeriodMenuQuery` maga nyitott (a dolgozói naptár is
+      hívja), de az `IncludeUnpublished` kapcsoló admin-jog (AC 2.5.2). Jelölővel ez nem fejezhető ki,
+      mert nem a kérés, hanem egy paraméterérték igényel jogot, ezért a handler őrzi. A párja, a
+      `GetDailyMenuQuery` egészében `IRequireAdmin`, mert azt csak admin felület hívja.
+- [x] **`IDevUserSwitcher` kivezetése** — a `UserCalendar` és az `AdminOrders` a rendes
+      `GetUsersQuery`-t használja; a `Home` dev-kártyája `IsDevelopment()` mögé került.
+- [x] **Naplózás** — a két behavior és a pénzmozgató handlerek (`GeneratePeriodInvoices`,
+      `MarkInvoicePaid`, `AddManualCredit`, `CancelMenuOrders`) `ILogger`-t kaptak.
+
+### Hibatűrés
+- [x] **`AppErrorBoundary`** a `MainLayout`-ban — a `ForbiddenException` és a `ValidationException`
+      barátságos kártyát kap (a váratlan kivételek üzenete elrejtve), a natív sárga sáv és a ledőlt
+      circuit helyett. Útvonalra kulcsolva, hogy a hiba ne ragadjon be a következő oldalon.
+- [ ] **16 helyen `result.Value!`** ellenőrzés nélkül (`AdminInvoices`, `MyInvoices`, `MyBalance`,
+      `AdminBalances`, `UserCalendar`, `MyOrders`, `AdminOrders`, `DailyMenuEditor`,
+      `ManualCreditDialog`) — sikertelen `Result` esetén NRE. Az `ErrorBoundary` már elkapja, de a
+      helyes megoldás a `Result` ellenőrzése (közös állapot-komponenssel, lásd lent).
+
+### UI egységesítés — nagyrészt elkészült (Fázis 3)
+- [x] **`PageHeader`** — az ikon+cím+leírás fejléc 13 oldalról egy komponensbe (`Description`,
+      `Filters`, `Actions`, `ChildContent` slotokkal). A régi backlog-tétel („UI / komponensek"
+      szekció) ezzel lezárva.
+- [x] **`WeekGrid`** — a négyszer lemásolt hétfő–péntek rács (`order-`, `menu-`, `admin-orders-`,
+      `my-orders-calendar`) és a négy `BuildWeeks()` egy komponensbe. A cellák `MudPaper`-ek, a
+      szaggatott üres cella MudBlazor border-utility osztályokból. Az oszlopszám/térköz `app.css`-beli
+      CSS-változóban, közösen a `WeekdayHeaderRow`-val, hogy ne csúszhassanak el.
+- [x] **`PeriodSelector`** — az öt oldalon újraírt időszak-választó egy komponensbe.
+- [x] **`PageState`** — közös betöltés / üres / hiba állapot.
+- [x] **Kézi CSS: nettó −165 sor**, két `.razor.css` teljesen törölve. Ami maradt: a rács geometriája
+      (MudGrid 12 oszlopos rendszere nem tudja), a beküldő sáv `position: sticky`-je, és a korábban is
+      jogos kivételek (`ReconnectModal`, `#blazor-error-ui`, `DecimalStepperField`).
+      **Tanulság:** a `MudPaper` gyerekkomponens, ezért a CSS-izoláció `b-xxx` attribútuma nem kerül rá
+      — a rá vonatkozó szabályokhoz `::deep` kell, különben némán nem érvényesülnek (böngészőben,
+      computed style-lal derült ki).
+
+### UI — még nyitott
+- [ ] **`result.Value!` a maradék ~12 helyen** (`AdminBalances`, `MyBalance`, `UserCalendar`,
+      `AdminOrders`, `MyOrders`, `DailyMenuEditor`, `ManualCreditDialog`) — az `AdminInvoices` és a
+      `MyInvoices` már `PageState`-tel, ellenőrzött `Result`-tal megy, a többit is át kell vezetni.
+- [ ] **A `/` kezdőlap tartalma gyakorlatilag egy dev eszköz** — egy gomb + a felhasználóváltó kártya
+      (ez utóbbi már csak fejlesztői környezetben). A dolgozónak nincs áttekintője (mai menü, egyenleg,
+      fizetetlen számla, gyorslinkek).
+- [ ] **A sötét paletta halott** — `AppTheme.PaletteDark` definiálva, de a `MudThemeProvider` nincs
+      `IsDarkMode`-hoz kötve és nincs kapcsoló. Vagy kössük be, vagy töröljük.
+- [ ] **Visszajelzés-konvenció rögzítése** a `CLAUDE.md`-be: mutáció eredménye → Snackbar; oldal-szintű
+      állapot → inline `MudAlert`; dialóguson belüli szerverhiba → dialóguson belüli alert. Ma keverednek.
+- [ ] Inline `Style="…"` maradékok átnézése (sűrűsödve `AdminInvoices`, `AdminALaCarteDailyOffer`
+      körül), szemben a „MudBlazor komponens/utility a kézi CSS helyett" elvvel.
+
+### Hiányzó / halott funkciók
+- [ ] **`UserNotification`: 8 írási hely, 0 olvasási.** Minden értesítés a táblába megy, de nincs se
+      query, se UI — ez az Epic 8. Amíg nincs kész, a dolgozó soha nem tudja meg, hogy lemondták vagy
+      átvezették a rendelését.
+- [ ] **`AppSetting` szerkeszthetetlen** — adagár és a három határidő seedből jön, nincs admin felület,
+      az `UpdatedByUserId`/`UpdatedAtUtc` halott mező. Az érték ma csak SQL-ből módosítható.
+- [ ] **À la carte fizetés rögzítése** — a dolgozó aznap fizeti (AC 7.1.2), de a rendszer csak a
+      rendelést tárolja, a fizetést nem; nincs pénztár/kassza-modul, így az à la carte pénzügyileg nem
+      zárható le. Ha kell: fizetés-állapot az `ALaCarteOrder`-en + napi kassza-riport.
+
+### Konvenció-driftek
+
+> **A javítás sorrendje: előbb a szabály, aztán a kód.** Ha review-n drift derül ki, először a
+> `CLAUDE.md` vagy a megfelelő skill (`ebedrendelo-usecase`, `ebedrendelo-extensions`,
+> `mudblazor-ui-first`) mondja ki a szabályt — így a következő generálás már nem termeli újra —, és a
+> kódjavítás ide kerül tételként. A gépileg ellenőrizhető rész a gyökér `.editorconfig`-ban van
+> (`EnforceCodeStyleInBuild`, warning szinten).
+
+- [ ] 6 command-nak nincs FluentValidation validátora, a validáció inline `if` a handlerben
+      (`CloseDay`, `ReopenDay`, `RemoveExcludedDay`, `SetALaCarteItemActive`, `RemoveDailyOffer`,
+      `CancelALaCarteOrderLine`).
+- [ ] **Architektúra-tesztek** a `EbedrendeloApp.Tests`-be, a működő `UseCaseAuthorizationCoverageTests`
+      mintájára: (a) `Domain.Entities` / `EbedrendeloDbContext` nem hivatkozható a `Components/` alól;
+      (b) minden `IRequest` command-hoz tartozik validátor — ez utóbbi ma a fenti 6 helyen bukna, ezért
+      csak allowlisttel, vagy a driftek javítása után vezethető be.
+- [ ] **`EbedrendeloApp/Migrations/`** üres, verziókövetetlen mappa a lemezen (a valódi hely a
+      `Data/Migrations/`, 11 migrációval). Csak lokális maradék, törölhető — de érdemes ellenőrizni,
+      hogy a `dotnet ef migrations add` tényleg a `Data/Migrations/`-ba generál-e.
+- [ ] **`Program.cs` blokkos namespace-t használ** — a build egyetlen figyelmeztetése az
+      `.editorconfig` bekapcsolása után (`IDE0161`). Mechanikus javítás file-scoped namespace-re, de
+      a `RegisterServicesFromAssemblyContaining(typeof(Program))` miatt build+teszt kell utána.
+- [ ] `IDE0005` (felesleges using) fordításkor nincs bekapcsolva, mert `GenerateDocumentationFile`-t
+      igényelne, az pedig több száz `CS1591`-et hozna. Ha kell, `GenerateDocumentationFile=true` +
+      `NoWarn=CS1591` a `Directory.Build.props`-ban.
+- [ ] A `Features/Billing` tesztmappa-konvenció kevert: `AddManualCredit/…` (use case almappa) vs.
+      `GeneratePeriodInvoicesHandlerTests.cs` (lapos).
+- [ ] A kommentnyelv hol magyar, hol angol, néha egy fájlon belül.
 
 ---
 
@@ -23,9 +131,11 @@
 
 - [ ] Design-referencia: https://happyetterem.hu/fooldal — a designja nagyon tetszett, érdemes
       majd megnézni, mit lehetne belőle átvenni.
-- [ ] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
+- [x] A napi menü szerkesztésénél lévő címsor (title, ikon, subtitle, jobb oldali extra tartalom
       pl. select) legyen kiemelve önálló, újrafelhasználható komponensbe, és vezessük át az összes
-      oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek).
+      oldalra, ahol hasonló fejléc kell (fragment/RenderFragment a variábilis résznek) — megoldva a
+      Fázis 3-ban: `Components/Shared/PageHeader.razor`, `Description`/`Filters`/`Actions`/
+      `ChildContent` slotokkal, mind a 13 oldalon átvezetve.
 - [x] A `MudAutocomplete` (leves/főétel név) a napi menü szerkesztő 3-oszlopos elrendezésében a
       hosszabb ételnevek miatt levágódott — megoldva a dialógus szélesítésével
       (`DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true }`,
@@ -104,9 +214,81 @@
       validáció (pl. "már le van zárva" / "nincs érvényben lévő zárás") inline `if` a
       `CloseDayHandler`/`ReopenDayHandler`-ben van, eltérően a többi feature konvenciójától.
       Funkcionálisan helyes, csak konzisztencia kérdés.
-- [ ] `KitchenSummary.razor` admin-jogosultság ellenőrzése kliens-oldali redirect
-      (`OnInitializedAsync`-ben, nem-adminra `mai-menu`-re navigál), nem route-szintű `[Authorize]`.
-      Ha ez eltér az app többi admin-oldalának mintájától, érdemes egységesíteni.
+- [x] `KitchenSummary.razor` (és a többi admin oldal) kliens-oldali redirectje — megoldva a Fázis 2-ben:
+      a valódi kapu az `AuthorizationBehavior` a szerveren, az oldal `OnInitializedAsync`-jében lévő
+      átirányítás onnantól csak kényelmi elem (ne a hibakártyát lássa, aki rossz linkre téved).
+      Route-szintű `[Authorize]` az Epic 9 valódi hitelesítésével jön.
+
+## Code review (2026-09-08, max) — javítva
+
+- [x] **`PageHeader` öt oldalon nem renderelt.** A `Components/_Imports.razor` nem importálta az
+      `EbedrendeloApp.Components.Shared` névteret, így öt oldalon (`AdminALaCarteItems`,
+      `AdminBalances`, `MyBalance`, `NonOrderableDays`, `OrderingPeriods`) a Razor ismeretlen
+      HTML-elemként renderelte a `<PageHeader>`-t: eltűnt a címsor, az ikon és a kártya. Nem fordítási
+      hiba volt, csak 14 `RZ10012` warning — és az inkrementális build ezeket nem mutatta újra, ezért
+      „részleges build zajának" néztem. Javítva egy sorral az `_Imports`-ban, plusz `PageHeaderTests`,
+      ami a renderelt `<h4>`-re állít.
+- [x] **A seed jóváírást gyártott ki nem számlázott napokra.** A `SeedMenuOrdersAsync` feltétel nélkül
+      írt `CancellationCredit`-et minden lemondott seed-rendelésre, holott a Fázis 1 óta jóváírás csak
+      kiszámlázott napért jár — az első éles számlagenerálás ezekkel a fantom-jóváírásokkal csökkentette
+      volna a valódi számlákat. Javítva: a seed a lezárt előző időszakra kiállítja a számlákat és
+      rábélyegzi a `PeriodInvoiceId`-t (így a demó ledger és a Számlák képernyő is kap adatot), és
+      jóváírás csak a kiszámlázott napokért keletkezik.
+- [x] **`GenerateInvoicesDialog` szövege ellentmondott a delta-számlázásnak.** Azt ígérte, hogy „akinek
+      már van számlája, kimarad — biztonságosan újrafuttatható", miközben a handler kiegészítő számlát
+      állít ki. Átírva, és kikerült belőle az à la carte mondat is, ami a Fázis 1 óta halott szöveg.
+- [x] **`GetPeriodMenuQuery` nem volt védve.** Lásd fent, a paraméterértékhez kötött jognál.
+- [x] **A jóváírás-sáv a kolléga naptárán is látszott** — a *saját* egyenlegedről szólt, miközben minden
+      pipa a kollégát terheli. Elrejtve idegen naptárban.
+- [x] **`Cancellable` figyelmen kívül hagyta az idegen nézetet.** A `GetOrderableDaysQuery` — amit a `01`
+      §6 „a felület egyetlen igazságforrása"-ként ír le — `true`-t adott olyan napra, amit a hívó nem
+      mondhat le; a tiltás csak a razorban élt. Javítva a handlerben, az ok viszont `AlreadyOrdered`
+      marad (a nap rendben van, csak a hívónak nincs joga).
+- [x] **Több időszakra leadáskor elveszett a részleges siker.** Ha a második szakasz elbukott, az első
+      (már commitolt) eredménye eldobódott, és az egész naptár helyére hibasáv került. Javítva: a
+      beküldött napok kikerülnek a kijelölésből, a meghiúsult szakasz pipái maradnak, és az összesítő
+      dialógus megmutatja, mi ment át.
+- [x] **Gépidő a szerver órája helyett.** A `UserCalendar` és a `WeekGrid` `DateTime.Today`-ből számolt,
+      miközben a szerver `IAppClock`-kal (Europe/Budapest) szeleteli ugyanazt a naptárat — konténerben
+      éjfél után egy nap eltérés. Mindkettő az `IAppClock`-ra váltott.
+- [x] **A dialógusok kívül estek a hibahatáron.** A `MudDialogProvider` a `MudLayout` testvére, az
+      `AppErrorBoundary` viszont csak a `@Body`-t fogta — miközben a pénzmozgató műveletek jórészt
+      dialógusból indulnak, és a behaviorök szándékosan kivételt dobnak. Saját hibahatárt kapott.
+
+## Code review (2026-09-08, max) — még nyitott
+
+- [ ] **Az audit-mezők hívó-adta értékek.** A `PlacedByUserId` / `CancelledByUserId` /
+      `GeneratedByUserId` / `MarkedPaidByUserId` / `PerformedByUserId` úgy kerül a naplóba, ahogy a hívó
+      küldte — az `AuthorizationBehavior` csak a `TargetUserId`-t nézi. Márpedig az AC 9.2.2 szerint épp
+      ez az audit a más nevében rendelés egyetlen védelme. A behavior már injektálja az `ICurrentUser`-t,
+      tehát egy helyen rá lehetne bélyegezni. Epic 9-cel együtt érdemes.
+- [ ] **`IAuditedOnBehalfOf` futásidőben no-op**, de a lefedettségi tesztet kielégíti — egy új, érzékeny
+      use case-re rátéve zölden átmegy úgy, hogy semmi nem védi. Az `IntentionallyUnrestricted` lista
+      legalább teszt-fájl szerkesztést kíván. Érdemes a jelölőt is a behaviorban „látni" (legalább
+      naplózni).
+- [ ] **A kolléga-azonosítás nincs korlátozva.** A `ResolveColleagueQuery` a teljes admin-oldali
+      `UserOptionDto`-t adja vissza (belépőnév, céges `UserId`, szerepkör), miközben a felület csak a
+      nevet és az egységet mutatja — és nincs se rate limit, se lockout. Egy szűk
+      `ResolvedColleagueDto(Id, DisplayName)` és egy próbálkozás-számláló zárná be.
+- [ ] **A számlagenerálás nem kezeli a párhuzamos futást.** A `SaveChangesAsync` nincs `try/catch`-ben,
+      így az egyediségi index (amit a `PeriodInvoiceConfiguration` épp erre hivatkozva véd) nyers
+      `DbUpdateException`-ként vagy deadlockként jön vissza. A `PlacePeriodOrderHandler` már pontosan
+      ezt kezeli — onnan másolható a minta.
+- [ ] **A seed minden induláskor ír.** A `SeedUsersAsync` szándékosan nem lép ki, ha a tábla nem üres
+      (különben a meglévő fejlesztői DB nem kapná meg a katalógust), viszont a `Program.cs` nem köti
+      `IsDevelopment()`-hez a `SeedAsync`-et. Éles használat előtt kapuzni kell.
+- [ ] **Maradék `DateTime.Today` a komponensekben.** Hat helyen (`AdminALaCarteDailyOffer`,
+      `AdminALaCarteKitchenSummary`, `KitchenSummary`, `DailyMenuEditor`, `AdminOrders`, `MyOrders`)
+      még a gép helyi ideje a kiindulópont. Ezek ma megjelenítési alapértékek, de ugyanaz a csapda.
+- [ ] **Nincs bUnit teszt a `PageState`, `WeekGrid` és `PeriodSelector` komponensekre** (a `PageHeader`
+      már kapott). A `WeekGrid` viszi az egyetlen valódi logikát (hétfő-igazítás, üres vezető hét
+      levágása) négy naptár-oldal alatt.
+- [ ] **`AdminInvoices` lapozás nélkül** tölti be az összes számlát; `ColleaguePicker.SearchAsync`
+      minden leütésre újra lekéri a teljes névsort (a `ManualCreditDialog` egyszer cache-eli);
+      a számla-értesítés nyers `{x} Ft`-ot formáz a `HungarianNumberFormat.Huf` helyett;
+      a `PageState.razor.css` kézi flex-blokkja `MudStack`-kel kiváltható.
+- [ ] **A migráció `Down()` felében elbukik**: az `FK_CreditEntries_PeriodInvoices` `Restrict`, ezért a
+      `DELETE FROM PeriodInvoices WHERE SequenceNumber > 1` nem fut le.
 
 ---
 

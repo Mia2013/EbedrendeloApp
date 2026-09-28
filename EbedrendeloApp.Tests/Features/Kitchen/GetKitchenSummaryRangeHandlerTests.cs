@@ -1,4 +1,4 @@
-using EbedrendeloApp.Domain.Entities;
+﻿using EbedrendeloApp.Domain.Entities;
 using EbedrendeloApp.Domain.Enums;
 using EbedrendeloApp.Features.Kitchen.GetKitchenSummaryRange;
 using EbedrendeloApp.Tests.TestSupport;
@@ -24,26 +24,33 @@ public class GetKitchenSummaryRangeHandlerTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     [Fact]
-    public async Task Groups_by_day_and_variant_and_omits_days_with_no_orders()
+    public async Task Groups_by_day_and_variant_and_keeps_days_with_no_orders()
     {
         await SeedMenuAsync();
         await SeedOrderAsync(Mon, "A");
         await SeedOrderAsync(Mon, "A");
         await SeedOrderAsync(Tue, "B");
-        // Wed intentionally has no orders.
+        // Szerdára szándékosan nincs rendelés — a nap ettől még szerepel a listában, csupa 0-val,
+        // különben nem lehet megkülönböztetni a „senki nem rendelt"-et a „kimaradt a lekérdezésből"-től.
 
         var result = await sut.Handle(new GetKitchenSummaryRangeQuery(Mon, Wed), CancellationToken.None);
 
-        Assert.Equal(2, result.Count);
-        Assert.Equal([Mon, Tue], result.Select(d => d.Date).ToList());
+        Assert.Equal(3, result.Count);
+        Assert.Equal([Mon, Tue, Wed], result.Select(d => d.Date).ToList());
 
         var monday = result.Single(d => d.Date == Mon);
         Assert.Equal(2, monday.TotalPortions);
         Assert.Equal(2, monday.Lines.Single(l => l.VariantCode == "A").Quantity);
+        Assert.Equal(0, monday.Lines.Single(l => l.VariantCode == "B").Quantity);
 
         var tuesday = result.Single(d => d.Date == Tue);
         Assert.Equal(1, tuesday.TotalPortions);
         Assert.Equal(1, tuesday.Lines.Single(l => l.VariantCode == "B").Quantity);
+
+        var wednesday = result.Single(d => d.Date == Wed);
+        Assert.Equal(0, wednesday.TotalPortions);
+        Assert.All(wednesday.Lines, l => Assert.Equal(0, l.Quantity));
+        Assert.NotEmpty(wednesday.Lines);
     }
 
     [Fact]

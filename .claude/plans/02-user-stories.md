@@ -1,4 +1,4 @@
-# Ebédrendelő Alkalmazás — User Storyk és Elfogadási Kritériumok
+﻿# Ebédrendelő Alkalmazás — User Storyk és Elfogadási Kritériumok
 
 > **Ez a dokumentum egyetlen mérvadó példánya.** Más helyen (home `.claude/plans/`, `docs/`) ne
 > keletkezzen belőle másolat.
@@ -260,8 +260,10 @@ Azért, hogy egyszerűen biztosítsam az ebédet az egész időszakra vagy a pó
 * **AC 3.1.3 (Részleges siker és kötegelés):** A leadott dátumlista feldolgozása nem "mindent vagy semmit" alapon működik. A sikeres napok egy tranzakcióban mentődnek (`Succeeded`), az elutasított napok pedig pontos hibakóddal a `Skipped` listába kerülnek.
 * **AC 3.1.4 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a művelet nem jelezhető tisztán sikeresnek a felületen; a kimaradt napokat és az okokat kötelező megjeleníteni.
 * **AC 3.1.5 (Napi 1 adag limit):** Egy felhasználónak egy napra legfeljebb 1 aktív menürendelése lehet (szűrt unique index `(UserId, Date) WHERE Status = 0`).
-* **AC 3.1.6 (Más nevében rendelés):** Rendelés leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`).
+* **AC 3.1.6 (Más nevében rendelés):** **Rendelés** leadható más nevében (`TargetUserId != CurrentUser`), de a rendszer mindig auditálja a tényleges leadót (`PlacedByUserId`). Ez kizárólag a leadásra vonatkozik: lemondani más naptárában csak adminisztrátor tud (AC 3.2.8), és a kolléga naptára sem böngészhető (AC 3.1.9). A címzettet **azonosítani kell**: a dolgozó a nevével + igazgatóságával + osztályával keresi meg (`ResolveColleagueQuery`), és csak **pontos egyezésre** kap találatot — nincs böngészhető névsor, nincs részleges keresés, és a sikertelen keresés egyetlen semleges üzenetet ad, ami nem árulja el, melyik mező volt hibás. Az adminisztrátor — akinek amúgy is joga van a teljes névsorhoz (AC 9.4.1) — autocomplete-et kap helyette.
 * **AC 3.1.7 (Időszakhoz kötés):** Minden rendelt dátumnak az időszak `[StartDate, EndDate]` tartományába kell esnie (`OutsidePeriod` egyébként), és a létrejövő rendelésre rákerül az `OrderingPeriodId` — így a későbbi határmódosítás nem sodorja át a rendelést másik számlára.
+* **AC 3.1.8 (A funkció nincs felkínálva):** A más nevében rendelés a dolgozói felületen **nem kiemelt funkció**: nincs rá hívogató felirat, csak egy visszafogott, felirat nélküli ikon, és az azonosító űrlap addig meg sem jelenik a DOM-ban, amíg valaki rá nem nyit. Ha van kiválasztott kolléga, a naptár **láthatóan az övére vált** (kerettel és a nevét tartalmazó felirattal), hogy egy pillanatra se lehessen összetéveszteni a sajátunkkal.
+* **AC 3.1.9 (A kolléga naptára rendelőlap, nem történet):** Ha egy **dolgozó** kollégát választ, a naptára nem böngészhető: **nincs időszakváltó**, és csak a nyitott, még tartó időszakok jelennek meg egymás alatt, **a mai naptól előre**. A múltbeli napok helyén ugyanaz az üres cella áll, mint az időszakon kívüli napokén — a szerver ezeket a sorokat **vissza sem adja** (`GetOrderableDaysQuery` idegen felhasználóra minimalizál, lezárt időszakra pedig `PeriodClosed` hibát ad), tehát a kolléga korábbi rendeléseiről semmi nem hagyja el a szervert. A megjelenő napok közül a nem rendelhetők **letiltott** jelölővel látszanak, a már leadottak pedig a menü nevével és szintén letiltva — így nem lehet duplán rendelni és módosítani sem. Adminra ez a szűkítés nem vonatkozik, ő a teljes naptárat kapja.
 
 **Technikai hivatkozás:** `PlacePeriodOrderCommand`, `Result<BatchOrderResult>`, `GetOrderableDaysQuery`
 
@@ -276,10 +278,12 @@ Azért, hogy a távollétem idejére ne készüljön feleslegesen étel és az �
 **Elfogadási Kritériumok:**
 * **AC 3.2.1 (Lemondási határidő):** A lemondás feltétele: `now <= ChangeDeadline(Date)` ÉS nincs `KitchenClosure(Date)`. (Példa: csütörtöki ebéd lemondási határideje a megelőző hétfő 11:00 helyi idő szerint).
 * **AC 3.2.2 (Aznapi lemondás tiltása):** Aznapi menürendelés lemondása szigorúan tilos és nem lehetséges.
-* **AC 3.2.3 (Jóváírás és audit):** A lemondott rendelés `Status = Cancelled`, `CancellationReason = ByUser` állapotot kap, és azonnal létrejön a hozzá tartozó `CancellationCredit` ledger tétel.
+* **AC 3.2.3 (Jóváírás és audit):** A lemondott rendelés `Status = Cancelled`, `CancellationReason = ByUser` állapotot kap. `CancellationCredit` ledger tétel **csak akkor** jön létre, ha a rendelés már ki volt számlázva (`MenuOrder.PeriodInvoiceId != null`) — ki nem számlázott napért nem jár pénz vissza, azt a dolgozó soha nem fizette ki, és a delta-számlázás (AC 7.1.6) eleve nem teszi rá egyetlen számlára sem. Az értesítés szövege ennek megfelelően különbözik a két esetben.
+* **AC 3.2.7 (Számlázás utáni lemondás):** A számla kiállítása nem zárja le a hónapot: a nap a 3 munkanapos szabályon belül továbbra is lemondható, a keletkező jóváírás pedig a következő menüszámlát csökkenti (3.3 „görgetés"). A kiállított számla pillanatkép, nem íródik át.
 * **AC 3.2.4 (Köteges lemondás részleges sikerrel):** A parancs **dátumlistát** fogad, és ugyanúgy `Result<BatchOrderResult>` értéket ad vissza, mint a rendelés: a sikeres napok egy tranzakcióban mentődnek (`Succeeded`), a kihagyottak a `Skipped` listába kerülnek `DeadlinePassed` / `DayClosed` / `NoActiveOrder` okkal. Egyetlen nap lemondása ennek az egyelemű esete — nincs rá külön parancs.
 * **AC 3.2.5 (Felületi visszajelzés szabálya):** Ha a `Skipped` lista nem üres, a lemondás nem jelezhető tisztán sikeresnek; a kimaradt napokat és az okukat kötelező megjeleníteni (ugyanaz a szabály, mint AC 3.1.4). Ellenkező esetben a dolgozó abban a hitben marad, hogy lemondta az ebédjét, miközben az elkészül és kiszámlázásra kerül.
 * **AC 3.2.6 (A bulk ablak nem ad kedvezményt):** A lemondásra mindkét rendelési fázisban ugyanaz a `ChangeDeadline` szabály vonatkozik — az `OrderDeadline` előtti időszak sem enged közelebbi napot lemondani.
+* **AC 3.2.8 (Idegen naptárban a lemondás admin-jog):** A más nevében rendelés (AC 3.1.6) **nem szimmetrikus**: leadni bárki tud a kolléga nevében, **lemondani viszont csak adminisztrátor**. Rendelést leadni a kollégának szívesség, lemondani kárt okoz — elveszi az ebédjét, és a nap számlázottságától függően pénzügyi hatása is van. A `CancelMenuOrdersCommand` ezért `IActsOnBehalfOf` (idegen `TargetUserId` → `ForbiddenException`), nem `IAuditedOnBehalfOf`, mint a párja. A felület ennek megfelelően a kolléga naptárában dolgozónak meg sem jeleníti a lemondás-vezérlőket. **Vállalt következmény:** a tévesen leadott rendelést a leadó nem tudja maga visszavonni — a kolléga a saját naptárában lemondhatja, vagy adminhoz kell fordulni.
 
 **Technikai hivatkozás:** `CancelMenuOrdersCommand`, `IWorkingDayCalculator`, `Result<BatchOrderResult>`
 
@@ -341,13 +345,13 @@ Azért, hogy a napi menü helyett vagy mellett egyéb ételeket fogyaszthassak.
 
 **Elfogadási Kritériumok:**
 * **AC 4.2.1 (Időkorlát):** Rendelés csak aznap (munkanapon), legkésőbb helyi idő szerint 10:30-ig adható le.
-* **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába (hogy legyen mihez számlázni).
+* **AC 4.2.2 (Időszaki fedettség):** Az adott napnak bele kell esnie egy létező `OrderingPeriod` tartományába — az à la carte rendelés így is időszakhoz kötött (`OrderingPeriodId`), hogy a napi forgalom időszakonként kimutatható legyen; a *számlára* nem kerül rá (AC 7.1.2), azt a dolgozó aznap fizeti.
 * **AC 4.2.3 (Darabszám limit — tételenként, nem kategóriánként):** Egy felhasználó **tételenként** legfeljebb 1 darabot rendelhet aznapra — ugyanazon a napon **több különböző Főétel** tétel is megrendelhető (mindegyikből legfeljebb 1 db), csak ugyanazon tétel duplikálása tilos.
 * **AC 4.2.4 (Atomi készletfoglalás — Leves kivételével):** A foglalás egyetlen atomi feltételes SQL UPDATE-tel történik (`OrderedCount < Capacity`), **minden nem Leves kategóriájú tételre**. Ha bármely nem Leves tétel elfogyott, a tranzakció visszaáll (nincs részleges a la carte rendelés). Leves kategóriájú ajánlatra nincs foglalás — az korlátlan (AC 4.2.8), és rá közvetlen rendelés nem is adható le.
 * **AC 4.2.5 (Lemondás a napi határidőig):** A leadott a la carte rendelési sor a napi a la carte
   határidőig (`ALaCarteOrderDeadlineLocalTime`, AC 4.2.1) **visszavonható** — utána nem, mert a
   konyha a határidő után már a leadott mennyiség alapján készül. A visszavonás nincs ledger-hatással
-  (AC 5.1.2/7.1.3: az a la carte sosem érinti a jóváírást), tisztán a készletfoglalás
+  (AC 5.1.2/7.1.2: az a la carte nem kerül számlára, így a jóváírást sem érinti), tisztán a készletfoglalás
   (`OrderedCount`) szimmetrikus visszaadásából áll — a felszabaduló adag azonnal újra foglalható
   bárki által, nincs elsőbbség a korábbi rendelőnek.
 * **AC 4.2.6 (Az `IsOpen` és az `OrderDeadline` itt nem feltétel):** Ez aznapi vásárlás, nem előrendelés — a rendelési időszak csak a számlázási hovatartozás (`OrderingPeriodId`) miatt kell. Lezárt (`IsOpen = false`) vagy a leadási határidején túli időszak napján is leadható a la carte rendelés.
@@ -433,7 +437,8 @@ Azért, hogy tudjam, mennyi felhasználható összeg áll rendelkezésemre a kö
 
 **Elfogadási Kritériumok:**
 * **AC 5.1.1 (Azonnali egyenleg):** Az egyenleg az aktív tételek összegét mutatja (`Σ RemainingHuf`). Nincs várakozási idő (`EligibleFrom`), a jóváírás a keletkezés pillanatától él.
-* **AC 5.1.2 (Menü-hatókör kimondása):** Az egyenleg **kizárólag menürendelésre** számítható be; a felület ezt egyértelműen jelzi, nehogy a dolgozó a la carte fedezetnek higgye.
+* **AC 5.1.2 (Menü-hatókör kimondása):** Az egyenleg **kizárólag menüszámlára** számítható be; a felület ezt egyértelműen jelzi, nehogy a dolgozó a la carte fedezetnek higgye (az a la carte-ot aznap, készpénzben fizeti — AC 7.1.2).
+* **AC 5.1.3 (Mikor keletkezik jóváírás):** Jóváírás lemondásból csak akkor keletkezik, ha a lemondott nap már ki volt számlázva (AC 3.2.3).
 
 **Technikai hivatkozás:** `GetMyBalanceQuery`, `CreditEntry`
 
@@ -485,8 +490,9 @@ Azért, hogy a konyha pontosan megtervezhesse az alapanyag-beszerzést és a fő
 * **AC 6.1.1:** Lekérhető egyetlen nap élő adagszáma variánsonként (A/B/C); az aznapi a la carte összesítést a US-4.6 adja.
 * **AC 6.1.2:** Lekérhető időszaki tartomány összesítője is a korábbi rendelési igények kiszolgálására.
 * **AC 6.1.3 (Csak aktív rendelés):** Az összesítő kizárólag az `Active` státuszú rendeléseket számolja; a lemondottak nem jelennek meg benne.
+* **AC 6.1.4 (Nullás sor is látszik):** A nap minden publikált variánsa megjelenik az összesítőben, a nem rendelt is, `0` adaggal — a variáns nem eshet ki a felsorolásból. Ugyanígy az időszaki nézetben az a nap is szerepel, amelyre van publikált menü, de nincs rendelés. Ha a variánst időközben törölték vagy publikálatlanná tették, de van rá aktív rendelés, az adag akkor is látszik. Ez a záráskori pillanatképre (AC 6.2.1) is vonatkozik.
 
-**Technikai hivatkozás:** `GetKitchenSummaryQuery`, `GetKitchenSummaryRangeQuery`
+**Technikai hivatkozás:** `GetKitchenSummaryQuery`, `GetKitchenSummaryRangeQuery`, `KitchenSummaryLines`
 
 ---
 
@@ -522,7 +528,7 @@ Azért, hogy egy utólagos eltérés esetén bizonyítható legyen a leadott ös
 
 ## Epic 7: Elszámolás és Számlázás
 
-### US-7.1: Időszaki számlák generálása szigorú menü-jóváírás beszámítással `[A]`
+### US-7.1: Időszaki menüszámlák generálása jóváírás-beszámítással `[A]`
 **Leírás:**  
 Mint **Rendszeradminisztrátor**,  
 Akarok **időszaki számlákat generálni a dolgozók számára a jóváírások automatikus elszámolásával**,  
@@ -530,17 +536,17 @@ Azért, hogy mindenki a ténylegesen fizetendő, korrigált összeget kapja meg.
 
 **Elfogadási Kritériumok:**
 * **AC 7.1.1 (Időszak alapú gyűjtés):** A számla nem naptári hónap, hanem a rendeléskor rögzített `OrderingPeriodId` alapján gyűjti össze a tételeket.
-* **AC 7.1.2 (Szigorú menü-hatókör):** A felhalmozott jóváírás **kizárólag a menütételek bruttó összegéből (`MenuGrossHuf`) vonható le** FIFO sorrendben.
-* **AC 7.1.3 (A la carte elkülönítés):** Az a la carte összeg (`ALaCarteGrossHuf`) teljes egészében fizetendő marad, jóváírás azt nem csökkentheti:
-  - `CreditAppliedHuf <= MenuGrossHuf`
-  - `MenuPayableHuf = MenuGrossHuf - CreditAppliedHuf`
-  - `ALaCartePayableHuf = ALaCarteGrossHuf`
-  - `PayableHuf = MenuPayableHuf + ALaCartePayableHuf`
-* **AC 7.1.4 (Görgetés):** Ha az egyenleg meghaladja a menü bruttó összegét, a fennmaradó rész a ledgerben marad a következő olyan időszakra, amelyben van menürendelés.
-* **AC 7.1.5 (Értesítés):** A számla létrejöttekor a dolgozó értesítést kap a levont jóváírások részletezésével.
-* **AC 7.1.6 (Időszakonként egy számla):** Egy felhasználóra egy időszakhoz legfeljebb egy számla keletkezik (unique `UserId` + `OrderingPeriodId`).
+* **AC 7.1.2 (Csak menü):** A számla kizárólag **menürendeléseket** tartalmaz. Az a la carte kizárólag aznapra vehető, a menüszámla viszont az étkezési hónap kezdete előtt készül (előre fizetés) — a dolgozó az a la carte-ot aznap fizeti, az nem kerül a számlára.
+* **AC 7.1.3 (Jóváírás-beszámítás):** A felhalmozott jóváírás FIFO sorrendben, a számla bruttójáig számítható be:
+  - `CreditAppliedHuf <= GrossHuf`
+  - `PayableHuf = GrossHuf - CreditAppliedHuf`
+* **AC 7.1.4 (Görgetés):** Ha az egyenleg meghaladja a számla bruttó összegét, a fennmaradó rész a ledgerben marad a következő menüszámlára.
+* **AC 7.1.5 (Értesítés):** Ha a számlán jóváírás került beszámításra, a dolgozó erről értesítést kap a levont összeggel.
+* **AC 7.1.6 (Delta-számlázás, kiegészítő számla):** A parancs csak a **még ki nem számlázott** aktív menürendeléseket számlázza (`MenuOrder.PeriodInvoiceId IS NULL`), és a bekerült napokra ráírja a számla azonosítóját. Újrafuttatva ezért csak az azóta leadott (B-fázisú) napokról készül **kiegészítő számla**, növekvő `SequenceNumber`-rel; ha nincs kiszámlázatlan nap, nem keletkezik új számla. Egy felhasználó egy időszakhoz így több számlát is kaphat (unique `UserId` + `OrderingPeriodId` + `SequenceNumber`).
+* **AC 7.1.7 (Korai számlázás tiltása):** A generálás elutasításra kerül (`OrderWindowOpen`), amíg az időszak tömeges leadási határideje (`OrderDeadline`) le nem telt.
+* **AC 7.1.8 (A számlázás nem zárja le a hónapot):** A számla kiállítása után az érintett napok **továbbra is lemondhatók** a 3 munkanapos szabály szerint (US-3.2), és **új nap is rendelhető** a B-fázisban (US-3.1) — a kiállított számla pillanatkép, nem íródik át; a lemondás jóváírást szül a következő számlára, az új rendelés pedig kiegészítő számlát kap.
 
-**Technikai hivatkozás:** `GeneratePeriodInvoicesCommand`, `PeriodInvoice`, `ICreditService`
+**Technikai hivatkozás:** `GeneratePeriodInvoicesCommand`, `PeriodInvoice`, `MenuOrder.PeriodInvoiceId`, `ICreditService`
 
 ---
 
@@ -565,7 +571,7 @@ Azért, hogy lássam, kitől van még hátralék.
 
 **Elfogadási Kritériumok:**
 * **AC 7.3.1 (Szűrők):** A lista szűrhető `OrderingPeriodId`-re és fizetettségi állapotra.
-* **AC 7.3.2 (Bontás):** Minden soron látszik a bruttó menü, a bruttó a la carte, a beszámított jóváírás és a **két fizetendő sor** külön (menü / a la carte), valamint a végösszeg.
+* **AC 7.3.2 (Bontás):** Minden soron látszik a számlához tartozó napok száma, a bruttó összeg, a beszámított jóváírás és a fizetendő végösszeg, valamint — kiegészítő számlánál — a sorszám.
 
 **Technikai hivatkozás:** `GetInvoicesQuery`
 
@@ -578,7 +584,7 @@ Akarok **látni a saját időszaki számláimat**,
 Azért, hogy tudjam, mennyit kell fizetnem, és hogy a jóváírásaimat valóban beszámították-e.
 
 **Elfogadási Kritériumok:**
-* **AC 7.4.1 (Időszakonkénti bontás):** Időszakonként megjelenik a bruttó menü, a bruttó a la carte, a beszámított jóváírás és a két fizetendő sor.
+* **AC 7.4.1 (Számlánkénti bontás):** Számlánként megjelenik az időszak neve és dátumtartománya, a fedezett napok száma, a bruttó összeg, a beszámított jóváírás és a fizetendő végösszeg. Kiegészítő számlánál külön jelzés mutatja, hogy az a korábbi számla utáni napokat tartalmazza.
 * **AC 7.4.2 (Fizetettség):** A számla fizetettségi állapota és a fizetés időpontja látszik.
 * **AC 7.4.3 (Kapcsolat a ledgerrel):** A beszámított jóváírás összege megegyezik a ledgerben az adott számlához (`PeriodInvoiceId`) tartozó `CreditApplied` tételek összegével (US-5.3).
 
@@ -639,7 +645,7 @@ Azért, hogy egy dolgozó ne tudjon menüt szerkeszteni, napot kizárni vagy sz�
 
 **Elfogadási Kritériumok:**
 * **AC 9.2.1 (Policy):** Az `[A]` jelölésű use case-eket az `"Admin"` policy védi; `User` szerepkörrel a hívás elutasításra kerül.
-* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) adja, nem a jogosultság.
+* **AC 9.2.2 (Más nevében rendelés nem admin jog):** A más nevében történő rendelés (AC 3.1.6) **bárki** számára engedélyezett — ez szándékos döntés, a védelmet az audit (`PlacedByUserId`) és a címzett azonosítási kötelezettsége adja, nem a jogosultság. A kódban ezt az `IAuditedOnBehalfOf` jelölő teszi láthatóvá, és a lista szándékosan **szűk**: csak a `PlacePeriodOrderCommand` és a `GetOrderableDaysQuery` marad nyitva — pontosan az, ami a leadáshoz kell. Minden más idegen felhasználóra admin-jogot kíván (`IActsOnBehalfOf`): a lemondás (`CancelMenuOrdersCommand`, AC 3.2.8), a rendeléstörténet (`GetMyPeriodOrderQuery`, AC 3.1.9) és a pénzügyi lekérdezések (`GetMyBalanceQuery`, `GetMyCreditLedgerQuery`, `GetMyInvoicesQuery`) — ezek egyike sem kell a rendelés leadásához. A `GetOrderableDaysQuery` nyitva marad, de a handler idegen felhasználóra minimalizálja a választ (AC 3.1.9).
 * **AC 9.2.3 (Saját adat hatóköre):** A `[U]` jelölésű lekérdezések (egyenleg, ledger, saját rendelések, saját számlák, értesítések) mindig a bejelentkezett felhasználó adatait adják vissza, más felhasználóét nem.
 
 **Technikai hivatkozás:** `AddAuthorizationBuilder()`, `"Admin"` policy, `ICurrentUser`
@@ -669,7 +675,7 @@ Azért, hogy legyen kit kiválasztani a felhasználóváltóban és a más nevé
 **Elfogadási Kritériumok:**
 * **AC 9.4.1 (Lista):** A felhasználók névvel (`VezetekNev`, `KeresztNev`), `UserName`-mel, céges `UserId`-vel és szerepkörrel kérhetők le, névsor szerint rendezve.
 * **AC 9.4.2 (Egyedi lekérdezés):** Egy felhasználó azonosító és `UserName` alapján is lekérdezhető.
-* **AC 9.4.3 (Felhasználásai):** Ugyanez a lista szolgálja ki a dev felhasználóváltót (US-9.1) és a más nevében rendelés címzett-választóját (AC 3.1.6).
+* **AC 9.4.3 (Felhasználásai):** Ugyanez a lista szolgálja ki a dev felhasználóváltót (US-9.1), a kézi jóváírás címzett-választóját (US-5.2) és a más nevében rendelés **adminisztrátori** autocomplete-jét (AC 3.1.6). A dolgozó ezt a listát **nem** kapja meg (a `GetUsersQuery` admin-jogot kíván) — ő a `ResolveColleagueQuery`-vel, pontos név + igazgatóság + osztály hármassal azonosítja a kollégát, hogy ne lehessen végiglapozni a névsort.
 
 **Technikai hivatkozás:** `GetUsersQuery`, `GetUserByIdQuery`, `GetUserByUserNameQuery`
 
@@ -739,9 +745,10 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 
 | Use case | Szerep | User story |
 |---|---|---|
-| `GetUsersQuery` | A/U | US-9.4 |
-| `GetUserByIdQuery` | A/U | US-9.4 |
-| `GetUserByUserNameQuery` | A/U | US-9.4 |
+| `GetUsersQuery` | A | US-9.4 |
+| `GetUserByIdQuery` | A | US-9.4 |
+| `GetUserByUserNameQuery` | A | US-9.4 |
+| `ResolveColleagueQuery` | A/U | US-3.1 (AC 3.1.6) |
 | *dev auth (`/dev-login`, `/dev-logout`, `ICurrentUser`, Admin policy)* | A/U | US-9.1, US-9.2, US-9.3 |
 | `UpsertOrderingPeriodCommand` | A | US-1.1 |
 | `GetOrderingPeriodQuery` | A/U | US-1.4 |
@@ -762,8 +769,8 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetPeriodMenuQuery` | A/U | US-2.5 |
 | `GetTodayMenuForUserQuery` | U | US-2.6 |
 | `PlacePeriodOrderCommand` | U | US-3.1 |
-| `CancelMenuOrdersCommand` | U | US-3.2 |
-| `GetMyPeriodOrderQuery` | U | US-3.3 |
+| `CancelMenuOrdersCommand` | U (idegenre A) | US-3.2 |
+| `GetMyPeriodOrderQuery` | U (idegenre A) | US-3.3 |
 | `GetUserOrdersQuery` | A | US-3.4 |
 | `UpsertALaCarteItemCommand` | A | US-4.3 |
 | `SetALaCarteItemActiveCommand` | A | US-4.3 |
@@ -788,12 +795,15 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetMyCreditLedgerQuery` | U | US-5.3 |
 | `AddManualCreditCommand` | A | US-5.2 |
 | `GetBalancesQuery` | A | *(nincs önálló story — AC 5.2.1-et támogató implementációs részlet)* |
+| `GetAdminDashboardQuery` | A | *(nincs önálló story — az admin belépési pontja, a meglévő epicek adatait összesíti)* |
 | `GetMyNotificationsQuery` | U | US-8.1 |
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
-Minden use case-hez tartozik story és fordítva — a `GetBalancesQuery` az egyetlen kivétel, ez tisztán
-implementációs részlet (admin áttekintő lista), nincs hozzá önálló AC. A kereszt-metsző követelmények
+Minden use case-hez tartozik story és fordítva — két kivétel van, mindkettő tisztán implementációs
+részlet, önálló AC nélkül: a `GetBalancesQuery` (admin egyenleg-lista) és a `GetAdminDashboardQuery`
+(az admin áttekintő, `/admin`, ami a meglévő epicek adatait összesíti). A `ResolveColleagueQuery` nem
+kapott önálló storyt: az AC 3.1.6 azonosítási lépése, ezért az US-3.1 alatt szerepel. A kereszt-metsző követelmények
 (Epic 10) minden sorra vonatkoznak.
 
 **Implementációs állapot:** az Epic 1–4 (Naptár/Menük/Rendelés/À la carte) teljes egészében
@@ -812,12 +822,17 @@ historikus adatmodellel (egy nap többször zárható/nyitható, minden zárás 
 a `KitchenClosureQueries.IsClosedAsync`/`GetClosedDatesAsync` közös kapu-ellenőrzéssel (ezt használja a
 rendelés/lemondás a `WorkingDayCalculator.CanChange`-en keresztül, a menü-szerkesztés/törlés és a nap
 kizárása is), UI-val (`KitchenSummary.razor` a `/konyhai-osszesito` alatt, `CloseDayDialog.razor`,
-`ReopenDayDialog.razor`, admin-only `NavMenu` "KONYHA" szekció) és teljes teszt-lefedettséggel mind az 5
+`ReopenDayDialog.razor`, admin-only `NavMenu` „Konyha" link) és teljes teszt-lefedettséggel mind az 5
 handlerre, mind a 3 komponensre.
 
-Az Epic 7–8 (Számlázás, Értesítések — a fenti táblázat `GeneratePeriodInvoicesCommand`-tól
-`MarkAllNotificationsReadCommand`-ig terjedő 11 sorából mind a 7, amelyik nem az Epic 5 Billing
-use case-eihez tartozik) egyelőre csak tervezve van, a kód még nem készült el hozzájuk (ld.
-`01-szerver-architektura.md` "10. Végrehajtási sorrend", Fázis 6–7) — nincs se `Features/`, se UI, se
-`NavMenu` link ezekhez. Az `INotificationService` továbbra is write-only marad (Epic 8 olvasó oldala még
-nem készült el).
+Az Epic 7 (Számlázás) elkészült: `GeneratePeriodInvoicesCommand`, `MarkInvoicePaidCommand`,
+`GetInvoicesQuery`, `GetMyInvoicesQuery` (`Features/Billing/`), UI-val (`AdminInvoices.razor` a
+`/szamlak`, `MyInvoices.razor` a `/szamlaim` alatt, `GenerateInvoicesDialog.razor`,
+`MarkInvoicePaidDialog.razor`, `NavMenu` linkekkel mindkét ághoz). A számla **nem** a (felhasználó,
+időszak) párra szól, hanem egy konkrét rendelés-halmazra (`MenuOrder.PeriodInvoiceId`), ezért egy
+időszakra több számla is lehet: az újrafuttatás a közben leadott napokról kiegészítő számlát állít ki,
+nem no-op (AC 7.1.6). À la carte tétel nem kerül a periódus-számlára — azt a dolgozó aznap fizeti.
+
+Az Epic 8 (Értesítések) továbbra is csak tervezve van: az `INotificationService` write-only, olvasó
+lekérdezés és UI nincs hozzá, a `MarkNotificationReadCommand` / `MarkAllNotificationsReadCommand` /
+`GetMyNotificationsQuery` sorokhoz nincs se `Features/`, se `NavMenu` link.

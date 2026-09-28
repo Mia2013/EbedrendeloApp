@@ -1,9 +1,13 @@
+using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Domain.Enums;
 using MediatR;
 
 namespace EbedrendeloApp.Features.Menus.GetTodayMenuForUser;
 
-public sealed record GetTodayMenuForUserQuery(int UserId) : IRequest<TodayMenuDto>;
+public sealed record GetTodayMenuForUserQuery(int UserId) : IRequest<TodayMenuDto>, IActsOnBehalfOf
+{
+    int IActsOnBehalfOf.TargetUserId => UserId;
+}
 
 /// <summary>
 /// <paramref name="MySelection"/> is null both when the day isn't orderable at all and when it is but
