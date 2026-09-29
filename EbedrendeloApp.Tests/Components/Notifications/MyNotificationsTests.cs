@@ -27,6 +27,7 @@ public class MyNotificationsTests : MudBunitContext
 
     public MyNotificationsTests()
     {
+        listQuery = StoreQuery;
         Services.AddMudServices();
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IAppClock>(new FixedAppClock(NowLocal));
@@ -35,22 +36,34 @@ public class MyNotificationsTests : MudBunitContext
         Services.AddScoped<NotificationBadgeState>();
 
         // A fake egy memóriabeli listán dolgozik, hogy a jelölés hatása a következő lekérdezésben látsszon.
-        mediator.Register<GetMyNotificationsQuery, IReadOnlyList<NotificationDto>>(q =>
-            store.Where(n => !q.UnreadOnly || !n.IsRead).ToList());
+        mediator.Register<GetMyNotificationsQuery, IReadOnlyList<NotificationDto>>(q => listQuery(q));
         mediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ =>
             new NotificationCountsDto(store.Count, store.Count(n => !n.IsRead)));
-        mediator.Register<MarkNotificationReadCommand, Result>(c =>
+
+        // Élesben a NotificationBadgeRefreshBehavior frissíti a számlálót a sikeres parancs után — a fake
+        // mediatoron nincs pipeline, ezért a parancs-kezelők ezt maguk teszik meg.
+        mediator.Register<MarkNotificationReadCommand, Result>(async c =>
         {
+            markReadCalls.Add(c.NotificationId);
             MarkRead(c.NotificationId);
+            await Services.GetRequiredService<NotificationBadgeState>().RefreshIfDisplayedAsync();
             return Result.Success();
         });
-        mediator.Register<MarkAllNotificationsReadCommand, Result<int>>(_ =>
+        mediator.Register<MarkAllNotificationsReadCommand, Result<int>>(async _ =>
         {
             var unread = store.Where(n => !n.IsRead).Select(n => n.Id).ToList();
             unread.ForEach(MarkRead);
+            await Services.GetRequiredService<NotificationBadgeState>().RefreshIfDisplayedAsync();
             return Result.Success(unread.Count);
         });
     }
+
+    private readonly List<int> markReadCalls = [];
+
+    private Func<GetMyNotificationsQuery, Task<IReadOnlyList<NotificationDto>>> listQuery;
+
+    private Task<IReadOnlyList<NotificationDto>> StoreQuery(GetMyNotificationsQuery q)
+        => Task.FromResult<IReadOnlyList<NotificationDto>>(store.Where(n => !q.UnreadOnly || !n.IsRead).ToList());
 
     private void MarkRead(int id)
     {
@@ -64,6 +77,12 @@ public class MyNotificationsTests : MudBunitContext
 
     private IRenderedComponent<MyNotifications> RenderPage()
         => Render<MyNotifications>((ComponentParameterCollectionBuilder<MyNotifications> _) => { });
+
+    private static AngleSharp.Dom.IElement Row(IRenderedComponent<MyNotifications> cut, string title)
+        => cut.FindAll("button[type='button']").Single(b => b.TextContent.Contains(title));
+
+    private static void ChooseFilter(IRenderedComponent<MyNotifications> cut, string label)
+        => cut.FindAll(".mud-chip").First(c => c.TextContent.Contains(label)).Click();
 
     private static IReadOnlyList<string> GroupLabels(IRenderedComponent<MyNotifications> cut)
         => cut.FindAll(".mud-typography-overline").Select(e => e.TextContent.Trim()).ToList();
@@ -91,28 +110,83 @@ public class MyNotificationsTests : MudBunitContext
     }
 
     [Fact]
-    public void Clicking_an_unread_notification_marks_it_read()
+    public void Clicking_an_unread_notification_marks_it_read_and_keeps_it_in_place()
     {
-        Add(1, "Olvasatlan", NowLocal);
+        Add(1, "Lemondás", NowLocal);
 
         var cut = RenderPage();
-        Assert.Single(cut.FindAll("[role='button']"));
+        Row(cut, "Lemondás").Click();
 
-        cut.Find("[role='button']").Click();
-
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[role='button']")));
+        cut.WaitForAssertion(() => Assert.Equal("true", Row(cut, "Lemondás").GetAttribute("aria-disabled")));
         Assert.True(store.Single().IsRead);
+        Assert.Contains("Olvasatlan (0)", cut.Markup);
     }
 
     [Fact]
-    public void Enter_on_an_unread_notification_marks_it_read_too()
+    public void A_second_click_does_not_mark_the_row_that_moved_up_in_the_unread_filter()
     {
-        Add(1, "Olvasatlan", NowLocal);
+        // Dupla kattintás / nyomva tartott Enter: a második esemény nem jelölheti a következő sort.
+        Add(1, "Első", NowLocal);
+        Add(2, "Második", NowLocal.AddMinutes(-1));
 
         var cut = RenderPage();
-        cut.Find("[role='button']").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" });
+        ChooseFilter(cut, "Olvasatlan");
+        cut.WaitForAssertion(() => Assert.Contains("Olvasatlan (2)", cut.Markup));
 
-        cut.WaitForAssertion(() => Assert.True(store.Single().IsRead));
+        var first = Row(cut, "Első");
+        first.Click();
+        cut.WaitForAssertion(() => Assert.Equal("true", Row(cut, "Első").GetAttribute("aria-disabled")));
+        Row(cut, "Első").Click();
+
+        Assert.Equal([1], markReadCalls);
+        Assert.False(store.Single(n => n.Id == 2).IsRead);
+    }
+
+    [Fact]
+    public void The_row_is_a_native_button_whose_accessible_name_is_its_content()
+    {
+        Add(1, "Rendelésed lemondásra került", NowLocal);
+
+        var cut = RenderPage();
+        var row = Row(cut, "Rendelésed lemondásra került");
+
+        // Nincs aria-label, ami elfedné a szöveget és a dátumot; az olvasatlanság szöveggel is szerepel.
+        Assert.Null(row.GetAttribute("aria-label"));
+        Assert.Contains("Szöveg", row.TextContent);
+        Assert.Contains("Olvasatlan · 2026.09.10. 09:00", row.TextContent);
+    }
+
+    [Fact]
+    public void A_slower_earlier_filter_load_does_not_overwrite_the_later_one()
+    {
+        Add(1, "Olvasott", NowLocal, isRead: true);
+        Add(2, "Új", NowLocal);
+        var cut = RenderPage();
+
+        // Az „Olvasatlan" betöltése beragad, közben a felhasználó visszavált „Mind"-re.
+        var slowUnread = new TaskCompletionSource<IReadOnlyList<NotificationDto>>();
+        listQuery = q => q.UnreadOnly ? slowUnread.Task : StoreQuery(q);
+        ChooseFilter(cut, "Olvasatlan");
+        ChooseFilter(cut, "Mind");
+        cut.WaitForAssertion(() => Assert.Contains(">Olvasott<", cut.Markup));
+
+        cut.InvokeAsync(() => slowUnread.SetResult([store[1]]));
+
+        cut.WaitForAssertion(() => Assert.Contains(">Olvasott<", cut.Markup));
+    }
+
+    [Fact]
+    public void A_new_notification_found_by_a_badge_refresh_reloads_the_list()
+    {
+        // Pl. a csengőre kattintás ezen az oldalon: a számláló frissül, és a lista is vele.
+        Add(1, "Régi", NowLocal);
+        var cut = RenderPage();
+
+        Add(2, "Friss", NowLocal);
+        cut.InvokeAsync(() => Services.GetRequiredService<NotificationBadgeState>().RefreshAsync());
+
+        cut.WaitForAssertion(() => Assert.Contains("Friss", cut.Markup));
+        Assert.Contains("Mind (2)", cut.Markup);
     }
 
     [Fact]
@@ -136,7 +210,7 @@ public class MyNotificationsTests : MudBunitContext
         Add(2, "Olvasatlan", NowLocal);
 
         var cut = RenderPage();
-        cut.FindAll(".mud-chip").First(c => c.TextContent.Contains("Olvasatlan")).Click();
+        ChooseFilter(cut, "Olvasatlan");
 
         cut.WaitForAssertion(() => Assert.DoesNotContain(">Olvasott<", cut.Markup));
         Assert.Contains("Olvasatlan (1)", cut.Markup);

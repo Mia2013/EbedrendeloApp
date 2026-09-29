@@ -58,7 +58,7 @@ Azért, hogy aznap ne készüljön étel (pl. elmaradó munkanap, karbantartás)
 * **AC 1.2.1 (Dátumkorlát):** Csak jövőbeli nap zárható ki (`Date > Today`). Aznapi vagy múltbeli nap kizárása azonnal elutasításra kerül.
 * **AC 1.2.2 (Lezárt nap védelme):** Ha a napra már létezik `KitchenClosure`, a kizárás elutasításra kerül.
 * **AC 1.2.3 (Rendelések lemondása):** A naphoz tartozó összes aktív `MenuOrder` állapota `Cancelled` lesz, `CancellationReason = DayExcluded` és a konkrét `CancelledByExcludedDayId` FK beállításával.
-* **AC 1.2.4 (Jóváírás és értesítés):** Minden érintett rendelés után `CancellationCredit` keletkezik a ledgerben, és a felhasználó `MenuCancelled` in-app értesítést kap.
+* **AC 1.2.4 (Jóváírás és értesítés):** Minden érintett, már kiszámlázott rendelés után `CancellationCredit` keletkezik a ledgerben, és a tulajdonos `CreditIssued` in-app értesítést kap; ki nem számlázott napnál nincs jóváírás, az értesítés `MenuCancelled` (01 §3.3). A leadó (AC 8.1.3) mindkét esetben `MenuCancelled`-et kap.
 * **AC 1.2.5 (A la carte érintetlen):** A la carte rendelés jövőbeli napra nem létezhet (csak aznapra adható le), ezért kizárásnál nincs teendő; a kizárt nap kínálata a lekérdezésekben üresen jelenik meg (AC 4.1.3).
 
 **Technikai hivatkozás:** `ExcludeDayCommand`, `ExcludedDay` entitás
@@ -175,8 +175,8 @@ Azért, hogy a már leadott rendelések automatikusan átkerüljenek az első el
 
 **Elfogadási Kritériumok:**
 * **AC 2.2.1 (Átvezetés):** Ha a napon marad másik variáns, az érintett aktív rendelések átkerülnek a legkisebb `SortOrder`/kód szerinti variánsra. A rendszer naplózza az eredeti kódot (`ReassignedFromVariantCode`) és az időpontot.
-* **AC 2.2.2 (Értesítés küldése):** Az átvezetésről a rendelés tulajdonosa és (ha más adta le) a leadója is `OrderReassigned` in-app értesítést kap.
-* **AC 2.2.3 (Utolsó variáns esete):** Ha nem marad más variáns a napon, az összes rendelés automatikusan lemondásra kerül (`CancellationReason = VariantRemoved`), jóváírás keletkezik és `MenuCancelled` értesítés megy ki.
+* **AC 2.2.2 (Értesítés küldése):** Az átvezetésről a rendelés tulajdonosa és (ha más adta le) a leadója is `OrderReassigned` in-app értesítést kap — a leadó kivéve, ha maga végezte a törlést (AC 8.1.3).
+* **AC 2.2.3 (Utolsó variáns esete):** Ha nem marad más variáns a napon, az összes rendelés automatikusan lemondásra kerül (`CancellationReason = VariantRemoved`); kiszámlázott napnál jóváírás keletkezik és a tulajdonos `CreditIssued`, egyébként `MenuCancelled` értesítést kap (AC 1.2.4 szerint).
 * **AC 2.2.4 (Lezárt nap védelme):** Ha a napra `KitchenClosure` létezik, a variáns törlése elutasításra kerül.
 
 **Technikai hivatkozás:** `DeleteMenuVariantCommand`, `IMenuReassignmentService`
@@ -207,7 +207,7 @@ Azért, hogy a tévesen felvitt vagy elmaradó napokat kivezethessem, az érinte
 
 **Elfogadási Kritériumok:**
 * **AC 2.4.1 (Rendelések lemondása):** A nap összes aktív rendelése lemondásra kerül `CancellationReason = MenuDeleted` okkal.
-* **AC 2.4.2 (Jóváírás és értesítés):** Minden érintett rendelés után `CancellationCredit` keletkezik, és a dolgozó `MenuCancelled` értesítést kap.
+* **AC 2.4.2 (Jóváírás és értesítés):** Minden érintett, már kiszámlázott rendelés után `CancellationCredit` keletkezik, és a tulajdonos `CreditIssued` értesítést kap; ki nem számlázott napnál `MenuCancelled`-et (AC 1.2.4 szerint).
 * **AC 2.4.3 (Lezárt nap védelme):** Ha a napra `KitchenClosure` létezik, a törlés elutasításra kerül.
 * **AC 2.4.4 (Elhatárolás a kizárástól):** A menü törlése nem teszi kizárt nappá a napot — ha a cél az, hogy aznap egyáltalán ne legyen kiszolgálás, az `ExcludeDayCommand` (US-1.2) a helyes eszköz.
 
@@ -604,11 +604,11 @@ Azért, hogy naprakész információval rendelkezzek a lemondásokról, átvezet
 * **AC 8.1.1 (Értesítési típusok):** A rendszer automatikusan értesítést generál:
   - Menü módosulásakor (`MenuChanged`),
   - Variáns törlése miatti átvezetéskor (`OrderReassigned`),
-  - Nap kizárása vagy menü törlése miatti lemondáskor (`MenuCancelled`),
+  - Lemondáskor (nap kizárása, menü- vagy utolsó variáns törlése, saját lemondás) — `MenuCancelled`, vagy ha a lemondás jóváírást szült, a tulajdonosnak `CreditIssued`,
   - Kizárás visszavonásakor (`OrderRestored` / `DayReopened`),
   - Jóváírás keletkezésekor és beszámításakor (`CreditIssued`, `CreditApplied`).
-* **AC 8.1.2 (Olvasottság kezelése):** A dolgozó lekérheti az értesítéseit (a legutóbbi 20-at), és egyenként — az értesítésre kattintva — vagy egyszerre az összeset olvasottnak jelölheti (`ReadAtUtc` kitöltése). Az olvasatlanok száma a menüpont mellett és a fejléc csengőjén látszik.
-* **AC 8.1.3 (Címzettség):** Ha a rendelést más adta le, az érintett esemény a rendelés tulajdonosához és a leadóhoz is eljut (AC 2.2.2).
+* **AC 8.1.2 (Olvasottság kezelése):** A dolgozó lekérheti az értesítéseit (a legutóbbi 20-at), és egyenként — az értesítésre kattintva — vagy egyszerre az összeset olvasottnak jelölheti (`ReadAtUtc` kitöltése). Az olvasatlanok száma a menüpont mellett és a fejléc csengőjén látszik, és a saját művelet (pl. lemondás) után azonnal frissül; más felhasználó művelete a következő navigáláskor jelenik meg.
+* **AC 8.1.3 (Címzettség):** Ha a rendelést más adta le, az érintett esemény a rendelés tulajdonosához és a leadóhoz is eljut (AC 2.2.2) — a leadóhoz kivéve, ha a műveletet maga végezte. A tulajdonos a saját műveletéről is kap értesítést. A jóváírás a tulajdonost illeti: jóváírásos lemondásnál a leadó `MenuCancelled`-et kap.
 
 **Technikai hivatkozás:** `GetMyNotificationsQuery`, `GetNotificationCountsQuery`, `MarkNotificationReadCommand`, `MarkAllNotificationsReadCommand`, `UserNotification`
 
@@ -838,6 +838,8 @@ Az Epic 8 (Értesítések) elkészült: `GetMyNotificationsQuery`, `GetNotificat
 `MarkNotificationReadCommand`, `MarkAllNotificationsReadCommand` (`Features/Notifications/`), UI-val
 (`MyNotifications.razor` az `/ertesiteseim` alatt, `NotificationBell.razor` a fejlécben, „Értesítéseim"
 menüpont olvasatlan-számlálóval a dolgozói és az admin „Saját rendelésem" menüben). Az AC 8.1.3 címzettsége
-egységes: minden rendelés-esemény a leadót is értesíti (`INotificationService.NotifyOrderParties`).
-Jóváírással járó lemondásnál (bármelyik útvonalon) a tulajdonos `CreditIssued`, a leadó `MenuCancelled`
-értesítést kap — a jóváírás csak a tulajdonost illeti.
+egységes: minden rendelés-esemény a leadót is értesíti, kivéve ha a műveletet maga végezte
+(`INotificationService.NotifyOrderParties`). Jóváírással járó lemondásnál (bármelyik útvonalon) a tulajdonos
+`CreditIssued`, a leadó `MenuCancelled` értesítést kap — a típust egy helyen, a
+`NotifyOrderCancelled` dönti el. A számláló minden sikeres parancs után frissül
+(`NotificationBadgeRefreshBehavior`).

@@ -146,6 +146,11 @@ public class RemoveExcludedDayHandlerTests : IDisposable
         await using var verifyDb = dbFactory.CreateDbContext();
         var originalOrder = await verifyDb.MenuOrders.SingleAsync(o => o.Id == orderId);
         Assert.Equal(OrderStatus.Cancelled, originalOrder.Status);
+
+        // Van már aktív rendelés a napra — az értesítés nem biztathat újrarendelésre (AlreadyOrdered-del bukna).
+        var reopened = await verifyDb.UserNotifications.SingleAsync(n => n.UserId == userId && n.Type == NotificationType.DayReopened);
+        Assert.Contains("az marad érvényben", reopened.Message);
+        Assert.DoesNotContain("újra rendelhetsz", reopened.Message);
     }
 
     [Fact]

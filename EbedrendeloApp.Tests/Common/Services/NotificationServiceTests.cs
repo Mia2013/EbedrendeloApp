@@ -74,15 +74,35 @@ public class NotificationServiceTests : IDisposable
     }
 
     [Fact]
-    public void The_placer_can_get_a_different_type_than_the_owner()
+    public void A_cancellation_with_credit_is_CreditIssued_for_the_owner_but_MenuCancelled_for_the_placer()
     {
+        // 01 §3.3 — a jóváírás a tulajdonosé; a leadónak ez puszta lemondás.
         using var db = dbFactory.CreateDbContext();
-        sut.NotifyOrderParties(db, Order(placedBy: Colleague), NotificationType.CreditIssued, OwnerText, PlacerText,
-            performedByUserId: Owner, NowUtc, placerType: NotificationType.MenuCancelled);
+        var credit = new CreditEntry
+        {
+            UserId = Owner,
+            AmountHuf = 1400,
+            Kind = CreditEntryKind.CancellationCredit,
+            CreatedByUserId = Admin,
+            RemainingHuf = 1400,
+        };
+
+        sut.NotifyOrderCancelled(db, Order(placedBy: Colleague), credit, OwnerText, PlacerText, performedByUserId: Admin, NowUtc);
 
         var notifications = db.UserNotifications.Local.ToList();
         Assert.Equal(NotificationType.CreditIssued, notifications.Single(n => n.UserId == Owner).Type);
         Assert.Equal(NotificationType.MenuCancelled, notifications.Single(n => n.UserId == Colleague).Type);
+    }
+
+    [Fact]
+    public void A_cancellation_without_credit_is_MenuCancelled_for_both()
+    {
+        using var db = dbFactory.CreateDbContext();
+
+        sut.NotifyOrderCancelled(db, Order(placedBy: Colleague), credit: null, OwnerText, PlacerText, performedByUserId: Admin, NowUtc);
+
+        Assert.All(db.UserNotifications.Local, n => Assert.Equal(NotificationType.MenuCancelled, n.Type));
+        Assert.Equal(2, db.UserNotifications.Local.Count);
     }
 
     [Fact]

@@ -35,6 +35,8 @@ public static class ApplicationServiceCollectionExtensions
             // hogy jól kérte-e.
             cfg.AddOpenBehavior(typeof(AuthorizationBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            // A parancs lefutása után: a saját művelet keltette értesítés azonnal látsszon a csengőn.
+            cfg.AddOpenBehavior(typeof(NotificationBadgeRefreshBehavior<,>));
         });
 
         AddValidatorsFromCurrentAssembly(services);

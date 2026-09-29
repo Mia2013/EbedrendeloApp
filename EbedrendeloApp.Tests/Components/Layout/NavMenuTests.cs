@@ -33,7 +33,7 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         => badgeMediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ => new NotificationCountsDto(unread, unread));
 
     private static string? UnreadChipText(IRenderedComponent<NavMenu> cut)
-        => cut.Find("a[href='ertesiteseim']").QuerySelector(".mud-chip")?.TextContent.Trim();
+        => cut.Find("a[href='ertesiteseim']").QuerySelector(".mud-badge")?.TextContent.Trim();
 
     /// <summary>A szolgáltatást a navigálás előtt kell regisztrálni: bUnitban az első
     /// <c>GetRequiredService</c> után már nem vehető fel új.</summary>
@@ -122,7 +122,27 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
 
         var cut = RenderAs(isAdmin);
 
-        Assert.Equal("4", UnreadChipText(cut));
+        cut.WaitForAssertion(() => Assert.Equal("4", UnreadChipText(cut)));
+        // A szám felolvasható címkét kap, és nem fókuszálható elem a linken belül.
+        var badge = cut.Find("a[href='ertesiteseim'] .mud-badge");
+        Assert.Equal("4 olvasatlan", badge.GetAttribute("aria-label"));
+        Assert.Empty(cut.FindAll("a[href='ertesiteseim'] [tabindex]"));
+    }
+
+    [Fact]
+    public void The_links_do_not_wait_for_the_unread_count()
+    {
+        // A számláló lekérdezése még fut — a szerepkörfüggő linkek ettől már látszanak.
+        var pending = new TaskCompletionSource<NotificationCountsDto>();
+        badgeMediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ => pending.Task);
+
+        var cut = RenderAs(isAdmin: false);
+
+        Assert.NotNull(cut.Find("a[href='naptar']"));
+        Assert.Null(UnreadChipText(cut));
+
+        pending.SetResult(new NotificationCountsDto(2, 2));
+        cut.WaitForAssertion(() => Assert.Equal("2", UnreadChipText(cut)));
     }
 
     [Fact]

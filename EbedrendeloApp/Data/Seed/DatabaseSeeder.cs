@@ -520,7 +520,7 @@ public static class DatabaseSeeder
 
             var (type, title, message) = (cancelled.CancellationReason, isInvoiced) switch
             {
-                (CancellationReason.DayExcluded, true) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
+                (CancellationReason.DayExcluded, true) => (NotificationType.CreditIssued, "Rendelésed lemondásra került",
                     $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került, a rendelésed jóváírásra került."),
                 (CancellationReason.DayExcluded, false) => (NotificationType.MenuCancelled, "Rendelésed lemondásra került",
                     $"A(z) {cancelled.Date:yyyy.MM.dd} nap kizárásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."),

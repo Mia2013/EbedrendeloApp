@@ -359,13 +359,13 @@ DeleteVariant(date, code):
     maradék = a nap többi variánsa, SortOrder majd Code szerint
     ha maradék üres:
         minden érintett rendelés → lemondás (CancellationReason = VariantRemoved)
-                                 + jóváírás (3.3) + értesítés (MenuCancelled)
+                                 + jóváírás (3.3) + értesítés (NotifyOrderCancelled: CreditIssued/MenuCancelled)
     különben:
         cél = maradék.First()                        // „A menü legyen a default"
         minden érintett rendelés:
             ReassignedFromVariantCode = régi kód;  MenuVariantId = cél.Id;  ReassignedAtUtc = most
             értesítés (OrderReassigned) a rendelés tulajdonosának
-            + ha PlacedByUserId ≠ UserId, a leadónak is
+            + ha PlacedByUserId ≠ UserId és nem ő végezte a törlést, a leadónak is
     variáns soft delete (RemovedAtUtc = most)                    // 2. fejezet, „miért nincs fizikai törlés"
 ```
 
@@ -378,7 +378,7 @@ menti a változást: előbb `SaveChangesAsync` az új/módosított variánsokra 
 
 Puszta **módosításnál** (név/leírás változik) nincs átvezetés, csak `MenuChanged` értesítés az adott nap
 aktív rendelőinek. Ha egy `UpsertDailyMenuCommand` hívás egyszerre módosít is és variánst is töröl, egy
-rendelés csak **egy** értesítést kap: aki már `OrderReassigned`/`MenuCancelled` üzenetet kapott a fenti
+rendelés csak **egy** értesítést kap: aki már átvezetés- vagy lemondás-értesítést (`OrderReassigned`/`MenuCancelled`/`CreditIssued`) kapott a fenti
 ágban, az nem kap még `MenuChanged`-et is ugyanarra a hívásra — a kettő ugyanazt az eseményt jelentené
 kétszer.
 
@@ -545,7 +545,7 @@ ExcludeDay(date, reason):
         Status = Cancelled
         CancellationReason = DayExcluded
         CancelledByExcludedDayId = excluded.Id
-        jóváírás (3.3) + értesítés (MenuCancelled)
+        jóváírás (3.3) + értesítés (NotifyOrderCancelled: CreditIssued/MenuCancelled)
 ```
 
 **A la carte:** nincs teendő. A tételek csak aznapra rendelhetők, jövőbeli napra tehát nem létezhet
@@ -816,13 +816,15 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   lapozás nélkül (az értesítés friss eseményről szól). A leadónak szóló értesítésnél kitölti, kinek a
   nevében szólt a rendelés (`OnBehalfOfName`).
 - `GetNotificationCountsQuery(UserId)` **[U]** — összes + olvasatlan; a menüpont és a fejléc csengőjének
-  számlálója (`Common/Notifications/NotificationBadgeState`, körönként egy példány, navigáláskor frissül —
-  valós idejű push nincs).
+  számlálója (`Common/Notifications/NotificationBadgeState`, körönként egy példány). Navigáláskor és minden
+  sikeres parancs után frissül (`NotificationBadgeRefreshBehavior` — a parancsot a `Command` névvégződés
+  jelöli); más felhasználó művelete a következő navigáláskor látszik, valós idejű push nincs.
 - `MarkNotificationReadCommand` **[U]** — kattintásra; idegen értesítés `NotFound`, már olvasott no-op.
 - `MarkAllNotificationsReadCommand` **[U]** — a 20-as listán túli olvasatlanokat is jelöli.
 - **Címzettség (AC 8.1.3):** rendelés-eseményről az `INotificationService.NotifyOrderParties` értesít — a
   tulajdonost, és ha a rendelést más adta le, a leadót is („az általad leadott…"), kivéve ha a leadó maga
-  végezte a műveletet.
+  végezte a műveletet. Lemondásról a `NotifyOrderCancelled`: jóváírásnál a tulajdonos `CreditIssued`-ot kap,
+  a leadó `MenuCancelled`-et (a jóváírás a tulajdonosé, 3.3).
 
 **Kimenet-konvenció:** minden command `Result` / `Result<T>` értéket ad vissza (nem kivételt) a várt
 üzleti kimenetekre (határidő lejárt, elfogyott, nap lezárva). A `ValidationBehavior` a bemeneti
@@ -961,11 +963,12 @@ kapcsolat, `DataSource=:memory:`): valódi relációs viselkedés, gyors, támog
   - új menü létrehozása **nem** küld `MenuChanged`-et (nincs kire, amíg nincs korábbi rendelés)
   - variáns kikerülése (akár `DeleteMenuVariantCommand`-dal, akár `UpsertDailyMenuCommand`-ból való
     kihagyással) → átvezetés a legkisebb `SortOrder`/`Code` szerinti maradék variánsra, `OrderReassigned`
-    a tulajdonosnak és — ha eltér — a leadónak is
+    a tulajdonosnak és — ha eltér, és nem ő végezte a műveletet — a leadónak is
   - variánskód átnevezése (`"A"` → `"D"`) egyetlen aktív variánson → a rendelés átvezetődik az új kódra,
     nem mondódik le (bizonyítja, hogy a frissen felvitt variáns még ugyanabban a hívásban érvényes
     átvezetési cél)
-  - az utolsó variáns törlése/kihagyása → lemondás `VariantRemoved` okkal + jóváírás + `MenuCancelled`
+  - az utolsó variáns törlése/kihagyása → lemondás `VariantRemoved` okkal; kiszámlázott napnál jóváírás +
+    `CreditIssued` a tulajdonosnak, egyébként `MenuCancelled`; a leadó mindkét esetben `MenuCancelled`-et kap
   - `DeleteDailyMenuCommand` → a nap minden aktív rendelése lemondva `MenuDeleted` okkal + jóváírás;
     lezárt napra elutasítva
   - törlés után `UpsertDailyMenuCommand` ugyanarra a `Date`-re **feléleszti** a soft-deletelt sort, nem

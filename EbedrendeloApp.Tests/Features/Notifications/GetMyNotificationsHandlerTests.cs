@@ -150,11 +150,37 @@ public class GetMyNotificationsHandlerTests : IDisposable
     public async Task Created_time_is_converted_to_local_time()
     {
         SeedNotification(ownerId, 30);
+        var handler = new GetMyNotificationsHandler(dbFactory, new SummerTimeClock());
 
-        var result = await CreateHandler().Handle(new GetMyNotificationsQuery(ownerId), CancellationToken.None);
+        var result = await handler.Handle(new GetMyNotificationsQuery(ownerId), CancellationToken.None);
 
-        // A FixedAppClock a UTC-t változatlanul adja vissza helyi időként — a lényeg, hogy a handler
-        // az órán keresztül számol, nem a gép időzónájával.
-        Assert.Equal(new DateTime(2026, 9, 1, 8, 30, 0), Assert.Single(result).CreatedAtLocal);
+        // 08:30 UTC → 10:30 nyári időben: a handler az órán át számol, nem adja vissza a nyers UTC-t.
+        Assert.Equal(new DateTime(2026, 9, 1, 10, 30, 0), Assert.Single(result).CreatedAtLocal);
+    }
+
+    [Fact]
+    public async Task A_nameless_owner_is_shown_by_user_name_to_the_placer()
+    {
+        // A „stranger" felhasználónak nincs vezeték- és keresztneve — üres „ nevében" helyett a
+        // felhasználónév kell.
+        var orderId = SeedOrder(ownerUserId: strangerId, placedByUserId: colleagueId);
+        SeedNotification(colleagueId, 1, relatedMenuOrderId: orderId);
+
+        var result = await CreateHandler().Handle(new GetMyNotificationsQuery(colleagueId), CancellationToken.None);
+
+        Assert.Equal("cecil", Assert.Single(result).OnBehalfOfName);
+    }
+
+    /// <summary>Budapesti nyári idő (UTC+2) — a <see cref="FixedAppClock"/> a UTC-t változatlanul adná
+    /// vissza, ami mellett egy konverziót kihagyó handler is átmenne.</summary>
+    private sealed class SummerTimeClock : EbedrendeloApp.Common.Time.IAppClock
+    {
+        public DateTimeOffset UtcNow => new(NowLocal.AddHours(-2), TimeSpan.Zero);
+
+        public DateTime LocalNow => NowLocal;
+
+        public DateOnly Today => DateOnly.FromDateTime(NowLocal);
+
+        public DateTime ToLocal(DateTimeOffset utc) => utc.UtcDateTime.AddHours(2);
     }
 }

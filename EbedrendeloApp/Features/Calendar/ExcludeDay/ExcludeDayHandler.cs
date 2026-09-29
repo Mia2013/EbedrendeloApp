@@ -61,10 +61,10 @@ public sealed class ExcludeDayHandler(
             order.CancelledByExcludedDayId = excluded.Id;
 
             var credit = creditService.IssueCancellationCredit(db, order, request.CreatedByUserId, nowUtc);
-            notificationService.NotifyOrderParties(
+            notificationService.NotifyOrderCancelled(
                 db,
                 order,
-                credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
+                credit,
                 new OrderNotificationText(
                     "Rendelésed lemondásra került",
                     credit is null
@@ -74,9 +74,7 @@ public sealed class ExcludeDayHandler(
                     "Az általad leadott rendelés lemondásra került",
                     $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), az általad leadott rendelés lemondásra került."),
                 request.CreatedByUserId,
-                nowUtc,
-                // A jóváírás csak a tulajdonost illeti — a leadónak ez elvesztett rendelés.
-                placerType: NotificationType.MenuCancelled);
+                nowUtc);
         }
 
         await db.SaveChangesAsync(cancellationToken);

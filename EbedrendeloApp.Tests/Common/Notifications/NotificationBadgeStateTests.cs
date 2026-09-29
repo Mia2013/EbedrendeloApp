@@ -36,12 +36,24 @@ public class NotificationBadgeStateTests : BunitContext
     [Fact]
     public async Task Two_displays_loading_at_once_share_a_single_query()
     {
-        unread = 4;
+        // A lekérdezés addig függőben van, amíg mindkét kijelző el nem indította a betöltést — így
+        // valóban egyszerre futnak, nem egymás után.
+        var pending = new TaskCompletionSource<NotificationCountsDto>();
+        var calls = 0;
+        mediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ =>
+        {
+            calls++;
+            return pending.Task;
+        });
         using var sut = CreateSut();
 
-        await Task.WhenAll(sut.EnsureLoadedAsync(), sut.EnsureLoadedAsync());
+        var menu = sut.EnsureLoadedAsync();
+        var bell = sut.EnsureLoadedAsync();
+        Assert.False(menu.IsCompleted);
+        pending.SetResult(new NotificationCountsDto(4, 4));
+        await Task.WhenAll(menu, bell);
 
-        Assert.Single(queriedUserIds);
+        Assert.Equal(1, calls);
         Assert.Equal(4, sut.Unread);
     }
 
@@ -109,6 +121,67 @@ public class NotificationBadgeStateTests : BunitContext
         await older;
 
         Assert.Equal(0, sut.Unread);
+    }
+
+    [Fact]
+    public async Task When_a_newer_refresh_fails_the_older_successful_result_is_still_applied()
+    {
+        var slowFirst = new TaskCompletionSource<NotificationCountsDto>();
+        var calls = 0;
+        mediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ => ++calls switch
+        {
+            1 => slowFirst.Task,
+            _ => Task.FromException<NotificationCountsDto>(new InvalidOperationException("átmeneti hiba")),
+        });
+        using var sut = CreateSut();
+
+        var initial = sut.EnsureLoadedAsync();
+        await sut.RefreshSafelyAsync();
+        slowFirst.SetResult(new NotificationCountsDto(5, 5));
+        await initial;
+
+        Assert.Equal(5, sut.Unread);
+    }
+
+    [Fact]
+    public async Task Switching_user_resets_the_count_and_ignores_the_previous_users_pending_query()
+    {
+        // 1. hívás: a régi felhasználó első betöltése; 2.: a régi felhasználóra indult, lassú frissítés;
+        // 3.: az új felhasználó lekérdezése, ami elbukik — a számláló így sem kaphatja vissza a régi számot.
+        var slowOldUser = new TaskCompletionSource<NotificationCountsDto>();
+        var calls = 0;
+        mediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ => ++calls switch
+        {
+            1 => Task.FromResult(new NotificationCountsDto(12, 12)),
+            2 => slowOldUser.Task,
+            _ => Task.FromException<NotificationCountsDto>(new InvalidOperationException("átmeneti hiba")),
+        });
+        using var sut = CreateSut();
+        await sut.EnsureLoadedAsync();
+        Assert.Equal(12, sut.Unread);
+
+        // A régi felhasználóra indul még egy frissítés (pl. navigálás), aztán felhasználóváltás.
+        var oldUserRefresh = sut.RefreshSafelyAsync();
+        await currentUser.SwitchToAsync(7);
+        Assert.Equal(0, sut.Unread);
+
+        slowOldUser.SetResult(new NotificationCountsDto(12, 12));
+        await oldUserRefresh;
+
+        Assert.Equal(0, sut.Unread);
+    }
+
+    [Fact]
+    public async Task RefreshIfDisplayedAsync_does_nothing_until_a_display_loaded_the_count()
+    {
+        using var sut = CreateSut();
+
+        await sut.RefreshIfDisplayedAsync();
+        Assert.Empty(queriedUserIds);
+
+        await sut.EnsureLoadedAsync();
+        await sut.RefreshIfDisplayedAsync();
+        Assert.Equal(2, queriedUserIds.Count);
     }
 
     [Fact]

@@ -167,16 +167,21 @@ public sealed class RemoveExcludedDayHandler(
                 order.CancelledByExcludedDayId = null;
 
                 skipped.Add(new SkippedOrderInfo(userName, skipReason));
+
+                // Ha a kihagyás oka az, hogy közben már van aktív rendelés a napra, nincs mit újra leadni —
+                // a „rendelj újra" tanács ott félrevezető lenne (AlreadyOrdered-del bukna).
+                var (ownerMessage, placerMessage) = hasNewerActiveOrder
+                    ? ($"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül. A korábbi rendelésed nem állt vissza, mert időközben már van aktív rendelésed erre a napra — az marad érvényben.",
+                       $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül. Az általad leadott rendelés nem állt vissza, mert időközben már van aktív rendelés erre a napra — az marad érvényben.")
+                    : ($"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de a rendelésed nem állt vissza automatikusan — a leadási határidőn belül újra rendelhetsz.",
+                       $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de az általad leadott rendelés nem állt vissza automatikusan — a leadási határidőn belül újra leadható.");
+
                 notificationService.NotifyOrderParties(
                     db,
                     order,
                     NotificationType.DayReopened,
-                    new OrderNotificationText(
-                        "A nap újranyitva",
-                        $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de a rendelésed nem állt vissza automatikusan — a leadási határidőn belül újra rendelhetsz."),
-                    new OrderNotificationText(
-                        "A nap újranyitva",
-                        $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de az általad leadott rendelés nem állt vissza automatikusan — a leadási határidőn belül újra leadható."),
+                    new OrderNotificationText("A nap újranyitva", ownerMessage),
+                    new OrderNotificationText("A nap újranyitva", placerMessage),
                     request.PerformedByUserId,
                     nowUtc);
             }

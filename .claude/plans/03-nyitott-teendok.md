@@ -290,16 +290,16 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
 
 ## Értesítések (Epic 8) — code review (2026-09-29), nem blokkoló
 
-- [ ] **Szóköz görgeti az oldalt** az `/ertesiteseim` olvasatlan során (`role="button"`): a jelölés
-      megtörténik, de az oldal is ugrik. `:preventDefault` natív `div`-re kell (RZ10010), és csak a
-      Szóközre — a Tab maradjon.
-- [ ] **A számlálót kétszer kérdezzük** az oldalon: a `MyNotifications` saját `GetNotificationCountsQuery`-t
-      futtat, miközben a `NotificationBadgeState` is. Ha a badge-állapot a `Total`-t is tartaná, az oldal
-      abból olvashatna.
+- [x] **Szóköz görgeti az oldalt / a számlálót kétszer kérdezzük** — megoldva a 2. review-körben: a sor natív
+      gomb, az oldal a `NotificationBadgeState` (`Total` + `Unread`) számait mutatja.
 - [ ] **Kézi inline stílus** a `MyNotifications.razor`-ban (`opacity:.65`, `primary-hover` háttér, a pötty
       `font-size`-a) — MudBlazor megoldásra cserélendő (pl. `MudBadge Dot`, `Size`).
 - [ ] **A szűrő-chip száma és a lista eltérhet**: „Olvasatlan (35)" mellett a lista 20 sort mutat
       (`GetMyNotificationsQuery.Limit`), jelzés nélkül. Legalább egy „további N régebbi" sor kellene.
+- [ ] **A leadó-kolléga seedelése négy tesztfájlban másolva** (`ExcludeDay`, `DeleteDailyMenu`,
+      `DeleteMenuVariant`, `RemoveExcludedDay` tesztek) — közös `TestSupport` helper lehetne. A
+      `NotificationReadStateHandlerTests` nem use case-névre szól, így a `--filter "~MarkNotificationRead"`
+      nem futtatja.
 - Szándékos, nem hiba: a saját műveletéről a **tulajdonos** is kap értesítést (pl. saját lemondásnál a
   jóváírásról), a leadó viszont nem, ha ő végezte a műveletet (01 §6 Notifications).
 

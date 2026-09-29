@@ -25,10 +25,15 @@ public sealed class GetMyNotificationsHandler(IDbContextFactory<EbedrendeloDbCon
                 n.RelatedDate,
                 n.CreatedAtUtc,
                 IsRead = n.ReadAtUtc != null,
-                // A leadó értesítésénél a rendelés tulajdonosa más, mint a címzett — az ő neve kell.
+                // A leadó értesítésénél a rendelés tulajdonosa más, mint a címzett — az ő neve kell. Név
+                // nélküli felhasználónál (pl. hiányos HR-import) a felhasználónév, hogy ne üres „ nevében"
+                // jelenjen meg.
                 OnBehalfOfName = db.MenuOrders
                     .Where(o => o.Id == n.RelatedMenuOrderId && o.UserId != n.UserId)
-                    .Join(db.Users, o => o.UserId, u => u.Id, (_, u) => (u.VezetekNev + " " + u.KeresztNev).Trim())
+                    .Join(db.Users, o => o.UserId, u => u.Id, (_, u) =>
+                        (u.VezetekNev + " " + u.KeresztNev).Trim() == ""
+                            ? u.UserName
+                            : (u.VezetekNev + " " + u.KeresztNev).Trim())
                     .FirstOrDefault(),
             })
             .ToListAsync(cancellationToken);

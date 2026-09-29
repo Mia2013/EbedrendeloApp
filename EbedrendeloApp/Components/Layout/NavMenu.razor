@@ -66,7 +66,7 @@
         <MudNavGroup Title="Saját rendelésem" Icon="@Icons.Material.Filled.Person" @bind-Expanded="personalExpanded">
             @foreach (var link in PersonalLinks)
             {
-                <MudNavLink Href="@link.Href">@link.Label @UnreadChip(link)</MudNavLink>
+                <MudNavLink Href="@link.Href">@LinkLabel(link)</MudNavLink>
             }
         </MudNavGroup>
     }
@@ -75,7 +75,7 @@
         @* A dolgozónak összesen öt oldala van — ezt nincs mit csoportosítani. *@
         @foreach (var link in PersonalLinks)
         {
-            <MudNavLink Href="@link.Href" Icon="@link.Icon">@link.Label @UnreadChip(link)</MudNavLink>
+            <MudNavLink Href="@link.Href" Icon="@link.Icon">@LinkLabel(link)</MudNavLink>
         }
     }
 </MudNavMenu>
@@ -129,13 +129,18 @@
         SyncExpandedGroups();
 
         await CurrentUser.EnsureLoadedAsync();
-        await BadgeState.EnsureLoadedAsync();
+
+        // Nem várjuk meg: a szerepkörfüggő linkek ne álljanak a számláló lekérdezésére. A szám a
+        // BadgeState.Changed-re rajzolódik ki; a betöltés hibája a BadgeState-ben naplózva marad.
+        _ = BadgeState.EnsureLoadedAsync();
     }
 
-    private RenderFragment? UnreadChip(NavItem link) => link.ShowsUnreadCount && BadgeState.Unread > 0
-        ? @<MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2 my-0"
-                    aria-label="@($"{BadgeState.Unread} olvasatlan")">@BadgeState.Unread</MudChip>
-        : null;
+    /// <summary>A link felirata, az értesítéseknél az olvasatlanok számával. A szám badge, nem chip: a
+    /// chip fókuszálható elem lenne a linken belül, a badge-nek viszont saját, felolvasható címkéje van.</summary>
+    private RenderFragment LinkLabel(NavItem link) => link.ShowsUnreadCount && BadgeState.Unread > 0
+        ? @<MudBadge Content="@BadgeState.Unread" Color="Color.Primary" Origin="Origin.CenterRight" Overlap="false"
+                     BadgeAriaLabel="@($"{BadgeState.Unread} olvasatlan")">@link.Label</MudBadge>
+        : @<text>@link.Label</text>;
 
     private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
 
