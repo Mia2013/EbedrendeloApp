@@ -145,15 +145,18 @@ public sealed class RemoveExcludedDayHandler(
                     creditService.RevokeCredit(db, creditEntry, request.PerformedByUserId, nowUtc, "Kizárás visszavonva");
                 }
 
-                notificationService.Notify(
+                notificationService.NotifyOrderParties(
                     db,
-                    order.UserId,
+                    order,
                     NotificationType.OrderRestored,
-                    "Rendelésed helyreállt",
-                    $"A(z) {request.Date:yyyy.MM.dd} nap kizárását visszavonták, a rendelésed újra aktív.",
-                    nowUtc,
-                    request.Date,
-                    order.Id);
+                    new OrderNotificationText(
+                        "Rendelésed helyreállt",
+                        $"A(z) {request.Date:yyyy.MM.dd} nap kizárását visszavonták, a rendelésed újra aktív."),
+                    new OrderNotificationText(
+                        "Az általad leadott rendelés helyreállt",
+                        $"A(z) {request.Date:yyyy.MM.dd} nap kizárását visszavonták, az általad leadott rendelés újra aktív."),
+                    request.PerformedByUserId,
+                    nowUtc);
 
                 restoredCount++;
             }
@@ -164,15 +167,18 @@ public sealed class RemoveExcludedDayHandler(
                 order.CancelledByExcludedDayId = null;
 
                 skipped.Add(new SkippedOrderInfo(userName, skipReason));
-                notificationService.Notify(
+                notificationService.NotifyOrderParties(
                     db,
-                    order.UserId,
+                    order,
                     NotificationType.DayReopened,
-                    "A nap újranyitva",
-                    $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de a rendelésed nem állt vissza automatikusan — a leadási határidőn belül újra rendelhetsz.",
-                    nowUtc,
-                    request.Date,
-                    order.Id);
+                    new OrderNotificationText(
+                        "A nap újranyitva",
+                        $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de a rendelésed nem állt vissza automatikusan — a leadási határidőn belül újra rendelhetsz."),
+                    new OrderNotificationText(
+                        "A nap újranyitva",
+                        $"A(z) {request.Date:yyyy.MM.dd} nap mégis kiszolgálásra kerül, de az általad leadott rendelés nem állt vissza automatikusan — a leadási határidőn belül újra leadható."),
+                    request.PerformedByUserId,
+                    nowUtc);
             }
         }
 

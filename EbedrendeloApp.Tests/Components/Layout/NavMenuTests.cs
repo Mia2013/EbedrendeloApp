@@ -1,6 +1,8 @@
 using Bunit;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Components.Layout;
+using EbedrendeloApp.Features.Notifications;
+using EbedrendeloApp.Features.Notifications.GetNotificationCounts;
 using EbedrendeloApp.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,13 +18,22 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
         "alacarte-etelek", "alacarte-napi-kinalat", "alacarte-konyhai-lista", "egyenlegek", "szamlak",
     ];
 
-    private static readonly string[] WorkerHrefs = ["naptar", "rendeleseim", "mai-menu", "egyenlegem", "szamlaim"];
+    private static readonly string[] WorkerHrefs = ["naptar", "rendeleseim", "mai-menu", "egyenlegem", "szamlaim", "ertesiteseim"];
+
+    private readonly FakeMediator badgeMediator;
 
     public NavMenuTests()
     {
         Services.AddMudServices();
+        badgeMediator = Services.AddNotificationBadge();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
+
+    private void SetUnread(int unread)
+        => badgeMediator.Register<GetNotificationCountsQuery, NotificationCountsDto>(_ => new NotificationCountsDto(unread, unread));
+
+    private static string? UnreadChipText(IRenderedComponent<NavMenu> cut)
+        => cut.Find("a[href='ertesiteseim']").QuerySelector(".mud-chip")?.TextContent.Trim();
 
     /// <summary>A szolgáltatást a navigálás előtt kell regisztrálni: bUnitban az első
     /// <c>GetRequiredService</c> után már nem vehető fel új.</summary>
@@ -100,6 +111,28 @@ public class NavMenuTests : EbedrendeloApp.Tests.TestSupport.MudBunitContext
             Assert.Single(expandedGroups);
             Assert.Contains("À la carte", expandedGroups[0].TextContent);
         });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_notifications_link_shows_the_unread_count(bool isAdmin)
+    {
+        SetUnread(4);
+
+        var cut = RenderAs(isAdmin);
+
+        Assert.Equal("4", UnreadChipText(cut));
+    }
+
+    [Fact]
+    public void Without_unread_notifications_the_link_has_no_count()
+    {
+        SetUnread(0);
+
+        var cut = RenderAs(isAdmin: false);
+
+        Assert.Null(UnreadChipText(cut));
     }
 
     [Fact]

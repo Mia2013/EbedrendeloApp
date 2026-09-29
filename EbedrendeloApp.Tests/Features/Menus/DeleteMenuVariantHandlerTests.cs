@@ -117,6 +117,49 @@ public class DeleteMenuVariantHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancelling_an_invoiced_order_notifies_the_owner_with_CreditIssued_and_the_placer_with_MenuCancelled()
+    {
+        // 01 §3.3 + AC 8.1.3 — kiszámlázott napnál jóváírás keletkezik: a tulajdonos CreditIssued-ot kap,
+        // a leadó (akit a jóváírás nem illet) MenuCancelled-et.
+        var date = new DateOnly(2026, 8, 20);
+        var (variantAId, _) = await SeedMenuAsync(date, "A");
+        var orderId = await SeedActiveOrderAsync(date, variantAId, invoiced: true);
+        var colleagueId = await ReassignPlacerToColleagueAsync(orderId);
+
+        await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        Assert.True(await db.CreditEntries.AnyAsync(c => c.SourceMenuOrderId == orderId));
+
+        var ownerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == userId);
+        Assert.Equal(NotificationType.CreditIssued, ownerNotification.Type);
+
+        var placerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == colleagueId);
+        Assert.Equal(NotificationType.MenuCancelled, placerNotification.Type);
+        Assert.Equal("Az általad leadott rendelés lemondásra került", placerNotification.Title);
+    }
+
+    [Fact]
+    public async Task Reassigning_an_order_placed_by_a_colleague_notifies_the_placer_too()
+    {
+        // AC 8.1.3 — az átvezetésről a leadó is tud.
+        var date = new DateOnly(2026, 8, 20);
+        var (variantAId, _) = await SeedMenuAsync(date, "A", "B");
+        var orderId = await SeedActiveOrderAsync(date, variantAId);
+        var colleagueId = await ReassignPlacerToColleagueAsync(orderId);
+
+        await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var ownerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == userId);
+        Assert.Equal(NotificationType.OrderReassigned, ownerNotification.Type);
+
+        var placerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == colleagueId);
+        Assert.Equal(NotificationType.OrderReassigned, placerNotification.Type);
+        Assert.Equal("Az általad leadott rendelés átvezetésre került", placerNotification.Title);
+    }
+
+    [Fact]
     public async Task Unpublishes_the_day_when_the_last_variant_is_deleted_even_without_active_orders()
     {
         // Regression test: without this, deleting the only variant left a "published" DailyMenu with an
@@ -190,7 +233,22 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         return (variantA.Id, variantB?.Id ?? 0);
     }
 
-    private async Task<int> SeedActiveOrderAsync(DateOnly date, int variantId)
+    private async Task<int> ReassignPlacerToColleagueAsync(int orderId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+        var colleague = new User { UserId = 3, UserName = "kollega", RoleId = db.Roles.First().Id };
+        db.Users.Add(colleague);
+        await db.SaveChangesAsync();
+
+        var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+        order.PlacedByUserId = colleague.Id;
+        await db.SaveChangesAsync();
+        return colleague.Id;
+    }
+
+    /// <param name="invoiced">Ha igaz, a rendelés egy már kiállított számlához tartozik — lemondáskor
+    /// jóváírás csak ilyenkor keletkezik (lásd ICreditService).</param>
+    private async Task<int> SeedActiveOrderAsync(DateOnly date, int variantId, bool invoiced = false)
     {
         await using var db = dbFactory.CreateDbContext();
 
@@ -204,6 +262,24 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         db.OrderingPeriods.Add(period);
         await db.SaveChangesAsync();
 
+        int? invoiceId = null;
+        if (invoiced)
+        {
+            var invoice = new PeriodInvoice
+            {
+                UserId = userId,
+                OrderingPeriodId = period.Id,
+                SequenceNumber = 1,
+                GrossHuf = 1400,
+                CreditAppliedHuf = 0,
+                PayableHuf = 1400,
+                GeneratedAtUtc = date.AddDays(-14).ToDateTime(new TimeOnly(9, 0)),
+            };
+            db.PeriodInvoices.Add(invoice);
+            await db.SaveChangesAsync();
+            invoiceId = invoice.Id;
+        }
+
         var order = new MenuOrder
         {
             UserId = userId,
@@ -213,6 +289,7 @@ public class DeleteMenuVariantHandlerTests : IDisposable
             PriceHuf = 1400,
             Status = OrderStatus.Active,
             PlacedByUserId = userId,
+            PeriodInvoiceId = invoiceId,
         };
         db.MenuOrders.Add(order);
         await db.SaveChangesAsync();

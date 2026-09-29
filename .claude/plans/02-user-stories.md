@@ -607,10 +607,10 @@ Azért, hogy naprakész információval rendelkezzek a lemondásokról, átvezet
   - Nap kizárása vagy menü törlése miatti lemondáskor (`MenuCancelled`),
   - Kizárás visszavonásakor (`OrderRestored` / `DayReopened`),
   - Jóváírás keletkezésekor és beszámításakor (`CreditIssued`, `CreditApplied`).
-* **AC 8.1.2 (Olvasottság kezelése):** A dolgozó lekérheti az értesítéseit, és egyenként vagy egyszerre az összeset olvasottnak jelölheti (`ReadAtUtc` kitöltése).
+* **AC 8.1.2 (Olvasottság kezelése):** A dolgozó lekérheti az értesítéseit (a legutóbbi 20-at), és egyenként — az értesítésre kattintva — vagy egyszerre az összeset olvasottnak jelölheti (`ReadAtUtc` kitöltése). Az olvasatlanok száma a menüpont mellett és a fejléc csengőjén látszik.
 * **AC 8.1.3 (Címzettség):** Ha a rendelést más adta le, az érintett esemény a rendelés tulajdonosához és a leadóhoz is eljut (AC 2.2.2).
 
-**Technikai hivatkozás:** `GetMyNotificationsQuery`, `MarkNotificationReadCommand`, `MarkAllNotificationsReadCommand`, `UserNotification`
+**Technikai hivatkozás:** `GetMyNotificationsQuery`, `GetNotificationCountsQuery`, `MarkNotificationReadCommand`, `MarkAllNotificationsReadCommand`, `UserNotification`
 
 ---
 
@@ -797,6 +797,7 @@ Az `01-szerver-architektura.md` 6. fejezetének minden use case-e, és a lefedő
 | `GetBalancesQuery` | A | *(nincs önálló story — AC 5.2.1-et támogató implementációs részlet)* |
 | `GetAdminDashboardQuery` | A | *(nincs önálló story — az admin belépési pontja, a meglévő epicek adatait összesíti)* |
 | `GetMyNotificationsQuery` | U | US-8.1 |
+| `GetNotificationCountsQuery` | U | US-8.1 |
 | `MarkNotificationReadCommand` | U | US-8.1 |
 | `MarkAllNotificationsReadCommand` | U | US-8.1 |
 
@@ -833,6 +834,10 @@ időszak) párra szól, hanem egy konkrét rendelés-halmazra (`MenuOrder.Period
 időszakra több számla is lehet: az újrafuttatás a közben leadott napokról kiegészítő számlát állít ki,
 nem no-op (AC 7.1.6). À la carte tétel nem kerül a periódus-számlára — azt a dolgozó aznap fizeti.
 
-Az Epic 8 (Értesítések) továbbra is csak tervezve van: az `INotificationService` write-only, olvasó
-lekérdezés és UI nincs hozzá, a `MarkNotificationReadCommand` / `MarkAllNotificationsReadCommand` /
-`GetMyNotificationsQuery` sorokhoz nincs se `Features/`, se `NavMenu` link.
+Az Epic 8 (Értesítések) elkészült: `GetMyNotificationsQuery`, `GetNotificationCountsQuery`,
+`MarkNotificationReadCommand`, `MarkAllNotificationsReadCommand` (`Features/Notifications/`), UI-val
+(`MyNotifications.razor` az `/ertesiteseim` alatt, `NotificationBell.razor` a fejlécben, „Értesítéseim"
+menüpont olvasatlan-számlálóval a dolgozói és az admin „Saját rendelésem" menüben). Az AC 8.1.3 címzettsége
+egységes: minden rendelés-esemény a leadót is értesíti (`INotificationService.NotifyOrderParties`).
+Jóváírással járó lemondásnál (bármelyik útvonalon) a tulajdonos `CreditIssued`, a leadó `MenuCancelled`
+értesítést kap — a jóváírás csak a tulajdonost illeti.

@@ -12,6 +12,7 @@ public class MainLayoutTests : MudBunitContext
     public MainLayoutTests()
     {
         Services.AddMudServices();
+        Services.AddNotificationBadge();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

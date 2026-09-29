@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Behaviors;
 using EbedrendeloApp.Common.Calendar;
+using EbedrendeloApp.Common.Notifications;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -23,6 +24,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<StubCurrentUser>();
         services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<StubCurrentUser>());
         services.AddScoped<IDevUserSwitcher>(sp => sp.GetRequiredService<StubCurrentUser>());
+
+        // Körönként egy olvasatlan-számláló, amit a menüpont és a fejléc csengője közösen mutat.
+        services.AddScoped<NotificationBadgeState>();
 
         services.AddMediatR(cfg =>
         {

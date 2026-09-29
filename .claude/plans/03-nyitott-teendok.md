@@ -78,9 +78,8 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       körül), szemben a „MudBlazor komponens/utility a kézi CSS helyett" elvvel.
 
 ### Hiányzó / halott funkciók
-- [ ] **`UserNotification`: 8 írási hely, 0 olvasási.** Minden értesítés a táblába megy, de nincs se
-      query, se UI — ez az Epic 8. Amíg nincs kész, a dolgozó soha nem tudja meg, hogy lemondták vagy
-      átvezették a rendelését.
+- [x] **`UserNotification`: 8 írási hely, 0 olvasási** — megoldva az Epic 8-cal: `/ertesiteseim` oldal,
+      menüpont- és csengő-számláló, és az AC 8.1.3 leadói értesítés minden rendelés-eseményre.
 - [ ] **`AppSetting` szerkeszthetetlen** — adagár és a három határidő seedből jön, nincs admin felület,
       az `UpdatedByUserId`/`UpdatedAtUtc` halott mező. Az érték ma csak SQL-ből módosítható.
 - [ ] **À la carte fizetés rögzítése** — a dolgozó aznap fizeti (AC 7.1.2), de a rendszer csak a
@@ -285,10 +284,24 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       levágása) négy naptár-oldal alatt.
 - [ ] **`AdminInvoices` lapozás nélkül** tölti be az összes számlát; `ColleaguePicker.SearchAsync`
       minden leütésre újra lekéri a teljes névsort (a `ManualCreditDialog` egyszer cache-eli);
-      a számla-értesítés nyers `{x} Ft`-ot formáz a `HungarianNumberFormat.Huf` helyett;
       a `PageState.razor.css` kézi flex-blokkja `MudStack`-kel kiváltható.
 - [ ] **A migráció `Down()` felében elbukik**: az `FK_CreditEntries_PeriodInvoices` `Restrict`, ezért a
       `DELETE FROM PeriodInvoices WHERE SequenceNumber > 1` nem fut le.
+
+## Értesítések (Epic 8) — code review (2026-09-29), nem blokkoló
+
+- [ ] **Szóköz görgeti az oldalt** az `/ertesiteseim` olvasatlan során (`role="button"`): a jelölés
+      megtörténik, de az oldal is ugrik. `:preventDefault` natív `div`-re kell (RZ10010), és csak a
+      Szóközre — a Tab maradjon.
+- [ ] **A számlálót kétszer kérdezzük** az oldalon: a `MyNotifications` saját `GetNotificationCountsQuery`-t
+      futtat, miközben a `NotificationBadgeState` is. Ha a badge-állapot a `Total`-t is tartaná, az oldal
+      abból olvashatna.
+- [ ] **Kézi inline stílus** a `MyNotifications.razor`-ban (`opacity:.65`, `primary-hover` háttér, a pötty
+      `font-size`-a) — MudBlazor megoldásra cserélendő (pl. `MudBadge Dot`, `Size`).
+- [ ] **A szűrő-chip száma és a lista eltérhet**: „Olvasatlan (35)" mellett a lista 20 sort mutat
+      (`GetMyNotificationsQuery.Limit`), jelzés nélkül. Legalább egy „további N régebbi" sor kellene.
+- Szándékos, nem hiba: a saját műveletéről a **tulajdonos** is kap értesítést (pl. saját lemondásnál a
+  jóváírásról), a leadó viszont nem, ha ő végezte a műveletet (01 §6 Notifications).
 
 ---
 

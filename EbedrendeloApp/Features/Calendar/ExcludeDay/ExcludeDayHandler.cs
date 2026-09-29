@@ -61,17 +61,22 @@ public sealed class ExcludeDayHandler(
             order.CancelledByExcludedDayId = excluded.Id;
 
             var credit = creditService.IssueCancellationCredit(db, order, request.CreatedByUserId, nowUtc);
-            notificationService.Notify(
+            notificationService.NotifyOrderParties(
                 db,
-                order.UserId,
-                NotificationType.MenuCancelled,
-                "Rendelésed lemondásra került",
-                credit is null
-                    ? $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
-                    : $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed jóváírásra került.",
+                order,
+                credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
+                new OrderNotificationText(
+                    "Rendelésed lemondásra került",
+                    credit is null
+                        ? $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                        : $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), a rendelésed jóváírásra került."),
+                new OrderNotificationText(
+                    "Az általad leadott rendelés lemondásra került",
+                    $"A(z) {request.Date:yyyy.MM.dd} nap kizárásra került ({request.Reason}), az általad leadott rendelés lemondásra került."),
+                request.CreatedByUserId,
                 nowUtc,
-                request.Date,
-                order.Id);
+                // A jóváírás csak a tulajdonost illeti — a leadónak ez elvesztett rendelés.
+                placerType: NotificationType.MenuCancelled);
         }
 
         await db.SaveChangesAsync(cancellationToken);

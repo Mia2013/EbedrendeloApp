@@ -812,8 +812,17 @@ Jelölés: **[A]** = admin, **[U]** = felhasználó.
   fedett munkanapra. Csupasz DTO (nincs `Result`, nincs üzleti hibaága); nincs önálló user story
 
 ### Notifications
-- `GetMyNotificationsQuery` **[U]**, `MarkNotificationReadCommand` **[U]**,
-  `MarkAllNotificationsReadCommand` **[U]**
+- `GetMyNotificationsQuery(UserId, UnreadOnly)` **[U]** — a legutóbbi **20** értesítés, a legújabb elöl,
+  lapozás nélkül (az értesítés friss eseményről szól). A leadónak szóló értesítésnél kitölti, kinek a
+  nevében szólt a rendelés (`OnBehalfOfName`).
+- `GetNotificationCountsQuery(UserId)` **[U]** — összes + olvasatlan; a menüpont és a fejléc csengőjének
+  számlálója (`Common/Notifications/NotificationBadgeState`, körönként egy példány, navigáláskor frissül —
+  valós idejű push nincs).
+- `MarkNotificationReadCommand` **[U]** — kattintásra; idegen értesítés `NotFound`, már olvasott no-op.
+- `MarkAllNotificationsReadCommand` **[U]** — a 20-as listán túli olvasatlanokat is jelöli.
+- **Címzettség (AC 8.1.3):** rendelés-eseményről az `INotificationService.NotifyOrderParties` értesít — a
+  tulajdonost, és ha a rendelést más adta le, a leadót is („az általad leadott…"), kivéve ha a leadó maga
+  végezte a műveletet.
 
 **Kimenet-konvenció:** minden command `Result` / `Result<T>` értéket ad vissza (nem kivételt) a várt
 üzleti kimenetekre (határidő lejárt, elfogyott, nap lezárva). A `ValidationBehavior` a bemeneti

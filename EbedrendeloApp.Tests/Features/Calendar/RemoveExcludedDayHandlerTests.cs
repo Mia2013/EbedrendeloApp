@@ -27,6 +27,7 @@ public class RemoveExcludedDayHandlerTests : IDisposable
 
     private readonly ExcludeDayHandler excludeHandler;
     private int adminId;
+    private int colleagueId;
 
     public void Dispose() => dbFactory.Dispose();
 
@@ -203,9 +204,47 @@ public class RemoveExcludedDayHandlerTests : IDisposable
         Assert.False(await db.ExcludedDays.AnyAsync(e => e.Date == ExcludedDate));
     }
 
+    [Fact]
+    public async Task Restoring_an_order_placed_by_a_colleague_notifies_the_placer_too()
+    {
+        // AC 8.1.3 — a helyreállításról a leadó is tud.
+        var (_, _, userId) = await SeedExcludedOrderAsync(placedByColleague: true);
+
+        await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var placerNotification = await db.UserNotifications
+            .SingleAsync(n => n.UserId == colleagueId && n.Type == NotificationType.OrderRestored);
+        Assert.Equal("Az általad leadott rendelés helyreállt", placerNotification.Title);
+        Assert.True(await db.UserNotifications.AnyAsync(n => n.UserId == userId && n.Type == NotificationType.OrderRestored));
+    }
+
+    [Fact]
+    public async Task A_skipped_order_placed_by_a_colleague_notifies_the_placer_with_DayReopened()
+    {
+        // AC 8.1.3 — ha a rendelés nem állítható vissza, a leadó is megtudja, hogy újra leadható.
+        var (_, orderId, userId) = await SeedExcludedOrderAsync(placedByColleague: true);
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var credit = await db.CreditEntries.SingleAsync(c => c.SourceMenuOrderId == orderId);
+            credit.RemainingHuf = 700;
+            await db.SaveChangesAsync();
+        }
+
+        await sut.Handle(new RemoveExcludedDayCommand(ExcludedDate, true, PerformedByUserId: adminId), CancellationToken.None);
+
+        await using var verify = dbFactory.CreateDbContext();
+        var placerNotification = await verify.UserNotifications
+            .SingleAsync(n => n.UserId == colleagueId && n.Type == NotificationType.DayReopened);
+        Assert.Contains("az általad leadott rendelés nem állt vissza", placerNotification.Message);
+        Assert.True(await verify.UserNotifications.AnyAsync(n => n.UserId == userId && n.Type == NotificationType.DayReopened));
+    }
+
     /// <param name="invoiced">Ha igaz, a rendelés egy már kiállított számlához tartozik — a kizárás
     /// jóváírása (és így a visszaállításkori visszavonása) csak ilyenkor jön létre.</param>
-    private async Task<(int periodId, int orderId, int userId)> SeedExcludedOrderAsync(bool invoiced = true)
+    /// <param name="placedByColleague">Ha igaz, a rendelést egy kolléga adta le a tulajdonos nevében
+    /// (<see cref="colleagueId"/>).</param>
+    private async Task<(int periodId, int orderId, int userId)> SeedExcludedOrderAsync(bool invoiced = true, bool placedByColleague = false)
     {
         int periodId, orderId, userId;
 
@@ -234,9 +273,11 @@ public class RemoveExcludedDayHandlerTests : IDisposable
 
             var user = new User { UserId = 1, UserName = "u1", RoleId = role.Id };
             var admin = new User { UserId = 2, UserName = "admin", RoleId = role.Id };
-            db.Users.AddRange(user, admin);
+            var colleague = new User { UserId = 3, UserName = "kollega", RoleId = role.Id };
+            db.Users.AddRange(user, admin, colleague);
             await db.SaveChangesAsync();
             adminId = admin.Id;
+            colleagueId = colleague.Id;
 
             int? invoiceId = null;
             if (invoiced)
@@ -264,7 +305,7 @@ public class RemoveExcludedDayHandlerTests : IDisposable
                 MenuVariantId = dailyMenu.Variants[0].Id,
                 PriceHuf = 1400,
                 Status = OrderStatus.Active,
-                PlacedByUserId = user.Id,
+                PlacedByUserId = placedByColleague ? colleague.Id : user.Id,
                 PeriodInvoiceId = invoiceId,
             };
             db.MenuOrders.Add(order);

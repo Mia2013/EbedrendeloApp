@@ -27,4 +27,22 @@ public sealed class NotificationService : INotificationService
             CreatedAtUtc = nowUtc,
         });
     }
+
+    public void NotifyOrderParties(
+        EbedrendeloDbContext db,
+        MenuOrder order,
+        NotificationType type,
+        OrderNotificationText owner,
+        OrderNotificationText placer,
+        int performedByUserId,
+        DateTime nowUtc,
+        NotificationType? placerType = null)
+    {
+        Notify(db, order.UserId, type, owner.Title, owner.Message, nowUtc, order.Date, order.Id);
+
+        if (order.PlacedByUserId != order.UserId && order.PlacedByUserId != performedByUserId)
+        {
+            Notify(db, order.PlacedByUserId, placerType ?? type, placer.Title, placer.Message, nowUtc, order.Date, order.Id);
+        }
+    }
 }

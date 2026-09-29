@@ -1,0 +1,216 @@
+@page "/ertesiteseim"
+@using EbedrendeloApp.Common.Notifications
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Common.Time
+@using EbedrendeloApp.Features.Notifications
+@using EbedrendeloApp.Features.Notifications.GetMyNotifications
+@using EbedrendeloApp.Features.Notifications.GetNotificationCounts
+@using EbedrendeloApp.Features.Notifications.MarkAllNotificationsRead
+@using EbedrendeloApp.Features.Notifications.MarkNotificationRead
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject IAppClock Clock
+@inject NotificationBadgeState BadgeState
+@inject ISnackbar Snackbar
+
+<PageTitle>Értesítéseim</PageTitle>
+
+<PageHeader Icon="@Icons.Material.Filled.Notifications" Title="Értesítéseim">
+    <Description>
+        A rendeléseidet érintő események: lemondás, átvezetés, menümódosulás és jóváírás. A rendszer
+        automatikusan hozza létre őket; itt a legutóbbi @GetMyNotificationsQuery.Limit látszik.
+    </Description>
+    <Actions>
+        @if (counts?.Unread > 0)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@isMarkingAll"
+                       StartIcon="@(isMarkingAll ? null : Icons.Material.Filled.DoneAll)"
+                       OnClick="MarkAllAsync">
+                @if (isMarkingAll)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Jelölés…</MudText>
+                }
+                else
+                {
+                    <MudText>Összes olvasottnak jelöl</MudText>
+                }
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<PageState IsLoading="@(notifications is null)" LoadingText="Értesítések betöltése…"
+           IsEmpty="@(counts?.Total == 0)" EmptyIcon="@Icons.Material.Filled.NotificationsNone"
+           EmptyText="Még nincs értesítésed. Amint a rendeléseidet érintő esemény történik — lemondás, átvezetés, menümódosulás vagy jóváírás —, itt fogod látni.">
+    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="mt-4 mb-2">
+        <MudChip T="string" Color="@(unreadOnly ? Color.Default : Color.Primary)"
+                 Variant="@(unreadOnly ? Variant.Outlined : Variant.Filled)"
+                 OnClick="() => SetFilterAsync(unreadOnly: false)">
+            Mind (@counts?.Total)
+        </MudChip>
+        <MudChip T="string" Color="@(unreadOnly ? Color.Primary : Color.Default)"
+                 Variant="@(unreadOnly ? Variant.Filled : Variant.Outlined)"
+                 OnClick="() => SetFilterAsync(unreadOnly: true)">
+            Olvasatlan (@counts?.Unread)
+        </MudChip>
+    </MudStack>
+
+    @if (counts?.Unread == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">Mindent elolvastál.</MudAlert>
+    }
+
+    @foreach (var group in Groups)
+    {
+        <MudText Typo="Typo.overline" Class="mud-text-secondary mt-4 d-block">@group.Label</MudText>
+        <MudPaper Elevation="1" Class="rounded-lg">
+            @foreach (var notification in group.Items)
+            {
+                @if (notification.IsRead)
+                {
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Start" Class="pa-3">
+                        <MudIcon Icon="@NotificationDisplay.Icon(notification.Type)" Color="@NotificationDisplay.Color(notification.Type)" Style="opacity:.65" />
+                        <MudStack Spacing="0" Class="flex-grow-1">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@notification.Title</MudText>
+                            <MudText Typo="Typo.body2">@notification.Message</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@MetaText(notification)</MudText>
+                        </MudStack>
+                    </MudStack>
+                }
+                else
+                {
+                    @* Olvasatlan: kattintásra (vagy Enter/Szóközzel) olvasott lesz — ezért billentyűzettel is
+                       elérhető gombként viselkedik, nem csak egérrel. *@
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Start" Class="pa-3 cursor-pointer"
+                              Style="background:var(--mud-palette-primary-hover)"
+                              role="button" tabindex="0" aria-label="@($"{notification.Title} — olvasottnak jelölés")"
+                              @onclick="() => MarkReadAsync(notification)"
+                              @onkeydown="e => OnRowKeyDownAsync(e, notification)">
+                        <MudIcon Icon="@NotificationDisplay.Icon(notification.Type)" Color="@NotificationDisplay.Color(notification.Type)" />
+                        <MudStack Spacing="0" Class="flex-grow-1">
+                            <MudText Typo="Typo.subtitle2">@notification.Title</MudText>
+                            <MudText Typo="Typo.body2">@notification.Message</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@MetaText(notification)</MudText>
+                        </MudStack>
+                        <MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Primary" Style="font-size:.6rem" aria-label="Olvasatlan" />
+                    </MudStack>
+                }
+                <MudDivider />
+            }
+        </MudPaper>
+    }
+</PageState>
+
+@code {
+    private sealed record NotificationGroup(string Label, IReadOnlyList<NotificationDto> Items);
+
+    private List<NotificationDto>? notifications;
+    private NotificationCountsDto? counts;
+    private bool unreadOnly;
+    private bool isMarkingAll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CurrentUser.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        counts = await Mediator.Send(new GetNotificationCountsQuery(CurrentUser.UserId));
+        notifications = (await Mediator.Send(new GetMyNotificationsQuery(CurrentUser.UserId, unreadOnly))).ToList();
+    }
+
+    private async Task SetFilterAsync(bool unreadOnly)
+    {
+        this.unreadOnly = unreadOnly;
+        await LoadAsync();
+    }
+
+    private async Task OnRowKeyDownAsync(KeyboardEventArgs e, NotificationDto notification)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await MarkReadAsync(notification);
+        }
+    }
+
+    private async Task MarkReadAsync(NotificationDto notification)
+    {
+        var result = await Mediator.Send(new MarkNotificationReadCommand(CurrentUser.UserId, notification.Id));
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add("Az értesítés nem jelölhető olvasottnak. Frissítsd az oldalt.", Severity.Error);
+            return;
+        }
+
+        await LoadAsync();
+        await BadgeState.RefreshSafelyAsync();
+    }
+
+    private async Task MarkAllAsync()
+    {
+        isMarkingAll = true;
+        try
+        {
+            var result = await Mediator.Send(new MarkAllNotificationsReadCommand(CurrentUser.UserId));
+            if (!result.TryGetValue(out var marked))
+            {
+                Snackbar.Add("Az értesítések nem jelölhetők olvasottnak. Próbáld újra.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add($"{marked} értesítés olvasottnak jelölve.", Severity.Success);
+            await LoadAsync();
+            await BadgeState.RefreshSafelyAsync();
+        }
+        finally
+        {
+            isMarkingAll = false;
+        }
+    }
+
+    /// <summary>Ma / Tegnap / Korábban — a „ma" a szerver órájából (<see cref="IAppClock"/>), nem a gép
+    /// helyi idejéből.</summary>
+    private IReadOnlyList<NotificationGroup> Groups
+    {
+        get
+        {
+            if (notifications is null)
+            {
+                return [];
+            }
+
+            var today = Clock.Today;
+            string LabelOf(NotificationDto n) => DateOnly.FromDateTime(n.CreatedAtLocal) switch
+            {
+                var d when d == today => "Ma",
+                var d when d == today.AddDays(-1) => "Tegnap",
+                _ => "Korábban",
+            };
+
+            return notifications
+                .GroupBy(LabelOf)
+                .Select(g => new NotificationGroup(g.Key, g.ToList()))
+                .ToList();
+        }
+    }
+
+    private static string MetaText(NotificationDto n)
+    {
+        var parts = new List<string> { n.CreatedAtLocal.ToString("yyyy.MM.dd. HH:mm") };
+        if (n.RelatedDate is { } date)
+        {
+            parts.Add($"Érintett nap: {date:yyyy.MM.dd.}");
+        }
+
+        if (n.OnBehalfOfName is { } name)
+        {
+            parts.Add($"{name} nevében");
+        }
+
+        return string.Join(" · ", parts);
+    }
+}

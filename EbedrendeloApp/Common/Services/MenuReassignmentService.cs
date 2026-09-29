@@ -39,17 +39,22 @@ public sealed class MenuReassignmentService(ICreditService creditService, INotif
                 order.CancellationReason = CancellationReason.VariantRemoved;
 
                 var credit = creditService.IssueCancellationCredit(db, order, performedByUserId, nowUtc);
-                notificationService.Notify(
+                notificationService.NotifyOrderParties(
                     db,
-                    order.UserId,
-                    NotificationType.MenuCancelled,
-                    "Rendelésed lemondásra került",
-                    credit is null
-                        ? $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
-                        : $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed jóváírásra került.",
+                    order,
+                    credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
+                    new OrderNotificationText(
+                        "Rendelésed lemondásra került",
+                        credit is null
+                            ? $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                            : $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, a rendelésed jóváírásra került."),
+                    new OrderNotificationText(
+                        "Az általad leadott rendelés lemondásra került",
+                        $"A(z) {date:yyyy.MM.dd} napi {removedVariant.Code} menü megszűnt, más variáns nem maradt a napon, az általad leadott rendelés lemondásra került."),
+                    performedByUserId,
                     nowUtc,
-                    date,
-                    order.Id);
+                    // A jóváírás csak a tulajdonost illeti — a leadónak ez elvesztett rendelés.
+                    placerType: NotificationType.MenuCancelled);
             }
             else
             {
@@ -58,28 +63,18 @@ public sealed class MenuReassignmentService(ICreditService creditService, INotif
                 order.MenuVariantId = target.Id;
                 order.ReassignedAtUtc = nowUtc;
 
-                notificationService.Notify(
+                notificationService.NotifyOrderParties(
                     db,
-                    order.UserId,
+                    order,
                     NotificationType.OrderReassigned,
-                    "Rendelésed átvezetésre került",
-                    $"A(z) {date:yyyy.MM.dd} napi {oldCode} menü megszűnt, a rendelésed átkerült a(z) {target.Code} menüre.",
-                    nowUtc,
-                    date,
-                    order.Id);
-
-                if (order.PlacedByUserId != order.UserId)
-                {
-                    notificationService.Notify(
-                        db,
-                        order.PlacedByUserId,
-                        NotificationType.OrderReassigned,
+                    new OrderNotificationText(
+                        "Rendelésed átvezetésre került",
+                        $"A(z) {date:yyyy.MM.dd} napi {oldCode} menü megszűnt, a rendelésed átkerült a(z) {target.Code} menüre."),
+                    new OrderNotificationText(
                         "Az általad leadott rendelés átvezetésre került",
-                        $"A(z) {date:yyyy.MM.dd} napi {oldCode} menü megszűnt, az általad leadott rendelés átkerült a(z) {target.Code} menüre.",
-                        nowUtc,
-                        date,
-                        order.Id);
-                }
+                        $"A(z) {date:yyyy.MM.dd} napi {oldCode} menü megszűnt, az általad leadott rendelés átkerült a(z) {target.Code} menüre."),
+                    performedByUserId,
+                    nowUtc);
             }
         }
 
