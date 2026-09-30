@@ -123,6 +123,32 @@ public class UpsertDailyMenuHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Updating_a_menu_notifies_the_placer_of_an_order_placed_on_behalf_too()
+    {
+        // AC 8.1.3 — a más nevében leadott rendelés menüjének módosulásáról a leadó is tud.
+        var date = new DateOnly(2026, 8, 20);
+        var (_, orderId, _, _) = await SeedMenuWithActiveOrderAsync(date, "A", "Régi név");
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+            order.PlacedByUserId = otherUserId;
+            await db.SaveChangesAsync();
+        }
+
+        var newSoupId = await SeedDishAsync(MenuDishKind.Leves, "Új név");
+
+        await sut.Handle(
+            new UpsertDailyMenuCommand(date, null, [new MenuVariantInput("A", newSoupId, null, 0)], adminId),
+            CancellationToken.None);
+
+        await using var verify = dbFactory.CreateDbContext();
+        var placerNotification = await verify.UserNotifications.SingleAsync(n => n.UserId == otherUserId);
+        Assert.Equal(NotificationType.MenuChanged, placerNotification.Type);
+        Assert.Equal("Az általad leadott rendelés menüje módosult", placerNotification.Title);
+        Assert.True(await verify.UserNotifications.AnyAsync(n => n.UserId == userId && n.Type == NotificationType.MenuChanged));
+    }
+
+    [Fact]
     public async Task Resaving_an_existing_menu_with_no_actual_changes_sends_no_MenuChanged_notification()
     {
         // Regression test: re-opening and re-saving an already-published day without changing anything
@@ -373,7 +399,6 @@ public class UpsertDailyMenuHandlerTests : IDisposable
         userId = user.Id;
         otherUserId = other.Id;
         adminId = admin.Id;
-        _ = otherUserId;
     }
 
     private async Task<(int menuId, int orderId, int variantId, int soupDishId)> SeedMenuWithActiveOrderAsync(DateOnly date, string variantCode, string variantName)

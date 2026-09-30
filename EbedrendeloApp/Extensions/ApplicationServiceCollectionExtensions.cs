@@ -1,5 +1,6 @@
 using EbedrendeloApp.Common.Behaviors;
 using EbedrendeloApp.Common.Calendar;
+using EbedrendeloApp.Common.Notifications;
 using EbedrendeloApp.Common.Security;
 using EbedrendeloApp.Common.Services;
 using EbedrendeloApp.Common.Time;
@@ -24,6 +25,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<StubCurrentUser>());
         services.AddScoped<IDevUserSwitcher>(sp => sp.GetRequiredService<StubCurrentUser>());
 
+        // Körönként egy olvasatlan-számláló, amit a menüpont és a fejléc csengője közösen mutat.
+        services.AddScoped<NotificationBadgeState>();
+
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssemblyContaining(typeof(Program));
@@ -31,6 +35,8 @@ public static class ApplicationServiceCollectionExtensions
             // hogy jól kérte-e.
             cfg.AddOpenBehavior(typeof(AuthorizationBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            // A parancs lefutása után: a saját művelet keltette értesítés azonnal látsszon a csengőn.
+            cfg.AddOpenBehavior(typeof(NotificationBadgeRefreshBehavior<,>));
         });
 
         AddValidatorsFromCurrentAssembly(services);

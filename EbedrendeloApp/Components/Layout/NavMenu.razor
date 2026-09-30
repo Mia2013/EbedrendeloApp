@@ -1,7 +1,9 @@
+@using EbedrendeloApp.Common.Notifications
 @using EbedrendeloApp.Common.Security
 @using Microsoft.AspNetCore.Components.Routing
 @inject ICurrentUser CurrentUser
 @inject NavigationManager NavigationManager
+@inject NotificationBadgeState BadgeState
 @implements IDisposable
 
 @* Az admin menü csoportokba van zárva (`MudNavGroup`): korábban 16 link és 8 szekciócím állt egymás
@@ -64,7 +66,7 @@
         <MudNavGroup Title="Saját rendelésem" Icon="@Icons.Material.Filled.Person" @bind-Expanded="personalExpanded">
             @foreach (var link in PersonalLinks)
             {
-                <MudNavLink Href="@link.Href">@link.Label</MudNavLink>
+                <MudNavLink Href="@link.Href">@LinkLabel(link)</MudNavLink>
             }
         </MudNavGroup>
     }
@@ -73,13 +75,14 @@
         @* A dolgozónak összesen öt oldala van — ezt nincs mit csoportosítani. *@
         @foreach (var link in PersonalLinks)
         {
-            <MudNavLink Href="@link.Href" Icon="@link.Icon">@link.Label</MudNavLink>
+            <MudNavLink Href="@link.Href" Icon="@link.Icon">@LinkLabel(link)</MudNavLink>
         }
     }
 </MudNavMenu>
 
 @code {
-    private sealed record NavItem(string Href, string Label, string? Icon = null);
+    /// <param name="ShowsUnreadCount">A link mellett az olvasatlan értesítések száma jelenik meg.</param>
+    private sealed record NavItem(string Href, string Label, string? Icon = null, bool ShowsUnreadCount = false);
 
     // A csoportok linkjei egy helyen: ebből renderel a menü, és ebből dől el, melyik csoport nyíljon
     // ki — így új oldal felvételekor nem lehet az egyiket elfelejteni.
@@ -109,6 +112,7 @@
         new("mai-menu", "Mai menü", Icons.Material.Filled.RestaurantMenu),
         new("egyenlegem", "Egyenlegem", Icons.Material.Filled.AccountBalanceWallet),
         new("szamlaim", "Számláim", Icons.Material.Filled.ReceiptLong),
+        new("ertesiteseim", "Értesítéseim", Icons.Material.Filled.Notifications, ShowsUnreadCount: true),
     ];
 
     private bool calendarExpanded;
@@ -120,11 +124,25 @@
     {
         CurrentUser.Changed += OnCurrentUserChanged;
         NavigationManager.LocationChanged += OnLocationChanged;
+        BadgeState.Changed += OnBadgeChanged;
 
         SyncExpandedGroups();
 
         await CurrentUser.EnsureLoadedAsync();
+
+        // Nem várjuk meg: a szerepkörfüggő linkek ne álljanak a számláló lekérdezésére. A szám a
+        // BadgeState.Changed-re rajzolódik ki; a betöltés hibája a BadgeState-ben naplózva marad.
+        _ = BadgeState.EnsureLoadedAsync();
     }
+
+    /// <summary>A link felirata, az értesítéseknél az olvasatlanok számával. A szám badge, nem chip: a
+    /// chip fókuszálható elem lenne a linken belül, a badge-nek viszont saját, felolvasható címkéje van.</summary>
+    private RenderFragment LinkLabel(NavItem link) => link.ShowsUnreadCount && BadgeState.Unread > 0
+        ? @<MudBadge Content="@BadgeState.Unread" Color="Color.Primary" Origin="Origin.CenterRight" Overlap="false"
+                     BadgeAriaLabel="@($"{BadgeState.Unread} olvasatlan")">@link.Label</MudBadge>
+        : @<text>@link.Label</text>;
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
 
     /// <summary>A nyitva lévő csoportot az aktuális oldal dönti el, navigáláskor újra: aki az
     /// „Egyenlegek”-re lép, annak a Pénzügy nyílik ki, a többi csukódik. Kézzel bármelyik nyitható —
@@ -158,5 +176,6 @@
     {
         CurrentUser.Changed -= OnCurrentUserChanged;
         NavigationManager.LocationChanged -= OnLocationChanged;
+        BadgeState.Changed -= OnBadgeChanged;
     }
 }

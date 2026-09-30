@@ -101,17 +101,20 @@ public sealed class CancelMenuOrdersHandler(
             // Jóváírás csak akkor keletkezik, ha a nap már ki volt számlázva (lásd ICreditService) —
             // ezért az értesítés szövege sem állíthatja, hogy jóváírás történt.
             var credit = creditService.IssueCancellationCredit(db, order, request.CancelledByUserId, nowUtc);
-            notificationService.Notify(
+            notificationService.NotifyOrderCancelled(
                 db,
-                order.UserId,
-                credit is null ? NotificationType.MenuCancelled : NotificationType.CreditIssued,
-                "Rendelésed lemondva",
-                credit is null
-                    ? $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
-                    : $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került.",
-                nowUtc,
-                date,
-                order.Id);
+                order,
+                credit,
+                new OrderNotificationText(
+                    "Rendelésed lemondva",
+                    credit is null
+                        ? $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                        : $"A(z) {date:yyyy.MM.dd} napi rendelésed lemondásra került, az összeg jóváírásra került."),
+                new OrderNotificationText(
+                    "Az általad leadott rendelés lemondva",
+                    $"A(z) {date:yyyy.MM.dd} napi, általad leadott rendelés lemondásra került."),
+                request.CancelledByUserId,
+                nowUtc);
 
             succeeded.Add(new DayResult(date, variantCodes[order.MenuVariantId]));
         }

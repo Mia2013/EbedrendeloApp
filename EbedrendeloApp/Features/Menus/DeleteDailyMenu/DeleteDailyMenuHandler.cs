@@ -52,17 +52,20 @@ public sealed class DeleteDailyMenuHandler(
             order.CancellationReason = CancellationReason.MenuDeleted;
 
             var credit = creditService.IssueCancellationCredit(db, order, request.PerformedByUserId, nowUtc);
-            notificationService.Notify(
+            notificationService.NotifyOrderCancelled(
                 db,
-                order.UserId,
-                NotificationType.MenuCancelled,
-                "Rendelésed lemondásra került",
-                credit is null
-                    ? $"A(z) {request.Date:yyyy.MM.dd} napi menü törlésre került, a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
-                    : $"A(z) {request.Date:yyyy.MM.dd} napi menü törlésre került, a rendelésed jóváírásra került.",
-                nowUtc,
-                request.Date,
-                order.Id);
+                order,
+                credit,
+                new OrderNotificationText(
+                    "Rendelésed lemondásra került",
+                    credit is null
+                        ? $"A(z) {request.Date:yyyy.MM.dd} napi menü törlésre került, a rendelésed lemondásra került. Ez a nap még nem volt kiszámlázva, így nem kerül rá számlára."
+                        : $"A(z) {request.Date:yyyy.MM.dd} napi menü törlésre került, a rendelésed jóváírásra került."),
+                new OrderNotificationText(
+                    "Az általad leadott rendelés lemondásra került",
+                    $"A(z) {request.Date:yyyy.MM.dd} napi menü törlésre került, az általad leadott rendelés lemondásra került."),
+                request.PerformedByUserId,
+                nowUtc);
         }
 
         menu.IsPublished = false;

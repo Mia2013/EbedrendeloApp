@@ -1,0 +1,27 @@
+@using EbedrendeloApp.Common.Notifications
+@inject NotificationBadgeState BadgeState
+@implements IDisposable
+
+@* A fejléc csengője: az olvasatlan értesítések száma, kattintásra az értesítések oldala. A számot a
+   NotificationBadgeState adja — ugyanazt, amit a menüpont mutat, így a kettő nem térhet el. *@
+
+<MudBadge Content="@BadgeState.Unread" Visible="@(BadgeState.Unread > 0)" Color="Color.Error" Overlap="true" Class="mx-2">
+    <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Href="ertesiteseim"
+                   aria-label="@AriaLabel" />
+</MudBadge>
+
+@code {
+    private string AriaLabel => BadgeState.Unread > 0
+        ? $"Értesítések, {BadgeState.Unread} olvasatlan"
+        : "Értesítések";
+
+    protected override async Task OnInitializedAsync()
+    {
+        BadgeState.Changed += OnBadgeChanged;
+        await BadgeState.EnsureLoadedAsync();
+    }
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => BadgeState.Changed -= OnBadgeChanged;
+}

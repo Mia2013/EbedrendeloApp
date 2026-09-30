@@ -80,7 +80,27 @@ public class DeleteDailyMenuHandlerTests : IDisposable
         Assert.Equal(1400, credit.AmountHuf);
 
         var notification = await db.UserNotifications.SingleAsync(n => n.RelatedMenuOrderId == orderId);
-        Assert.Equal(NotificationType.MenuCancelled, notification.Type);
+        Assert.Equal(NotificationType.CreditIssued, notification.Type);
+    }
+
+    [Fact]
+    public async Task An_order_placed_by_a_colleague_notifies_the_placer_too()
+    {
+        // AC 8.1.3 — a más nevében leadott rendelés lemondásáról a leadó is tud; a jóváírás viszont a
+        // tulajdonosé, a leadó lemondás-értesítést kap.
+        var date = new DateOnly(2026, 8, 20);
+        var orderId = await SeedMenuWithActiveOrderAsync(date);
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
+
+        await sut.Handle(new DeleteDailyMenuCommand(date, adminId), CancellationToken.None);
+
+        await using var db = dbFactory.CreateDbContext();
+        var placerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == colleagueId);
+        Assert.Equal(NotificationType.MenuCancelled, placerNotification.Type);
+        Assert.Equal("Az általad leadott rendelés lemondásra került", placerNotification.Title);
+
+        var ownerNotification = await db.UserNotifications.SingleAsync(n => n.UserId == userId);
+        Assert.Equal(NotificationType.CreditIssued, ownerNotification.Type);
     }
 
     [Fact]

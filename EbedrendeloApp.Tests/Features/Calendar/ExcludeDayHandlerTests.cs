@@ -66,7 +66,7 @@ public class ExcludeDayHandlerTests : IDisposable
         Assert.Equal(CreditEntryKind.CancellationCredit, credit.Kind);
 
         var notification = await db.UserNotifications.SingleAsync(n => n.UserId == order.UserId);
-        Assert.Equal(NotificationType.MenuCancelled, notification.Type);
+        Assert.Equal(NotificationType.CreditIssued, notification.Type);
 
         _ = periodId;
     }
@@ -88,7 +88,26 @@ public class ExcludeDayHandlerTests : IDisposable
         Assert.False(await db.CreditEntries.AnyAsync(c => c.SourceMenuOrderId == orderId));
 
         var notification = await db.UserNotifications.SingleAsync(n => n.UserId == order.UserId);
+        Assert.Equal(NotificationType.MenuCancelled, notification.Type);
         Assert.Contains("nem volt kiszámlázva", notification.Message);
+    }
+
+    [Fact]
+    public async Task An_order_placed_by_a_colleague_notifies_the_placer_too()
+    {
+        // AC 8.1.3 — a más nevében leadott rendelés lemondásáról a leadó is tud.
+        var (_, orderId) = await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400);
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
+
+        await sut.Handle(new ExcludeDayCommand(new DateOnly(2026, 8, 20), "Karbantartás", CreatedByUserId: adminId), CancellationToken.None);
+
+        await using var verify = dbFactory.CreateDbContext();
+        var placerNotification = await verify.UserNotifications.SingleAsync(n => n.UserId == colleagueId);
+        Assert.Equal("Az általad leadott rendelés lemondásra került", placerNotification.Title);
+        // A jóváírás a tulajdonosé — a leadó akkor is lemondás-értesítést kap, ha a nap ki volt számlázva.
+        Assert.Equal(NotificationType.MenuCancelled, placerNotification.Type);
+        var ownerNotification = await verify.UserNotifications.SingleAsync(n => n.UserId == userId);
+        Assert.Equal(NotificationType.CreditIssued, ownerNotification.Type);
     }
 
     [Fact]

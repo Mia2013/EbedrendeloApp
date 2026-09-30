@@ -1,0 +1,287 @@
+@page "/ertesiteseim"
+@using EbedrendeloApp.Common.Notifications
+@using EbedrendeloApp.Common.Security
+@using EbedrendeloApp.Common.Time
+@using EbedrendeloApp.Features.Notifications
+@using EbedrendeloApp.Features.Notifications.GetMyNotifications
+@using EbedrendeloApp.Features.Notifications.MarkAllNotificationsRead
+@using EbedrendeloApp.Features.Notifications.MarkNotificationRead
+@using MediatR
+@inject IMediator Mediator
+@inject ICurrentUser CurrentUser
+@inject IAppClock Clock
+@inject NotificationBadgeState BadgeState
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>Értesítéseim</PageTitle>
+
+<PageHeader Icon="@Icons.Material.Filled.Notifications" Title="Értesítéseim">
+    <Description>
+        A rendeléseidet érintő események: lemondás, átvezetés, menümódosulás és jóváírás. A rendszer
+        automatikusan hozza létre őket; itt a legutóbbi @GetMyNotificationsQuery.Limit látszik.
+    </Description>
+    <Actions>
+        @if (BadgeState.Unread > 0)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@isMarkingAll"
+                       StartIcon="@(isMarkingAll ? null : Icons.Material.Filled.DoneAll)"
+                       OnClick="MarkAllAsync">
+                @if (isMarkingAll)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Jelölés…</MudText>
+                }
+                else
+                {
+                    <MudText>Összes olvasottnak jelöl</MudText>
+                }
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<PageState IsLoading="@(notifications is null)" LoadingText="Értesítések betöltése…"
+           IsEmpty="@(notifications is { Count: 0 } && !unreadOnly)" EmptyIcon="@Icons.Material.Filled.NotificationsNone"
+           EmptyText="Még nincs értesítésed. Amint a rendeléseidet érintő esemény történik — lemondás, átvezetés, menümódosulás vagy jóváírás —, itt fogod látni.">
+    <MudChipSet T="bool" SelectionMode="SelectionMode.SingleSelection" CheckMark="true" Class="mt-4 mb-2"
+                SelectedValue="@unreadOnly" SelectedValueChanged="SetFilterAsync">
+        <MudChip Value="false">Mind (@BadgeState.Total)</MudChip>
+        <MudChip Value="true">Olvasatlan (@BadgeState.Unread)</MudChip>
+    </MudChipSet>
+
+    @if (BadgeState.Total > 0 && BadgeState.Unread == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">Mindent elolvastál.</MudAlert>
+    }
+
+    @foreach (var group in Groups)
+    {
+        <MudText Typo="Typo.overline" Class="mud-text-secondary mt-4 d-block">@group.Label</MudText>
+        <MudPaper Elevation="1" Class="rounded-lg">
+            @foreach (var notification in group.Items)
+            {
+                <div @key="notification.Id">
+                    @if (clickableIds.Contains(notification.Id))
+                    {
+                        @* Natív gomb: az Enter és a Szóköz kattintás, nem görgeti az oldalt, és a felolvasó a
+                           teljes tartalmat (cím, szöveg, dátum) mondja. A megjelölt sor a következő
+                           betöltésig gomb marad (aria-disabled), hogy a fókusz ne vesszen el, és egy
+                           második kattintás ne a helyére csúszó következő sort jelölje. *@
+                        <button type="button"
+                                class="mud-button-root mud-width-full d-flex justify-start align-start pa-3"
+                                aria-disabled="@(notification.IsRead ? "true" : null)"
+                                @onclick="() => MarkReadAsync(notification.Id)">
+                            @RowContent(notification)
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="d-flex pa-3">@RowContent(notification)</div>
+                    }
+                    <MudDivider />
+                </div>
+            }
+        </MudPaper>
+    }
+
+    @if (HiddenCount > 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+            @(unreadOnly
+                ? $"További {HiddenCount} régebbi olvasatlan értesítés nem látszik — az „Összes olvasottnak jelöl” ezeket is jelöli."
+                : $"További {HiddenCount} régebbi értesítés nem látszik.")
+        </MudText>
+    }
+</PageState>
+
+@code {
+    private sealed record NotificationGroup(string Label, IReadOnlyList<NotificationDto> Items);
+
+    private List<NotificationDto>? notifications;
+
+    /// <summary>A betöltéskor olvasatlan sorok — ezek kattinthatók, a megjelölés után is a következő
+    /// betöltésig.</summary>
+    private HashSet<int> clickableIds = [];
+
+    private readonly HashSet<int> marking = [];
+    private bool unreadOnly;
+    private bool isMarkingAll;
+    private int loadVersion;
+    private int loadedTotal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BadgeState.Changed += OnBadgeChanged;
+        await CurrentUser.EnsureLoadedAsync();
+        await BadgeState.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    /// <summary>Átfedő betöltéseknél (gyors szűrőváltás) csak a legutoljára indított eredménye kerül ki
+    /// — különben a lista más szűrőhöz tartozhatna, mint ami ki van jelölve.</summary>
+    private async Task LoadAsync()
+    {
+        var version = ++loadVersion;
+        var total = BadgeState.Total;
+        var loaded = await Mediator.Send(new GetMyNotificationsQuery(CurrentUser.UserId, unreadOnly));
+        if (version != loadVersion)
+        {
+            return;
+        }
+
+        notifications = loaded.ToList();
+        clickableIds = notifications.Where(n => !n.IsRead).Select(n => n.Id).ToHashSet();
+        loadedTotal = total;
+    }
+
+    /// <summary>A számláló változott (navigálás, pl. a csengőre kattintás ezen az oldalon, vagy egy
+    /// parancs után). Új értesítésnél — ha az összes nőtt — a lista is újratöltődik; puszta jelölésnél
+    /// nem, hogy a megjelölt sor a helyén maradjon.</summary>
+    private void OnBadgeChanged() => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            if (notifications is not null && BadgeState.Total != loadedTotal)
+            {
+                await LoadAsync();
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await DispatchExceptionAsync(ex);
+        }
+    });
+
+    private async Task SetFilterAsync(bool unreadOnly)
+    {
+        this.unreadOnly = unreadOnly;
+        await LoadAsync();
+    }
+
+    private async Task MarkReadAsync(int notificationId)
+    {
+        var index = notifications?.FindIndex(n => n.Id == notificationId) ?? -1;
+        if (index < 0 || notifications![index].IsRead || !marking.Add(notificationId))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await Mediator.Send(new MarkNotificationReadCommand(CurrentUser.UserId, notificationId));
+            if (!result.IsSuccess)
+            {
+                Snackbar.Add("Az értesítés nem jelölhető olvasottnak. Frissítsd az oldalt.", Severity.Error);
+                return;
+            }
+
+            // Helyben jelöljük, nem töltjük újra: a sor a helyén marad. A számláló a parancs után magától
+            // frissül (NotificationBadgeRefreshBehavior).
+            index = notifications.FindIndex(n => n.Id == notificationId);
+            if (index >= 0)
+            {
+                notifications[index] = notifications[index] with { IsRead = true };
+            }
+        }
+        finally
+        {
+            marking.Remove(notificationId);
+        }
+    }
+
+    private async Task MarkAllAsync()
+    {
+        isMarkingAll = true;
+        try
+        {
+            var result = await Mediator.Send(new MarkAllNotificationsReadCommand(CurrentUser.UserId));
+            if (!result.TryGetValue(out var marked))
+            {
+                Snackbar.Add("Az értesítések nem jelölhetők olvasottnak. Próbáld újra.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add($"{marked} értesítés olvasottnak jelölve.", Severity.Success);
+            await LoadAsync();
+        }
+        finally
+        {
+            isMarkingAll = false;
+        }
+    }
+
+    private RenderFragment RowContent(NotificationDto notification) =>
+        @<MudStack Row Spacing="3" AlignItems="AlignItems.Start" Class="mud-width-full">
+            <MudBadge Dot="true" Overlap="true" Color="Color.Primary" Visible="@(!notification.IsRead)">
+                <MudIcon Icon="@NotificationDisplay.Icon(notification.Type)"
+                         Color="@(notification.IsRead ? Color.Default : NotificationDisplay.Color(notification.Type))" />
+            </MudBadge>
+            <MudStack Spacing="0" Class="flex-grow-1">
+                <MudText Typo="@(notification.IsRead ? Typo.body2 : Typo.subtitle2)" Align="Align.Left"
+                         Class="@(notification.IsRead ? "mud-text-secondary" : null)">@notification.Title</MudText>
+                <MudText Typo="Typo.body2" Align="Align.Left">@notification.Message</MudText>
+                <MudText Typo="Typo.caption" Align="Align.Left" Class="mud-text-secondary">@MetaText(notification)</MudText>
+            </MudStack>
+        </MudStack>;
+
+    /// <summary>A szűrő-chip száma (számláló) és a <see cref="GetMyNotificationsQuery.Limit"/>-re vágott
+    /// lista különbsége — jelezzük, hogy a chip száma nem hibás, csak a régebbiek nem látszanak.</summary>
+    private int HiddenCount => notifications is null
+        ? 0
+        : Math.Max(0, (unreadOnly ? BadgeState.Unread : BadgeState.Total) - notifications.Count);
+
+    /// <summary>Ma / Tegnap / Korábban — a „ma" a szerver órájából (<see cref="IAppClock"/>), nem a gép
+    /// helyi idejéből.</summary>
+    private IReadOnlyList<NotificationGroup> Groups
+    {
+        get
+        {
+            if (notifications is null)
+            {
+                return [];
+            }
+
+            var today = Clock.Today;
+            string LabelOf(NotificationDto n) => DateOnly.FromDateTime(n.CreatedAtLocal) switch
+            {
+                var d when d == today => "Ma",
+                var d when d == today.AddDays(-1) => "Tegnap",
+                _ => "Korábban",
+            };
+
+            return notifications
+                .GroupBy(LabelOf)
+                .Select(g => new NotificationGroup(g.Key, g.ToList()))
+                .ToList();
+        }
+    }
+
+    /// <summary>A meta-sor. Az olvasatlanság szöveggel is szerepel, nem csak a pöttyel és a félkövér címmel —
+    /// így a felolvasó is kimondja, és színtévesztő is látja.</summary>
+    private static string MetaText(NotificationDto n)
+    {
+        var parts = new List<string>();
+        if (!n.IsRead)
+        {
+            parts.Add("Olvasatlan");
+        }
+
+        parts.Add(n.CreatedAtLocal.ToString("yyyy.MM.dd. HH:mm"));
+        if (n.RelatedDate is { } date)
+        {
+            parts.Add($"Érintett nap: {date:yyyy.MM.dd.}");
+        }
+
+        if (n.OnBehalfOfName is { } name)
+        {
+            parts.Add($"{name} nevében");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    public void Dispose() => BadgeState.Changed -= OnBadgeChanged;
+}

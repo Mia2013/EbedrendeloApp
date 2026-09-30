@@ -78,9 +78,8 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       körül), szemben a „MudBlazor komponens/utility a kézi CSS helyett" elvvel.
 
 ### Hiányzó / halott funkciók
-- [ ] **`UserNotification`: 8 írási hely, 0 olvasási.** Minden értesítés a táblába megy, de nincs se
-      query, se UI — ez az Epic 8. Amíg nincs kész, a dolgozó soha nem tudja meg, hogy lemondták vagy
-      átvezették a rendelését.
+- [x] **`UserNotification`: 8 írási hely, 0 olvasási** — megoldva az Epic 8-cal: `/ertesiteseim` oldal,
+      menüpont- és csengő-számláló, és az AC 8.1.3 leadói értesítés minden rendelés-eseményre.
 - [ ] **`AppSetting` szerkeszthetetlen** — adagár és a három határidő seedből jön, nincs admin felület,
       az `UpdatedByUserId`/`UpdatedAtUtc` halott mező. Az érték ma csak SQL-ből módosítható.
 - [ ] **À la carte fizetés rögzítése** — a dolgozó aznap fizeti (AC 7.1.2), de a rendszer csak a
@@ -285,10 +284,25 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
       levágása) négy naptár-oldal alatt.
 - [ ] **`AdminInvoices` lapozás nélkül** tölti be az összes számlát; `ColleaguePicker.SearchAsync`
       minden leütésre újra lekéri a teljes névsort (a `ManualCreditDialog` egyszer cache-eli);
-      a számla-értesítés nyers `{x} Ft`-ot formáz a `HungarianNumberFormat.Huf` helyett;
       a `PageState.razor.css` kézi flex-blokkja `MudStack`-kel kiváltható.
 - [ ] **A migráció `Down()` felében elbukik**: az `FK_CreditEntries_PeriodInvoices` `Restrict`, ezért a
       `DELETE FROM PeriodInvoices WHERE SequenceNumber > 1` nem fut le.
+
+## Értesítések (Epic 8) — code review (2026-09-29), nem blokkoló
+
+- [x] **Szóköz görgeti az oldalt / a számlálót kétszer kérdezzük** — megoldva a 2. review-körben: a sor natív
+      gomb, az oldal a `NotificationBadgeState` (`Total` + `Unread`) számait mutatja.
+- [x] **Kézi inline stílus** a `MyNotifications.razor`-ban — megoldva: a pötty `MudBadge Dot` a típus-ikonon,
+      az olvasott ikon `Color.Default` (nincs `opacity`), az olvasatlan sor háttere megszűnt (a félkövér cím,
+      a pötty és az „Olvasatlan" szöveg jelzi).
+- [x] **A szűrő-chip száma és a lista eltérhet** — megoldva: a lista alatt „További N régebbi (olvasatlan)
+      értesítés nem látszik" sor jelenik meg, ha a számláló nagyobb a betöltött listánál.
+- [x] **A leadó-kolléga seedelése négy tesztfájlban másolva** — megoldva: `TestSupport/OrderPlacerSeeding`
+      (`AssignColleagueAsPlacerAsync`). A `NotificationReadStateHandlerTests` use case-enként szét lett
+      bontva (`GetNotificationCounts…`, `MarkNotificationRead…`, `MarkAllNotificationsRead…HandlerTests`,
+      közös seed: `NotificationReadStateTestBase`).
+- Szándékos, nem hiba: a saját műveletéről a **tulajdonos** is kap értesítést (pl. saját lemondásnál a
+  jóváírásról), a leadó viszont nem, ha ő végezte a műveletet (01 §6 Notifications).
 
 ---
 

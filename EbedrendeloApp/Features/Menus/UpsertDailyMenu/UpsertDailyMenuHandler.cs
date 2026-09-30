@@ -164,15 +164,18 @@ public sealed class UpsertDailyMenuHandler(
                     continue;
                 }
 
-                notificationService.Notify(
+                notificationService.NotifyOrderParties(
                     db,
-                    order.UserId,
+                    order,
                     NotificationType.MenuChanged,
-                    "A napi menü módosult",
-                    $"A(z) {request.Date:yyyy.MM.dd} napi menü adatai módosultak.",
-                    nowUtc,
-                    request.Date,
-                    order.Id);
+                    new OrderNotificationText(
+                        "A napi menü módosult",
+                        $"A(z) {request.Date:yyyy.MM.dd} napi menü adatai módosultak."),
+                    new OrderNotificationText(
+                        "Az általad leadott rendelés menüje módosult",
+                        $"A(z) {request.Date:yyyy.MM.dd} napi menü adatai módosultak — ez az általad leadott rendelést is érinti."),
+                    request.PerformedByUserId,
+                    nowUtc);
             }
         }
 

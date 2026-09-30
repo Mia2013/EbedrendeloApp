@@ -144,6 +144,36 @@ public class CancelMenuOrdersHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancelling_an_order_a_colleague_placed_notifies_the_colleague_too()
+    {
+        // AC 8.1.3 — a kolléga adta le, a tulajdonos mondja le: a leadónak is tudnia kell róla. A nap ki
+        // van számlázva, így a tulajdonos jóváírást kap — a leadónak viszont ez puszta lemondás.
+        await SeedAsync();
+        var orderId = await SeedActiveOrderAsync(Thu, invoiced: true);
+        int colleagueId;
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var colleague = new User { UserId = 2, UserName = "kollega", RoleId = db.Roles.First().Id };
+            db.Users.Add(colleague);
+            await db.SaveChangesAsync();
+            colleagueId = colleague.Id;
+
+            var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
+            order.PlacedByUserId = colleagueId;
+            await db.SaveChangesAsync();
+        }
+
+        var sut = CreateHandler(new DateTime(2026, 8, 17, 9, 0, 0));
+        await sut.Handle(new CancelMenuOrdersCommand(userId, userId, [Thu]), CancellationToken.None);
+
+        await using var verify = dbFactory.CreateDbContext();
+        var placerNotification = await verify.UserNotifications.SingleAsync(n => n.UserId == colleagueId);
+        Assert.Equal("Az általad leadott rendelés lemondva", placerNotification.Title);
+        Assert.Equal(NotificationType.MenuCancelled, placerNotification.Type);
+        Assert.Equal(NotificationType.CreditIssued, (await verify.UserNotifications.SingleAsync(n => n.UserId == userId)).Type);
+    }
+
+    [Fact]
     public async Task Rejects_cancellation_past_the_change_deadline()
     {
         await SeedAsync();
