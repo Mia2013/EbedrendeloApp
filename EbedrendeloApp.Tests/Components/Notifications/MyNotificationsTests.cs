@@ -62,8 +62,10 @@ public class MyNotificationsTests : MudBunitContext
 
     private Func<GetMyNotificationsQuery, Task<IReadOnlyList<NotificationDto>>> listQuery;
 
+    // Mint az éles handler: legfeljebb Limit darab.
     private Task<IReadOnlyList<NotificationDto>> StoreQuery(GetMyNotificationsQuery q)
-        => Task.FromResult<IReadOnlyList<NotificationDto>>(store.Where(n => !q.UnreadOnly || !n.IsRead).ToList());
+        => Task.FromResult<IReadOnlyList<NotificationDto>>(
+            store.Where(n => !q.UnreadOnly || !n.IsRead).Take(GetMyNotificationsQuery.Limit).ToList());
 
     private void MarkRead(int id)
     {
@@ -214,6 +216,32 @@ public class MyNotificationsTests : MudBunitContext
 
         cut.WaitForAssertion(() => Assert.DoesNotContain(">Olvasott<", cut.Markup));
         Assert.Contains("Olvasatlan (1)", cut.Markup);
+    }
+
+    [Fact]
+    public void Tells_how_many_older_notifications_are_beyond_the_listed_ones()
+    {
+        // A chip a számlálót mutatja (25), a lista a legutóbbi 20-at — a különbséget jelezni kell.
+        for (var i = 1; i <= GetMyNotificationsQuery.Limit + 5; i++)
+        {
+            Add(i, $"Értesítés {i}", NowLocal.AddMinutes(-i));
+        }
+
+        var cut = RenderPage();
+        Assert.Contains("További 5 régebbi értesítés nem látszik.", cut.Markup);
+
+        ChooseFilter(cut, "Olvasatlan");
+        cut.WaitForAssertion(() => Assert.Contains("További 5 régebbi olvasatlan értesítés nem látszik", cut.Markup));
+    }
+
+    [Fact]
+    public void No_older_notifications_line_when_every_one_is_listed()
+    {
+        Add(1, "Egy", NowLocal);
+
+        var cut = RenderPage();
+
+        Assert.DoesNotContain("régebbi", cut.Markup);
     }
 
     [Fact]

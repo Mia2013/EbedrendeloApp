@@ -292,14 +292,15 @@ A teljes átvilágítás megállapításai. Elkészült: **Fázis 1** (számláz
 
 - [x] **Szóköz görgeti az oldalt / a számlálót kétszer kérdezzük** — megoldva a 2. review-körben: a sor natív
       gomb, az oldal a `NotificationBadgeState` (`Total` + `Unread`) számait mutatja.
-- [ ] **Kézi inline stílus** a `MyNotifications.razor`-ban (`opacity:.65`, `primary-hover` háttér, a pötty
-      `font-size`-a) — MudBlazor megoldásra cserélendő (pl. `MudBadge Dot`, `Size`).
-- [ ] **A szűrő-chip száma és a lista eltérhet**: „Olvasatlan (35)" mellett a lista 20 sort mutat
-      (`GetMyNotificationsQuery.Limit`), jelzés nélkül. Legalább egy „további N régebbi" sor kellene.
-- [ ] **A leadó-kolléga seedelése négy tesztfájlban másolva** (`ExcludeDay`, `DeleteDailyMenu`,
-      `DeleteMenuVariant`, `RemoveExcludedDay` tesztek) — közös `TestSupport` helper lehetne. A
-      `NotificationReadStateHandlerTests` nem use case-névre szól, így a `--filter "~MarkNotificationRead"`
-      nem futtatja.
+- [x] **Kézi inline stílus** a `MyNotifications.razor`-ban — megoldva: a pötty `MudBadge Dot` a típus-ikonon,
+      az olvasott ikon `Color.Default` (nincs `opacity`), az olvasatlan sor háttere megszűnt (a félkövér cím,
+      a pötty és az „Olvasatlan" szöveg jelzi).
+- [x] **A szűrő-chip száma és a lista eltérhet** — megoldva: a lista alatt „További N régebbi (olvasatlan)
+      értesítés nem látszik" sor jelenik meg, ha a számláló nagyobb a betöltött listánál.
+- [x] **A leadó-kolléga seedelése négy tesztfájlban másolva** — megoldva: `TestSupport/OrderPlacerSeeding`
+      (`AssignColleagueAsPlacerAsync`). A `NotificationReadStateHandlerTests` use case-enként szét lett
+      bontva (`GetNotificationCounts…`, `MarkNotificationRead…`, `MarkAllNotificationsRead…HandlerTests`,
+      közös seed: `NotificationReadStateTestBase`).
 - Szándékos, nem hiba: a saját műveletéről a **tulajdonos** is kap értesítést (pl. saját lemondásnál a
   jóváírásról), a leadó viszont nem, ha ő végezte a műveletet (01 §6 Notifications).
 

@@ -97,18 +97,7 @@ public class ExcludeDayHandlerTests : IDisposable
     {
         // AC 8.1.3 — a más nevében leadott rendelés lemondásáról a leadó is tud.
         var (_, orderId) = await SeedActiveOrderAsync(new DateOnly(2026, 8, 20), price: 1400);
-        int colleagueId;
-        await using (var db = dbFactory.CreateDbContext())
-        {
-            var colleague = new User { UserId = 3, UserName = "kollega", RoleId = db.Roles.First().Id };
-            db.Users.Add(colleague);
-            await db.SaveChangesAsync();
-            colleagueId = colleague.Id;
-
-            var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
-            order.PlacedByUserId = colleagueId;
-            await db.SaveChangesAsync();
-        }
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
 
         await sut.Handle(new ExcludeDayCommand(new DateOnly(2026, 8, 20), "Karbantartás", CreatedByUserId: adminId), CancellationToken.None);
 

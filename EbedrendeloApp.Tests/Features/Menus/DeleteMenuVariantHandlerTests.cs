@@ -124,7 +124,7 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         var date = new DateOnly(2026, 8, 20);
         var (variantAId, _) = await SeedMenuAsync(date, "A");
         var orderId = await SeedActiveOrderAsync(date, variantAId, invoiced: true);
-        var colleagueId = await ReassignPlacerToColleagueAsync(orderId);
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
 
         await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
 
@@ -146,7 +146,7 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         var date = new DateOnly(2026, 8, 20);
         var (variantAId, _) = await SeedMenuAsync(date, "A", "B");
         var orderId = await SeedActiveOrderAsync(date, variantAId);
-        var colleagueId = await ReassignPlacerToColleagueAsync(orderId);
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
 
         await sut.Handle(new DeleteMenuVariantCommand(date, "A", adminId), CancellationToken.None);
 
@@ -231,19 +231,6 @@ public class DeleteMenuVariantHandlerTests : IDisposable
         var variantA = menu.Variants.Single(v => v.Code == codeA);
         var variantB = menu.Variants.SingleOrDefault(v => v.Code == codeB);
         return (variantA.Id, variantB?.Id ?? 0);
-    }
-
-    private async Task<int> ReassignPlacerToColleagueAsync(int orderId)
-    {
-        await using var db = dbFactory.CreateDbContext();
-        var colleague = new User { UserId = 3, UserName = "kollega", RoleId = db.Roles.First().Id };
-        db.Users.Add(colleague);
-        await db.SaveChangesAsync();
-
-        var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
-        order.PlacedByUserId = colleague.Id;
-        await db.SaveChangesAsync();
-        return colleague.Id;
     }
 
     /// <param name="invoiced">Ha igaz, a rendelés egy már kiállított számlához tartozik — lemondáskor

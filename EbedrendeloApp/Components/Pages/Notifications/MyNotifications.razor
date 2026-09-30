@@ -70,7 +70,6 @@
                            második kattintás ne a helyére csúszó következő sort jelölje. *@
                         <button type="button"
                                 class="mud-button-root mud-width-full d-flex justify-start align-start pa-3"
-                                style="@(notification.IsRead ? null : "background:var(--mud-palette-primary-hover)")"
                                 aria-disabled="@(notification.IsRead ? "true" : null)"
                                 @onclick="() => MarkReadAsync(notification.Id)">
                             @RowContent(notification)
@@ -84,6 +83,15 @@
                 </div>
             }
         </MudPaper>
+    }
+
+    @if (HiddenCount > 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+            @(unreadOnly
+                ? $"További {HiddenCount} régebbi olvasatlan értesítés nem látszik — az „Összes olvasottnak jelöl” ezeket is jelöli."
+                : $"További {HiddenCount} régebbi értesítés nem látszik.")
+        </MudText>
     }
 </PageState>
 
@@ -207,19 +215,23 @@
 
     private RenderFragment RowContent(NotificationDto notification) =>
         @<MudStack Row Spacing="3" AlignItems="AlignItems.Start" Class="mud-width-full">
-            <MudIcon Icon="@NotificationDisplay.Icon(notification.Type)" Color="@NotificationDisplay.Color(notification.Type)"
-                     Style="@(notification.IsRead ? "opacity:.65" : null)" />
+            <MudBadge Dot="true" Overlap="true" Color="Color.Primary" Visible="@(!notification.IsRead)">
+                <MudIcon Icon="@NotificationDisplay.Icon(notification.Type)"
+                         Color="@(notification.IsRead ? Color.Default : NotificationDisplay.Color(notification.Type))" />
+            </MudBadge>
             <MudStack Spacing="0" Class="flex-grow-1">
                 <MudText Typo="@(notification.IsRead ? Typo.body2 : Typo.subtitle2)" Align="Align.Left"
                          Class="@(notification.IsRead ? "mud-text-secondary" : null)">@notification.Title</MudText>
                 <MudText Typo="Typo.body2" Align="Align.Left">@notification.Message</MudText>
                 <MudText Typo="Typo.caption" Align="Align.Left" Class="mud-text-secondary">@MetaText(notification)</MudText>
             </MudStack>
-            @if (!notification.IsRead)
-            {
-                <MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Primary" Style="font-size:.6rem" />
-            }
         </MudStack>;
+
+    /// <summary>A szűrő-chip száma (számláló) és a <see cref="GetMyNotificationsQuery.Limit"/>-re vágott
+    /// lista különbsége — jelezzük, hogy a chip száma nem hibás, csak a régebbiek nem látszanak.</summary>
+    private int HiddenCount => notifications is null
+        ? 0
+        : Math.Max(0, (unreadOnly ? BadgeState.Unread : BadgeState.Total) - notifications.Count);
 
     /// <summary>Ma / Tegnap / Korábban — a „ma" a szerver órájából (<see cref="IAppClock"/>), nem a gép
     /// helyi idejéből.</summary>
@@ -247,7 +259,7 @@
         }
     }
 
-    /// <summary>A meta-sor. Az olvasatlanság szöveggel is szerepel, nem csak a pöttyel és a háttérrel —
+    /// <summary>A meta-sor. Az olvasatlanság szöveggel is szerepel, nem csak a pöttyel és a félkövér címmel —
     /// így a felolvasó is kimondja, és színtévesztő is látja.</summary>
     private static string MetaText(NotificationDto n)
     {

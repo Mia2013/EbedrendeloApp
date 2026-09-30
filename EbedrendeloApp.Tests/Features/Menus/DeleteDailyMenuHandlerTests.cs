@@ -90,7 +90,7 @@ public class DeleteDailyMenuHandlerTests : IDisposable
         // tulajdonosé, a leadó lemondás-értesítést kap.
         var date = new DateOnly(2026, 8, 20);
         var orderId = await SeedMenuWithActiveOrderAsync(date);
-        var colleagueId = await ReassignPlacerToColleagueAsync(orderId);
+        var colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
 
         await sut.Handle(new DeleteDailyMenuCommand(date, adminId), CancellationToken.None);
 
@@ -144,19 +144,6 @@ public class DeleteDailyMenuHandlerTests : IDisposable
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-    }
-
-    private async Task<int> ReassignPlacerToColleagueAsync(int orderId)
-    {
-        await using var db = dbFactory.CreateDbContext();
-        var colleague = new User { UserId = 3, UserName = "kollega", RoleId = db.Roles.First().Id };
-        db.Users.Add(colleague);
-        await db.SaveChangesAsync();
-
-        var order = await db.MenuOrders.SingleAsync(o => o.Id == orderId);
-        order.PlacedByUserId = colleague.Id;
-        await db.SaveChangesAsync();
-        return colleague.Id;
     }
 
     private async Task<int> SeedMenuOnlyAsync(DateOnly date)

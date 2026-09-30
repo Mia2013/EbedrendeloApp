@@ -278,11 +278,9 @@ public class RemoveExcludedDayHandlerTests : IDisposable
 
             var user = new User { UserId = 1, UserName = "u1", RoleId = role.Id };
             var admin = new User { UserId = 2, UserName = "admin", RoleId = role.Id };
-            var colleague = new User { UserId = 3, UserName = "kollega", RoleId = role.Id };
-            db.Users.AddRange(user, admin, colleague);
+            db.Users.AddRange(user, admin);
             await db.SaveChangesAsync();
             adminId = admin.Id;
-            colleagueId = colleague.Id;
 
             int? invoiceId = null;
             if (invoiced)
@@ -310,7 +308,7 @@ public class RemoveExcludedDayHandlerTests : IDisposable
                 MenuVariantId = dailyMenu.Variants[0].Id,
                 PriceHuf = 1400,
                 Status = OrderStatus.Active,
-                PlacedByUserId = placedByColleague ? colleague.Id : user.Id,
+                PlacedByUserId = user.Id,
                 PeriodInvoiceId = invoiceId,
             };
             db.MenuOrders.Add(order);
@@ -319,6 +317,11 @@ public class RemoveExcludedDayHandlerTests : IDisposable
             periodId = period.Id;
             orderId = order.Id;
             userId = user.Id;
+        }
+
+        if (placedByColleague)
+        {
+            colleagueId = await dbFactory.AssignColleagueAsPlacerAsync(orderId);
         }
 
         var excludeResult = await excludeHandler.Handle(new ExcludeDayCommand(ExcludedDate, "Karbantartás", adminId), CancellationToken.None);
